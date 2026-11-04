@@ -1,0 +1,1 @@
+Khi một khối mã là nội dung hoặc một đoạn của một tệp cụ thể, ghi đường dẫn tệp tương đối trong repo vào dòng mở khối theo dạng ```yaml title="path/to/file.yml"; khối mã không thuộc tệp nào thì chỉ ghi ngôn ngữ.

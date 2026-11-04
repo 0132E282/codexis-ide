@@ -1,0 +1,290 @@
+@import 'tailwindcss';
+@source '../';
+
+@import 'tw-animate-css';
+
+
+
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+
+    --radius-xs: var(--radius);
+    --radius-sm: var(--radius);
+    --radius-md: var(--radius);
+    --radius-lg: var(--radius);
+    --radius-xl: var(--radius);
+    --radius-2xl: var(--radius);
+    --radius-3xl: var(--radius);
+    --radius-4xl: var(--radius);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+    --background: #fafafa;
+    --foreground: #18181b;
+    --card: #ffffff;
+    --card-foreground: #18181b;
+    --popover: #ffffff;
+    --popover-foreground: #18181b;
+    --primary: #2f6fed;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f3f9;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #eff4fe;
+    --accent-foreground: #2f6fed;
+    --destructive: #e5484d;
+    --destructive-foreground: #ffffff;
+    --border: #e4e4e7;
+    --input: #d4d4d8;
+    --ring: #2f6fed;
+    --chart-1: #2f6fed;
+    --chart-2: #10a05e;
+    --chart-3: #f59e0b;
+    --chart-4: #8b5cf6;
+    --chart-5: #ec4899;
+    --radius: 4px;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #18181b;
+    --sidebar-primary: #2f6fed;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #eff4fe;
+    --sidebar-accent-foreground: #2f6fed;
+    --sidebar-border: #e4e4e7;
+    --sidebar-ring: #2f6fed;
+}
+
+.dark {
+    --background: #111113;
+    --foreground: #fafafa;
+    --card: #18181b;
+    --card-foreground: #fafafa;
+    --popover: #18181b;
+    --popover-foreground: #fafafa;
+    --primary: #5b8df6;
+    --primary-foreground: #ffffff;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa;
+    --accent: #1e2a4a;
+    --accent-foreground: #93b4fb;
+    --destructive: #f26a6e;
+    --destructive-foreground: #ffffff;
+    --border: #27272a;
+    --input: #3f3f46;
+    --ring: #5b8df6;
+    --chart-1: #5b8df6;
+    --chart-2: #34d399;
+    --chart-3: #fbbf24;
+    --chart-4: #a78bfa;
+    --chart-5: #f472b6;
+    --sidebar: #18181b;
+    --sidebar-foreground: #fafafa;
+    --sidebar-primary: #5b8df6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1e2a4a;
+    --sidebar-accent-foreground: #93b4fb;
+    --sidebar-border: #27272a;
+    --sidebar-ring: #5b8df6;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* Set by the app layout for the first frames after a reload so the initial layout settles without animating. */
+html.no-transitions *,
+html.no-transitions *::before,
+html.no-transitions *::after {
+    transition: none !important;
+}
+
+/* Change marks in the code editor's margin (like a git gutter): green = new lines, blue = edited lines, red triangle = removed lines. */
+.pm-gutter-added,
+.pm-gutter-modified {
+    margin-left: 3px;
+    width: 3px !important;
+}
+.pm-gutter-added {
+    background: #2ea043;
+}
+.pm-gutter-modified {
+    background: #388bfd;
+}
+.pm-gutter-deleted {
+    margin-left: 3px;
+    width: 0 !important;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 5px solid #f85149;
+    height: 0 !important;
+    margin-top: -4px;
+}
+
+/* "Hoàn tác đoạn này" shown under a change mark in the code editor's margin. */
+.pm-revert-pop {
+    margin-left: 4px;
+    padding: 2px 10px;
+    border: 1px solid var(--border, #d4d4d8);
+    border-radius: 6px;
+    background: var(--popover, #fff);
+    color: var(--popover-foreground, #111);
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+}
+.pm-revert-pop:hover {
+    background: var(--accent, #f4f4f5);
+}
+
+/* * Loading frame of a picture being made: a grid of dots, with two patches of it brightening and drifting. */
+.pm-dots {
+    background-image: radial-gradient(
+        circle,
+        rgb(59 91 219 / 0.16) 1.5px,
+        transparent 2px
+    );
+    background-size: 27px 27px;
+}
+
+.pm-dots::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(
+        circle,
+        rgb(59 91 219 / 0.8) 1.5px,
+        transparent 2px
+    );
+    background-size: 27px 27px;
+    -webkit-mask-image:
+        radial-gradient(circle at center, #000 0, transparent 70%),
+        radial-gradient(circle at center, #000 0, transparent 70%);
+    mask-image:
+        radial-gradient(circle at center, #000 0, transparent 70%),
+        radial-gradient(circle at center, #000 0, transparent 70%);
+    -webkit-mask-size: 32% 32%;
+    mask-size: 32% 32%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    animation: pm-dots-drift 5s ease-in-out infinite alternate;
+}
+
+@keyframes pm-dots-drift {
+    from {
+        -webkit-mask-position:
+            8% 12%,
+            88% 85%;
+        mask-position:
+            8% 12%,
+            88% 85%;
+    }
+
+    to {
+        -webkit-mask-position:
+            70% 70%,
+            20% 20%;
+        mask-position:
+            70% 70%,
+            20% 20%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pm-dots::before {
+        animation: none;
+    }
+}
+
+/* The lines the person asked the AI about, kept highlighted after the editor loses focus. */
+.pm-asked-range {
+    background-color: color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+/* The comment box sits inside Monaco, whose stylesheet outlines every focused element; the box draws its own focus ring. */
+.monaco-editor .pm-inline-ask :focus {
+    outline: none !important;
+}
+
+/* The app's own Field draws a focus ring; the comment box keeps the editor free of it. */
+.monaco-editor .pm-inline-ask textarea:focus-visible {
+    box-shadow: none !important;
+}
+
+/* * Lines the AI just wrote into the open file: a soft yellow that fades out. */
+.monaco-editor .pm-ai-glow {
+    animation: pm-ai-glow 2.4s ease-out forwards;
+}
+
+@keyframes pm-ai-glow {
+    from {
+        background-color: rgb(250 204 21 / 0.35);
+    }
+
+    to {
+        background-color: transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .monaco-editor .pm-ai-glow {
+        animation: none;
+        background-color: rgb(250 204 21 / 0.2);
+    }
+}
