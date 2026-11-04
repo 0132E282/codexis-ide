@@ -1232,7 +1232,7 @@ export function CodeViewer({
             {showChanges && (
                 <section
                     aria-label="Thay đổi so với git"
-                    className="relative hidden min-h-0 min-w-0 flex-1 flex-col lg:flex"
+                    className="@container relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden"
                 >
                     <div className="flex h-12 items-center gap-2 border-b px-3 text-sm font-medium">
                         Thay đổi
@@ -1263,7 +1263,7 @@ export function CodeViewer({
             {selected !== null && !showChanges && (
                 <section
                     aria-label="Nội dung tệp"
-                    className="relative hidden min-h-0 min-w-0 flex-1 flex-col lg:flex"
+                    className="@container relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden"
                 >
                     <div
                         role="tablist"
@@ -1727,11 +1727,7 @@ export function CodeViewer({
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
-                    ) : (
-                        <span className="truncate text-sm font-medium">
-                            {sourceName}
-                        </span>
-                    )}
+                    ) : null}
                     <span className="ml-auto flex shrink-0 items-center gap-0.5">
                         {headerActions}
                     </span>

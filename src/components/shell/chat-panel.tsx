@@ -603,9 +603,12 @@ export function ChatPanel({
                 {/* * One centred column, as wide as the message box: a wide panel keeps lines readable instead of pushing the two sides apart. */}
                 <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6">
                     {turns.length === 0 && (
-                        <p className="pt-8 text-center text-sm text-muted-foreground">
-                            Nhắn tin để làm việc với AI trong dự án này.
-                        </p>
+                        <div className="flex flex-col items-center gap-3 pt-[20vh] text-center">
+                            <img src={logo} alt="" className="size-12" />
+                            <p className="text-sm text-muted-foreground">
+                                Nhắn tin để làm việc với AI trong dự án này.
+                            </p>
+                        </div>
                     )}
                     {turns.map((turn) => (
                         <TurnView key={turn.id} turn={turn} />

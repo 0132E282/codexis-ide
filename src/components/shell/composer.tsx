@@ -14,6 +14,7 @@ import {
 import {
     useEffect,
     useMemo,
+    useRef,
     useState,
     type FormEvent,
     type ReactNode,
@@ -220,6 +221,7 @@ export function Composer({
     };
     const selected = CLIS.find((option) => option.value === cli) ?? CLIS[0];
     const CliIcon = CLI_ICONS[selected.value];
+    const input = useRef<HTMLTextAreaElement>(null);
 
     return (
         <form
@@ -253,7 +255,20 @@ export function Composer({
                     </>
                 </div>
             )}
-            <div className="@container rounded-md border bg-card p-3">
+            <div
+                className="@container cursor-text rounded-md border bg-card p-3"
+                onMouseDown={(event) => {
+                    // * A click on the empty parts of the box (not a button or the text itself) lands in the message field.
+                    if (
+                        event.target === event.currentTarget ||
+                        (event.target instanceof HTMLElement &&
+                            event.target.dataset.focusInput !== undefined)
+                    ) {
+                        event.preventDefault();
+                        input.current?.focus();
+                    }
+                }}
+            >
                 {attachments.length > 0 && (
                     <ul className="mb-2 flex flex-wrap gap-2">
                         {attachments.map((attachment) => (
@@ -335,6 +350,7 @@ export function Composer({
                     </ul>
                 )}
                 <textarea
+                    ref={input}
                     value={value}
                     onChange={(event) => {
                         onChange(event.target.value);
@@ -411,7 +427,10 @@ export function Composer({
                     placeholder="Nhắn tin cho trợ lý AI"
                     className="block w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
                 />
-                <div className="mt-2 flex flex-wrap items-center gap-1">
+                <div
+                    data-focus-input
+                    className="mt-2 flex flex-wrap items-center gap-1"
+                >
                     {project === null ? (
                         <>
                             <Button

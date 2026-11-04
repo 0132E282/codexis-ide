@@ -66,6 +66,12 @@ export function NewProjectDialog({
                 ...current,
                 ...chosen.filter((folder) => !current.includes(folder)),
             ]);
+            // * The title defaults to the name of the first folder picked, unless one was typed.
+            setName((current) =>
+                current.trim() === ''
+                    ? (chosen[0]?.split(/[\\/]/).filter(Boolean).pop() ?? '')
+                    : current,
+            );
         } catch (caught) {
             setError(errorText(caught));
         }
@@ -113,7 +119,7 @@ export function NewProjectDialog({
     return (
         <Dialog open={open} onOpenChange={changeOpen}>
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="gap-3 p-0 sm:max-w-md">
+            <DialogContent className="gap-3 p-0 sm:max-w-2xl">
                 <DialogHeader className="px-4 pt-4">
                     <DialogTitle className="text-base">
                         Môi trường mới
