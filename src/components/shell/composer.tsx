@@ -11,6 +11,7 @@ import {
     WandSparkles,
     X,
 } from 'lucide-react';
+import { referenceForPaste } from '@/lib/editor-copy';
 import {
     useEffect,
     useMemo,
@@ -72,6 +73,23 @@ export const MODES: { value: string; label: string; hint: string }[] = [
 ];
 
 const MAX_SUGGESTIONS = 8;
+
+/** The same skill or agent can be found in several folders (user, project, linked copies): the list keeps the first of each name. */
+function firstOfEachName(entries: ToolEntry[]): ToolEntry[] {
+    const seen = new Set<string>();
+
+    return entries.filter((entry) => {
+        const key = entry.name.toLowerCase();
+
+        if (seen.has(key)) {
+            return false;
+        }
+
+        seen.add(key);
+
+        return true;
+    });
+}
 // * Height of one menu item in pixels: the model list opens upward, its last item level with the AI it belongs to.
 const MENU_ITEM_HEIGHT = 32;
 
@@ -190,6 +208,7 @@ export function Composer({
         }
     };
     const [skills, setSkills] = useState<ToolEntry[]>([]);
+    const [agents, setAgents] = useState<ToolEntry[]>([]);
     const [activeSuggestion, setActiveSuggestion] = useState(0);
     const [dismissed, setDismissed] = useState(false);
 
@@ -197,26 +216,37 @@ export function Composer({
     useEffect(() => {
         ideTools
             .skills()
-            .then((listing) => setSkills(listing.items))
+            .then((listing) => setSkills(firstOfEachName(listing.items)))
+            .catch(() => undefined);
+        // * "@" lists the sub-agents of this machine and project.
+        ideTools
+            .agents()
+            .then((listing) => setAgents(firstOfEachName(listing.items)))
             .catch(() => undefined);
     }, []);
 
     // * The list shows while the message is just "/" and the start of a name.
     const query = /^\/(\S*)$/.exec(value)?.[1].toLowerCase() ?? null;
-    const suggestions = useMemo(
-        () =>
-            query === null
-                ? []
-                : skills
-                      .filter((skill) =>
-                          skill.name.toLowerCase().includes(query),
-                      )
-                      .slice(0, MAX_SUGGESTIONS),
-        [skills, query],
-    );
+    // * "@" and the start of a name at the end of the message (after a space or at the start) lists the sub-agents.
+    const mention = /(?:^|\s)@([\w-]*)$/.exec(value)?.[1].toLowerCase() ?? null;
+    const prefix = query !== null ? '/' : '@';
+    const suggestions = useMemo(() => {
+        const source = query !== null ? skills : mention !== null ? agents : [];
+        const needle = query ?? mention;
+
+        return needle === null
+            ? []
+            : source
+                  .filter((entry) => entry.name.toLowerCase().includes(needle))
+                  .slice(0, MAX_SUGGESTIONS);
+    }, [skills, agents, query, mention]);
     const menuOpen = suggestions.length > 0 && !dismissed;
-    const pick = (skill: ToolEntry) => {
-        onChange(`/${skill.name} `);
+    const pick = (entry: ToolEntry) => {
+        onChange(
+            query !== null
+                ? `/${entry.name} `
+                : value.replace(/@([\w-]*)$/, `@agent-${entry.name} `),
+        );
         setActiveSuggestion(0);
     };
     const selected = CLIS.find((option) => option.value === cli) ?? CLIS[0];
@@ -337,7 +367,9 @@ export function Composer({
                                     className={`flex w-full flex-col rounded-sm px-2 py-1.5 text-left ${index === activeSuggestion ? 'bg-accent' : 'hover:bg-accent/60'}`}
                                 >
                                     <span className="font-medium">
-                                        /{skill.name}
+                                        {prefix}
+                                        {prefix === '@' ? 'agent-' : ''}
+                                        {skill.name}
                                     </span>
                                     {skill.description !== '' && (
                                         <span className="truncate text-xs text-muted-foreground">
@@ -367,14 +399,30 @@ export function Composer({
                                       .filter((item) => item.kind === 'file')
                                       .map((item) => item.getAsFile())
                                       .filter((file) => file !== null);
-                        const paths = pastedPaths(
-                            clipboardData.getData('text/plain'),
-                        );
+                        const pastedText = clipboardData.getData('text/plain');
+                        const paths = pastedPaths(pastedText);
+                        const reference = referenceForPaste(pastedText);
 
                         // * Pasted images and files become attachments; so do pasted paths of files on disk (Finder's "Copy as Pathname"). Other text pastes as usual.
                         if (files.length > 0) {
                             event.preventDefault();
                             onPasteFiles(files);
+                        } else if (reference !== null) {
+                            // * Code copied from the editor goes in as `file:lines`: the AI reads the file itself, so the message stays short.
+                            event.preventDefault();
+
+                            const field = event.currentTarget;
+                            const start = field.selectionStart;
+                            const caret = start + reference.length;
+
+                            onChange(
+                                value.slice(0, start) +
+                                    reference +
+                                    value.slice(field.selectionEnd),
+                            );
+                            requestAnimationFrame(() =>
+                                field.setSelectionRange(caret, caret),
+                            );
                         } else if (paths.length > 0) {
                             event.preventDefault();
                             onPastePaths(paths);

@@ -1,4 +1,5 @@
 import { referenceLabel } from '@/lib/code-reference';
+import { rememberEditorCopy } from '@/lib/editor-copy';
 import { createRoot } from 'react-dom/client';
 import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
@@ -506,6 +507,29 @@ export default function MonacoCode({
             onMount={(editor, monaco) => {
                 monacoRef.current = monaco;
                 setInstance(editor);
+                // * Remembers what is copied, so pasting it into the chat sends `file:lines` and not the code.
+                editor.getDomNode()?.addEventListener(
+                    'copy',
+                    () => {
+                        const selection = editor.getSelection();
+                        const text =
+                            selection === null || selection.isEmpty()
+                                ? ''
+                                : (editor
+                                      .getModel()
+                                      ?.getValueInRange(selection) ?? '');
+
+                        if (selection !== null && text !== '') {
+                            rememberEditorCopy(
+                                pathRef.current,
+                                selection.startLineNumber,
+                                selection.endLineNumber,
+                                text,
+                            );
+                        }
+                    },
+                    true,
+                );
                 // * The assistant's avatar by a selection: a click asks about the selected lines (like Cmd+L).
                 const hint = document.createElement('div');
                 const hintRoot = createRoot(hint);

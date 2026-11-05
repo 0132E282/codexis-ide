@@ -537,31 +537,41 @@ export function ChatPanel({
                         after?: string;
                     };
 
-                    update(runId, (turn) => ({
-                        ...turn,
-                        // * Words before a tool call and the answer after it must not run together.
-                        answer: turn.answer ? `${turn.answer}\n\n` : '',
-                        steps: [
-                            ...(turn.steps ?? []),
-                            {
-                                kind: 'tool',
-                                id: call.id,
-                                name: call.name,
-                                description: call.description,
-                                input: call.input,
-                                change:
-                                    call.before !== undefined &&
-                                    call.after !== undefined
-                                        ? {
-                                              before: call.before,
-                                              after: call.after,
-                                          }
-                                        : undefined,
-                                output: null,
-                                status: 'running',
-                            },
-                        ],
-                    }));
+                    update(runId, (turn) =>
+                        // * The CLI can send the same call again: it is shown once.
+                        turn.steps?.some(
+                            (step) =>
+                                step.kind === 'tool' && step.id === call.id,
+                        )
+                            ? turn
+                            : {
+                                  ...turn,
+                                  // * Words before a tool call and the answer after it must not run together.
+                                  answer: turn.answer
+                                      ? `${turn.answer}\n\n`
+                                      : '',
+                                  steps: [
+                                      ...(turn.steps ?? []),
+                                      {
+                                          kind: 'tool',
+                                          id: call.id,
+                                          name: call.name,
+                                          description: call.description,
+                                          input: call.input,
+                                          change:
+                                              call.before !== undefined &&
+                                              call.after !== undefined
+                                                  ? {
+                                                        before: call.before,
+                                                        after: call.after,
+                                                    }
+                                                  : undefined,
+                                          output: null,
+                                          status: 'running',
+                                      },
+                                  ],
+                              },
+                    );
                 } catch {
                     // * A malformed event is not shown.
                 }
@@ -595,10 +605,11 @@ export function ChatPanel({
                         label: string;
                     };
 
-                    setSubagents((current) => [
-                        ...current,
-                        { ...started, done: false },
-                    ]);
+                    setSubagents((current) =>
+                        current.some((agent) => agent.id === started.id)
+                            ? current
+                            : [...current, { ...started, done: false }],
+                    );
                 } catch {
                     // * A malformed event is not shown.
                 }
@@ -612,7 +623,10 @@ export function ChatPanel({
                 update(runId, (turn) => ({ ...turn, error: payload }));
             } else {
                 runs.current.delete(runId);
-                setSubagents([]);
+                // * They stay listed (done) until the next message starts; a turn that ends cannot leave one "working".
+                setSubagents((current) =>
+                    current.map((agent) => ({ ...agent, done: true })),
+                );
                 update(runId, (turn) => ({ ...turn, running: false }));
 
                 const finished = drafts.current.get(runId);
@@ -706,6 +720,7 @@ export function ChatPanel({
         tried: AgentCli[],
         fromComposer: boolean,
     ) => {
+        setSubagents([]);
         // * Unique across restarts: saved turns keep their ids.
         const id = `run-${Date.now().toString(36)}-${counter.current++}`;
         const turn: Turn = {
