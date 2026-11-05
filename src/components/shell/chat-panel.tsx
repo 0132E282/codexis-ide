@@ -153,7 +153,24 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
                 </div>
             )}
             {turn.running && turn.answer === '' && (
-                <p className="text-muted-foreground">Đang trả lời…</p>
+                <p
+                    role="status"
+                    className="flex items-center gap-2 text-muted-foreground"
+                >
+                    Đang trả lời
+                    <span
+                        aria-hidden="true"
+                        className="flex items-center gap-1"
+                    >
+                        {[0, 150, 300].map((delay) => (
+                            <span
+                                key={delay}
+                                style={{ animationDelay: `${delay}ms` }}
+                                className="size-1.5 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none"
+                            />
+                        ))}
+                    </span>
+                </p>
             )}
             {turn.error !== null && (
                 <p role="alert" className="text-destructive">

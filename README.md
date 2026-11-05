@@ -19,6 +19,14 @@
 
 Chưa có: terminal thật (khung terminal hiện chỉ báo chưa hỗ trợ) và CLI `gemini`.
 
+## Tải về (macOS)
+
+Tải tệp `.dmg` mới nhất tại [trang Releases](https://github.com/0132E282/codexis-ide/releases/latest), mở tệp và kéo app vào thư mục `Applications`.
+
+- Bản hiện tại chỉ chạy trên Mac chip Apple Silicon (arm64).
+- App chưa được ký số và notarize nên macOS có thể chặn lần mở đầu tiên. Bấm chuột phải vào app, chọn **Open**, hoặc chạy `xattr -cr "/Applications/Rynox IDE.app"`.
+- Để chat với AI, cần cài sẵn và đăng nhập CLI `claude` hoặc `codex` (xem phần Yêu cầu).
+
 ## Yêu cầu
 
 - [Node.js](https://nodejs.org) và [pnpm](https://pnpm.io).
@@ -37,7 +45,7 @@ Các lệnh khác:
 ```sh
 pnpm dev          # chỉ Vite (không có Rust nên các lệnh backend không chạy)
 pnpm build        # chỉ build frontend
-pnpm tauri build  # đóng gói bản .app
+pnpm tauri build --bundles app,dmg  # đóng gói bản .app và .dmg (src-tauri/target/release/bundle/)
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint (lint:fix để tự sửa)
 pnpm format:check # prettier (format để tự sửa)
