@@ -1,7 +1,7 @@
 [package]
 name = "rynox-ide"
 version = "0.1.0"
-description = "Rynox IDE: the Code tab of the AI chat as a desktop app"
+description = "Codexis IDE: the Code tab of the AI chat as a desktop app"
 edition = "2021"
 
 [lib]

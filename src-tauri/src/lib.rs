@@ -86,5 +86,5 @@ pub fn run() {
             commands::chat_save_session,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running the Rynox IDE");
+        .expect("error while running the Codexis IDE");
 }

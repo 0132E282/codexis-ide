@@ -23,7 +23,7 @@ Chưa có: terminal thật (khung terminal hiện chỉ báo chưa hỗ trợ) v
 Tải tệp `.dmg` mới nhất tại [trang Releases](https://github.com/0132E282/codexis-ide/releases/latest), mở tệp và kéo app vào thư mục `Applications`.
 
 - Bản hiện tại chỉ chạy trên Mac chip Apple Silicon (arm64).
-- App chưa được ký số và notarize nên macOS có thể chặn lần mở đầu tiên. Bấm chuột phải vào app, chọn **Open**, hoặc chạy `xattr -cr "/Applications/Rynox IDE.app"`.
+- App chưa được ký số và notarize nên macOS có thể chặn lần mở đầu tiên. Bấm chuột phải vào app, chọn **Open**, hoặc chạy `xattr -cr "/Applications/Codexis IDE.app"`.
 - Để chat với AI, cần cài sẵn và đăng nhập CLI `claude` hoặc `codex` (xem phần Yêu cầu).
 
 ## Yêu cầu

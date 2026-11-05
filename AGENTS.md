@@ -1,8 +1,8 @@
-# AGENTS.md — Rynox IDE
+# AGENTS.md — Codexis IDE
 
 ## Mục đích
 
-Rynox IDE là IDE desktop độc lập (Tauri 2 + Rust): trình soạn code có git, terminal thật và AI agent điều khiển các CLI `claude` / `codex` / `gemini`. Backend là Rust, UI là React 19 (Monaco editor, xterm terminal, diff, changes). Một số phần (git, PTY terminal, AI agent) vẫn đang được lên kế hoạch theo `README.md`.
+Codexis IDE là IDE desktop độc lập (Tauri 2 + Rust): trình soạn code có git, terminal thật và AI agent điều khiển các CLI `claude` / `codex` / `gemini`. Backend là Rust, UI là React 19 (Monaco editor, xterm terminal, diff, changes). Một số phần (git, PTY terminal, AI agent) vẫn đang được lên kế hoạch theo `README.md`.
 
 ## Stack và cấu trúc
 

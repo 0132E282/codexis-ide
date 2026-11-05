@@ -1,6 +1,6 @@
 ---
 title: Đăng nhập tài khoản Google/GitHub ở footer sidebar
-description: Thiết kế OAuth cho app Tauri 2 không có server (Google loopback + PKCE, GitHub device flow), lưu trữ, UI footer sidebar, cấu hình client ID và task triển khai. Đọc khi làm tính năng đăng nhập/đăng xuất hoặc đụng tới OAuth trong Rynox IDE.
+description: Thiết kế OAuth cho app Tauri 2 không có server (Google loopback + PKCE, GitHub device flow), lưu trữ, UI footer sidebar, cấu hình client ID và task triển khai. Đọc khi làm tính năng đăng nhập/đăng xuất hoặc đụng tới OAuth trong Codexis IDE.
 tags: [design, oauth, tauri, google, github, sidebar, auth]
 ---
 

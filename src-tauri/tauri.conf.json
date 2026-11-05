@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Rynox IDE",
+  "productName": "Codexis IDE",
   "version": "0.1.0",
   "identifier": "ai.geteasy.rynox-ide",
   "build": {
@@ -11,7 +11,7 @@
   },
   "app": {
     "windows": [
-      { "title": "Rynox IDE", "width": 1280, "height": 800, "minWidth": 560, "minHeight": 360, "maximized": true, "titleBarStyle": "Overlay", "hiddenTitle": true }
+      { "title": "Codexis IDE", "width": 1280, "height": 800, "minWidth": 560, "minHeight": 360, "maximized": true, "titleBarStyle": "Overlay", "hiddenTitle": true }
     ],
     "security": { "csp": null }
   },
