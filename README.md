@@ -1,8 +1,7 @@
-<p align="center">
-  <img src="docs/logo.png" alt="Rynox IDE" width="128" height="128" />
-</p>
-
-<h1 align="center">Rynox IDE</h1>
+<h1 align="center">
+  <img src="docs/logo.png" alt="codexis-ide" width="64" height="64" align="absmiddle" />
+  Codexis IDE
+</h1>
 
 <p align="center">
   IDE desktop độc lập (Tauri 2 + Rust): soạn code, xem thay đổi git và trò chuyện với AI agent điều khiển các CLI <code>claude</code> / <code>codex</code> ngay trong thư mục dự án.
