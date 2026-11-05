@@ -68,6 +68,15 @@ Ví dụ:
 RYNOX_WORKSPACE=~/code/my-app RYNOX_DB=~/rynox-dev.db pnpm start
 ```
 
+`.env.example` là file mẫu (`DB_CONNECTION=sqlite` và các biến `DB_*`); chép thành `.env` để dùng riêng, `.env` đã được git bỏ qua. App chưa tự đọc `.env`, hiện chỉ các biến trong bảng trên có tác dụng.
+
+## CI
+
+Workflow [`.github/workflows/build.yml`](.github/workflows/build.yml) chạy mỗi lần push, pull request hoặc chạy tay:
+
+1. `test`: `pnpm lint`, `cargo fmt --check`, `cargo clippy -D warnings`, `pnpm build`, `cargo test`.
+2. `build`: chỉ chạy khi `test` qua; chạy `pnpm tauri build` và upload bản `.app` thành artifact `rynox-ide-macos` (tải ở trang của lần chạy trong tab Actions).
+
 ## Dữ liệu được lưu ở đâu
 
 Trên macOS:
