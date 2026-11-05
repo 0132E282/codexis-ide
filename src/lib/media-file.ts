@@ -23,8 +23,15 @@ export function isPdfSource(source: string): boolean {
 }
 
 /** A picture or PDF of the open project as a data URL the page can show. */
-export async function readMedia(path: string, mime: string): Promise<string> {
-    const bytes = await invoke<ArrayBuffer>('workspace_read_media', { path });
+export async function readMedia(
+    path: string,
+    mime: string,
+    root?: string,
+): Promise<string> {
+    const bytes = await invoke<ArrayBuffer>('workspace_read_media', {
+        path,
+        root,
+    });
 
     return new Promise((resolve, reject) => {
         const reader = new FileReader();

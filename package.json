@@ -1,9 +1,9 @@
 {
-  "name": "rynox-ide",
+  "name": "codexis-ide",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tauri dev",
+    "start": "tauri dev --additional-watch-folders ../prompts",
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",

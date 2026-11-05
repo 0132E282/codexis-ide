@@ -20,7 +20,7 @@ import {
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Input } from '@/components/ui/input';
 import { NewProjectDialog } from '@/components/shell/new-project-dialog';
-import type { ChatConversation, Project } from '@/lib/ide';
+import type { ChatConversation, Project, Subagent } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
 const IS_MAC = navigator.userAgent.includes('Macintosh');
@@ -46,6 +46,7 @@ export function Sidebar({
     onRemove,
     conversations,
     currentConversation,
+    subagents,
     onOpenConversation,
     onDeleteConversation,
     onNewChat,
@@ -67,6 +68,8 @@ export function Sidebar({
     conversations: ChatConversation[];
     /** The conversation shown in the chat; null until it is loaded. */
     currentConversation: number | null;
+    /** Sub-agents the AI has started in the shown conversation's running turn. */
+    subagents: Subagent[];
     onOpenConversation: (id: number) => void;
     onDeleteConversation: (id: number) => void;
     /** Starts a new conversation with the AI in the open project. */
@@ -257,6 +260,43 @@ export function Sidebar({
                                             >
                                                 <Trash2 aria-hidden="true" />
                                             </Button>
+                                            {conversation.id ===
+                                                currentConversation &&
+                                                subagents.length > 0 && (
+                                                    <ul
+                                                        aria-label="Agent đang làm việc"
+                                                        className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
+                                                    >
+                                                        {subagents.map(
+                                                            (agent) => (
+                                                                <li
+                                                                    key={
+                                                                        agent.id
+                                                                    }
+                                                                    title={
+                                                                        agent.label
+                                                                    }
+                                                                    className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground"
+                                                                >
+                                                                    <span
+                                                                        aria-hidden="true"
+                                                                        className={cn(
+                                                                            'size-1.5 shrink-0 rounded-full',
+                                                                            agent.done
+                                                                                ? 'bg-muted-foreground/50'
+                                                                                : 'animate-pulse bg-primary',
+                                                                        )}
+                                                                    />
+                                                                    <span className="truncate">
+                                                                        {
+                                                                            agent.label
+                                                                        }
+                                                                    </span>
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
+                                                )}
                                         </li>
                                     ))}
                                 </ul>

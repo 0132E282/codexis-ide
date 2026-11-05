@@ -591,6 +591,13 @@ export default function MonacoCode({
                 ...READ_ONLY_OPTIONS,
                 readOnly: !editable,
                 domReadOnly: !editable,
+                // * Markdown is prose: its long lines wrap (keeping their indent) instead of running off the side.
+                ...(languageOf(path) === 'markdown'
+                    ? {
+                          wordWrap: 'on' as const,
+                          wrappingIndent: 'same' as const,
+                      }
+                    : {}),
             }}
         />
     );

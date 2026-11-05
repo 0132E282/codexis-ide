@@ -1,9 +1,12 @@
 import { FileText } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import logo from '@/assets/logo.png';
+import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { Composer } from '@/components/shell/composer';
+import { TurnSteps } from '@/components/shell/turn-steps';
 import type { Attachment } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
@@ -11,7 +14,7 @@ import { useTypewriter } from '@/hooks/use-typewriter';
 import { errorText, ide, onAgentEvent, pickFiles } from '@/lib/ide';
 import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
-import type { AgentCli, ChatHistory } from '@/lib/ide';
+import type { AgentCli, ChatHistory, Step, Subagent } from '@/lib/ide';
 
 type Turn = {
     id: string;
@@ -20,9 +23,19 @@ type Turn = {
     error: string | null;
     running: boolean;
     cli: AgentCli;
+    /** What the AI did, step by step, while this session ran; a turn loaded from the history has only its `answer`. */
+    steps?: Step[];
     /** Loaded from the saved history: shown at once, not typed out. */
     restored?: boolean;
 };
+
+/** The chat closes when the editor columns squeeze it narrower than this (px). */
+const CHAT_TOO_NARROW = 220;
+/** Time after it opens during which a narrow chat is not closed again. */
+const REOPEN_GRACE_MS = 800;
+
+// * A tool call that an older version wrote into the saved answer.
+const OLD_TOOL_LINES = /^> ⚙ .*$/gm;
 
 const ATTACHMENT_LINE = /^@(\/.+)$/;
 // * Pasted files are saved as `<8 hex digits>-<name>`: the digits are not part of the name the person sees.
@@ -46,6 +59,21 @@ function splitPrompt(prompt: string) {
     }
 
     return { text: lines.join('\n').trim(), files };
+}
+
+/** The text of a message with each `/command` at the start of a line (or after a space) highlighted. */
+function HighlightedText({ text }: { text: string }) {
+    return text
+        .split(/((?:^|(?<=\s))\/[\w:-]+(?=\s|$))/g)
+        .map((piece, index) =>
+            index % 2 === 1 ? (
+                <span key={index} className="font-medium text-primary">
+                    {piece}
+                </span>
+            ) : (
+                piece
+            ),
+        );
 }
 
 const IMAGE_TYPES: Record<string, string> = {
@@ -122,7 +150,20 @@ function AttachmentView({ path, name }: { path: string; name: string }) {
 }
 
 // * Memoised: dragging the panel edge re-renders the panel on every frame, and a long markdown answer must not be parsed again each time.
-const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
+const TurnView = memo(function TurnView({
+    turn,
+    interactive,
+    followUp,
+    onChoose,
+}: {
+    turn: Turn;
+    /** Whether a choice card of this turn can still be answered (the last turn, once it has ended). */
+    interactive: boolean;
+    /** The message the user sent after this turn, which marks the option picked. */
+    followUp: string | null;
+    onChoose: (text: string) => void;
+}) {
+    const choices: ChoiceHandlers = { interactive, answer: followUp, onChoose };
     const typed = useTypewriter(turn.answer, turn.restored !== true);
     const { text, files } = splitPrompt(turn.prompt);
 
@@ -143,16 +184,24 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
                 )}
                 {text !== '' && (
                     <p className="rounded-2xl bg-muted px-4 py-2.5 break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
-                        {text}
+                        <HighlightedText text={text} />
                     </p>
                 )}
             </div>
-            {typed !== '' && (
-                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                    <MarkdownContent content={typed} />
-                </div>
+            {turn.steps !== undefined && turn.steps.length > 0 ? (
+                <TurnSteps
+                    steps={turn.steps}
+                    running={turn.running}
+                    choices={choices}
+                />
+            ) : (
+                typed !== '' && (
+                    <div className="min-w-0 break-words [overflow-wrap:anywhere]">
+                        <MarkdownContent content={typed} choices={choices} />
+                    </div>
+                )
             )}
-            {turn.running && turn.answer === '' && (
+            {turn.running && turn.answer === '' && turn.steps === undefined && (
                 <p
                     role="status"
                     className="flex items-center gap-2 text-muted-foreground"
@@ -183,12 +232,20 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
 
 /** Chat with an AI CLI in the open project: each message is one CLI turn, and the CLI's session id keeps the conversation going. Turns and session ids are saved per workspace, so reopening it continues the same CLI conversation. */
 export function ChatPanel({
+    root,
     fill,
     newChat,
     openConversation,
     onConversation,
     onChanged,
+    onSubagents,
+    collapsed,
+    onTooNarrow,
+    headerStart,
+    headerActions,
 }: {
+    /** Folder of the project this chat belongs to: every command of the panel is addressed to it, so it keeps working while another project is open. */
+    root: string;
     fill: boolean;
     /** Counter bumped to start a new conversation (ignored while a turn is running). */
     newChat: number;
@@ -198,7 +255,18 @@ export function ChatPanel({
     onConversation: (id: number) => void;
     /** Told when a turn was saved, so the list can be read again. */
     onChanged: () => void;
+    /** Told which sub-agents the AI has started in the running turn (empty when none). */
+    onSubagents: (subagents: Subagent[]) => void;
+    /** Closed by dragging the editor columns over it: hidden, but still mounted so a running turn goes on. */
+    collapsed: boolean;
+    /** Told when the editor columns have squeezed the chat narrower than it can be used; the app then closes it. */
+    onTooNarrow: () => void;
+    /** Button at the left end of the bar at the top of the chat (folds the sidebar). */
+    headerStart?: ReactNode;
+    /** Buttons for the right end of that bar (branch, editor, terminal). */
+    headerActions?: ReactNode;
 }) {
+    const [subagents, setSubagents] = useState<Subagent[]>([]);
     const [turns, setTurns] = useState<Turn[]>([]);
     const [text, setText] = useState('');
     const [cli, setCli] = useState<AgentCli>('claude');
@@ -219,9 +287,10 @@ export function ChatPanel({
     const workspace = useRef<string | null>(null);
     // * The conversation the turns are saved into; null until the history is loaded.
     const conversation = useRef<number | null>(null);
-    const notify = useRef({ onConversation, onChanged });
+    const notify = useRef({ onConversation, onChanged, onTooNarrow });
     const counter = useRef(0);
     const bottom = useRef<HTMLDivElement>(null);
+    const section = useRef<HTMLElement>(null);
     const width = useResizableWidth(
         'rynox.chat-width',
         384,
@@ -231,6 +300,30 @@ export function ChatPanel({
         'trailing',
     );
     const busy = turns.some((turn) => turn.running);
+
+    // * Watches the width the chat really has: the editor columns can squeeze it, and below this width it cannot be read, so it closes.
+    useEffect(() => {
+        const element = section.current;
+
+        if (element === null || fill || collapsed) {
+            return;
+        }
+
+        // * Just opened again: the columns are still making room, so it is not judged yet.
+        const openedAt = performance.now();
+        const observer = new ResizeObserver(([entry]) => {
+            if (
+                entry.contentRect.width < CHAT_TOO_NARROW &&
+                performance.now() - openedAt > REOPEN_GRACE_MS
+            ) {
+                notify.current.onTooNarrow();
+            }
+        });
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, [fill, collapsed]);
     // * Set after each render: the agent events are listened to once, and the move to the next AI needs the latest state.
     const failover = useRef<((finished: Turn) => void) | null>(null);
     // * The CLIs already tried for a message that is being moved from one AI to the next, by turn id.
@@ -238,8 +331,13 @@ export function ChatPanel({
     const handledNewChat = useRef(newChat);
 
     useEffect(() => {
-        notify.current = { onConversation, onChanged };
+        notify.current = { onConversation, onChanged, onTooNarrow };
     });
+
+    useEffect(() => {
+        onSubagents(subagents);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [subagents]);
 
     // * Shows a loaded conversation: `replace` swaps the turns, otherwise they go before what was typed while it loaded.
     const apply = (history: ChatHistory, replace: boolean) => {
@@ -257,6 +355,11 @@ export function ChatPanel({
 
         const restored = history.turns.map((turn) => ({
             ...turn,
+            // * Turns saved by an older version hold the tool calls as `> ⚙ {json}` lines; they are not part of the answer.
+            answer: turn.answer
+                .replace(OLD_TOOL_LINES, '')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim(),
             running: false,
             restored: true,
         }));
@@ -268,7 +371,7 @@ export function ChatPanel({
     useEffect(() => {
         let cancelled = false;
 
-        ide.chatLoad()
+        ide.chatLoad(undefined, root)
             .then((history) => !cancelled && apply(history, false))
             // * No saved history: the chat still works, it is just not kept.
             .catch(() => undefined);
@@ -288,7 +391,7 @@ export function ChatPanel({
         }
 
         void ide
-            .chatLoad(openConversation)
+            .chatLoad(openConversation, root)
             .then((history) => {
                 apply(history, true);
                 setAttachments([]);
@@ -348,7 +451,11 @@ export function ChatPanel({
                     error: turn.error,
                 })
                 .then(() => notify.current.onChanged())
-                .catch(() => undefined);
+                .catch((caught) => console.error(errorText(caught)));
+        } else {
+            console.error(
+                'Chưa lưu được lượt chat: chưa tải xong cuộc trò chuyện.',
+            );
         }
     };
 
@@ -393,11 +500,119 @@ export function ChatPanel({
                     answer: turn.answer
                         ? `${turn.answer}\n\n${payload}`
                         : payload,
+                    steps: [
+                        ...(turn.steps ?? []),
+                        { kind: 'text', text: payload },
+                    ],
                 }));
+            } else if (kind === 'delta') {
+                // * A piece of the answer still being written: appended as it is, to the last step when that is text.
+                update(runId, (turn) => {
+                    const steps = [...(turn.steps ?? [])];
+                    const last = steps[steps.length - 1];
+
+                    if (last?.kind === 'text') {
+                        steps[steps.length - 1] = {
+                            kind: 'text',
+                            text: last.text + payload,
+                        };
+                    } else {
+                        steps.push({ kind: 'text', text: payload });
+                    }
+
+                    return {
+                        ...turn,
+                        answer: turn.answer + payload,
+                        steps,
+                    };
+                });
+            } else if (kind === 'tool') {
+                try {
+                    const call = JSON.parse(payload) as {
+                        id: string;
+                        name: string;
+                        description: string;
+                        input: string;
+                        before?: string;
+                        after?: string;
+                    };
+
+                    update(runId, (turn) => ({
+                        ...turn,
+                        // * Words before a tool call and the answer after it must not run together.
+                        answer: turn.answer ? `${turn.answer}\n\n` : '',
+                        steps: [
+                            ...(turn.steps ?? []),
+                            {
+                                kind: 'tool',
+                                id: call.id,
+                                name: call.name,
+                                description: call.description,
+                                input: call.input,
+                                change:
+                                    call.before !== undefined &&
+                                    call.after !== undefined
+                                        ? {
+                                              before: call.before,
+                                              after: call.after,
+                                          }
+                                        : undefined,
+                                output: null,
+                                status: 'running',
+                            },
+                        ],
+                    }));
+                } catch {
+                    // * A malformed event is not shown.
+                }
+            } else if (kind === 'toolresult') {
+                try {
+                    const result = JSON.parse(payload) as {
+                        id: string;
+                        output: string;
+                        error: boolean;
+                    };
+
+                    update(runId, (turn) => ({
+                        ...turn,
+                        steps: turn.steps?.map((step) =>
+                            step.kind === 'tool' && step.id === result.id
+                                ? {
+                                      ...step,
+                                      output: result.output,
+                                      status: result.error ? 'error' : 'ok',
+                                  }
+                                : step,
+                        ),
+                    }));
+                } catch {
+                    // * A malformed event is not shown.
+                }
+            } else if (kind === 'subagent') {
+                try {
+                    const started = JSON.parse(payload) as {
+                        id: string;
+                        label: string;
+                    };
+
+                    setSubagents((current) => [
+                        ...current,
+                        { ...started, done: false },
+                    ]);
+                } catch {
+                    // * A malformed event is not shown.
+                }
+            } else if (kind === 'subagentdone') {
+                setSubagents((current) =>
+                    current.map((agent) =>
+                        agent.id === payload ? { ...agent, done: true } : agent,
+                    ),
+                );
             } else if (kind === 'error') {
                 update(runId, (turn) => ({ ...turn, error: payload }));
             } else {
                 runs.current.delete(runId);
+                setSubagents([]);
                 update(runId, (turn) => ({ ...turn, running: false }));
 
                 const finished = drafts.current.get(runId);
@@ -514,6 +729,8 @@ export function ChatPanel({
         }
 
         setTurns((current) => [...current, turn]);
+        // * Saved at once, then again when the turn ends: a message is not lost when the answer never finishes (the app is closed, the CLI stalls).
+        persist(turn);
         ide.agentSend(
             id,
             target,
@@ -522,6 +739,7 @@ export function ChatPanel({
             models[target] ?? null,
             target === 'claude' ? mode : null,
             target === 'claude' && agentTeam,
+            root,
         ).catch((caught) => {
             runs.current.delete(id);
             drafts.current.delete(id);
@@ -539,6 +757,22 @@ export function ChatPanel({
             recordUsage(failed);
         });
     };
+
+    // * A picked option (or the typed "Khác…" answer) is the next message; `choose` stays the same function so the memoised turns do not re-render.
+    const sendChoice = useRef((_text: string) => {});
+
+    useEffect(() => {
+        sendChoice.current = (picked) => {
+            if (!busy) {
+                startTurn(picked, cli, [], false);
+            }
+        };
+    });
+
+    const choose = useCallback(
+        (picked: string) => sendChoice.current(picked),
+        [],
+    );
 
     const send = () => {
         const prompt = [
@@ -599,14 +833,16 @@ export function ChatPanel({
 
     return (
         <section
+            ref={section}
             aria-label="Trò chuyện với AI"
             style={fill ? undefined : { width: width.width }}
             className={cn(
                 'relative flex min-h-0 flex-col',
+                collapsed && 'hidden',
                 // * The chat gives way: when the editor or the file column is dragged out to the full width it shrinks away (and clips) instead of pushing the sidebar off the screen.
                 fill
                     ? 'max-w-full min-w-0 flex-1'
-                    : 'max-w-full min-w-[14rem] shrink-0 border-r',
+                    : 'max-w-full min-w-0 border-r',
             )}
         >
             {!fill && (
@@ -616,6 +852,12 @@ export function ChatPanel({
                     {...width.handleProps}
                 />
             )}
+            <header className="flex h-[49px] shrink-0 items-center justify-between gap-2 border-b px-2">
+                <span className="ml-2 flex items-center">{headerStart}</span>
+                <span className="flex items-center gap-0.5">
+                    {headerActions}
+                </span>
+            </header>
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
                 {/* * One centred column, as wide as the message box: a wide panel keeps lines readable instead of pushing the two sides apart. */}
                 <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6">
@@ -627,8 +869,16 @@ export function ChatPanel({
                             </p>
                         </div>
                     )}
-                    {turns.map((turn) => (
-                        <TurnView key={turn.id} turn={turn} />
+                    {turns.map((turn, index) => (
+                        <TurnView
+                            key={turn.id}
+                            turn={turn}
+                            interactive={
+                                index === turns.length - 1 && !turn.running
+                            }
+                            followUp={turns[index + 1]?.prompt ?? null}
+                            onChoose={choose}
+                        />
                     ))}
                     <div ref={bottom} />
                 </div>

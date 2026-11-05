@@ -73,6 +73,32 @@ impl AppState {
             .map_err(|error| error.to_string())
     }
 
+    /// The workspace at `root`, so several projects can stay open at once: `None` is the open workspace. Any other root must be the open one or the first folder of a saved project, so a caller can never reach a folder the user did not add.
+    fn workspace_for(&self, root: Option<&str>) -> Result<Workspace, String> {
+        let active = self.workspace()?;
+        let Some(root) = root else {
+            return Ok(active);
+        };
+
+        if Path::new(root) == active.root() {
+            return Ok(active);
+        }
+
+        let known = self
+            .projects
+            .lock()
+            .expect("projects lock poisoned")
+            .projects()
+            .iter()
+            .any(|project| project.folders.first().is_some_and(|folder| folder == root));
+
+        if !known {
+            return Err(crate::workspace::WorkspaceError::Denied.to_string());
+        }
+
+        Workspace::open(Path::new(root)).map_err(|error| error.to_string())
+    }
+
     fn list_projects(&self) -> ProjectsReply {
         let projects = self.projects.lock().expect("projects lock poisoned");
 
@@ -142,6 +168,8 @@ impl AppState {
 #[derive(Debug, Serialize)]
 pub struct Info {
     name: String,
+    /// Full path of the workspace root: the key the front end hands back (`root`) to address this project.
+    root: String,
 }
 
 impl Info {
@@ -152,7 +180,10 @@ impl Info {
             |n| n.to_string_lossy().into_owned(),
         );
 
-        Self { name }
+        Self {
+            name,
+            root: root.display().to_string(),
+        }
     }
 }
 
@@ -202,8 +233,8 @@ pub fn projects_select(state: State<AppState>, id: String) -> Result<Info, Strin
 }
 
 #[tauri::command]
-pub fn workspace_tree(state: State<AppState>) -> Result<TreeReply, String> {
-    let tree = state.workspace()?.tree();
+pub fn workspace_tree(state: State<AppState>, root: Option<String>) -> Result<TreeReply, String> {
+    let tree = state.workspace_for(root.as_deref())?.tree();
 
     Ok(TreeReply {
         paths: tree.paths,
@@ -212,9 +243,13 @@ pub fn workspace_tree(state: State<AppState>) -> Result<TreeReply, String> {
 }
 
 #[tauri::command]
-pub fn workspace_read(state: State<AppState>, path: String) -> Result<FileReply, String> {
+pub fn workspace_read(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<FileReply, String> {
     let content = state
-        .workspace()?
+        .workspace_for(root.as_deref())?
         .read(&path)
         .map_err(|error| error.to_string())?;
     let hash = crate::workspace::hash(&content);
@@ -226,10 +261,11 @@ pub fn workspace_read(state: State<AppState>, path: String) -> Result<FileReply,
 #[tauri::command]
 pub fn workspace_read_media(
     state: State<AppState>,
+    root: Option<String>,
     path: String,
 ) -> Result<tauri::ipc::Response, String> {
     state
-        .workspace()?
+        .workspace_for(root.as_deref())?
         .read_bytes(&path)
         .map(tauri::ipc::Response::new)
         .map_err(|error| error.to_string())
@@ -239,12 +275,13 @@ pub fn workspace_read_media(
 #[tauri::command]
 pub fn workspace_write(
     state: State<AppState>,
+    root: Option<String>,
     path: String,
     content: String,
     expected_hash: Option<String>,
 ) -> Result<String, String> {
     state
-        .workspace()?
+        .workspace_for(root.as_deref())?
         .write(&path, &content, expected_hash.as_deref())
         .map(|written| written.after)
         .map_err(|error| error.to_string())
@@ -253,11 +290,16 @@ pub fn workspace_write(
 #[tauri::command]
 pub fn open_in_vscode(
     state: State<AppState>,
+    root: Option<String>,
     path: Option<String>,
     line: Option<u32>,
 ) -> Result<(), String> {
-    vscode::open(&state.workspace()?, path.as_deref(), line.unwrap_or(1))
-        .map_err(|error| error.to_string())
+    vscode::open(
+        &state.workspace_for(root.as_deref())?,
+        path.as_deref(),
+        line.unwrap_or(1),
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Serialize)]
@@ -277,10 +319,11 @@ pub struct HeadReply {
 #[tauri::command]
 pub fn local_put_file(
     state: State<AppState>,
+    root: Option<String>,
     path: String,
     content: String,
 ) -> Result<String, String> {
-    let workspace = state.workspace()?;
+    let workspace = state.workspace_for(root.as_deref())?;
     let current = workspace
         .current_hash(&path)
         .map_err(|error| error.to_string())?;
@@ -292,8 +335,8 @@ pub fn local_put_file(
 }
 
 #[tauri::command]
-pub fn local_changes(state: State<AppState>) -> Result<ChangesReply, String> {
-    let changes = git::changes(&state.workspace()?);
+pub fn local_changes(state: State<AppState>, root: Option<String>) -> Result<ChangesReply, String> {
+    let changes = git::changes(&state.workspace_for(root.as_deref())?);
 
     Ok(ChangesReply {
         git: changes.is_some(),
@@ -302,13 +345,18 @@ pub fn local_changes(state: State<AppState>) -> Result<ChangesReply, String> {
 }
 
 #[tauri::command]
-pub fn local_branches(state: State<AppState>) -> Result<Branches, String> {
-    Ok(git::branches(&state.workspace()?))
+pub fn local_branches(state: State<AppState>, root: Option<String>) -> Result<Branches, String> {
+    Ok(git::branches(&state.workspace_for(root.as_deref())?))
 }
 
 #[tauri::command]
-pub fn local_head(state: State<AppState>, path: String) -> Result<HeadReply, String> {
-    let head = git::head_content(&state.workspace()?, &path).map_err(|error| error.to_string())?;
+pub fn local_head(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<HeadReply, String> {
+    let head = git::head_content(&state.workspace_for(root.as_deref())?, &path)
+        .map_err(|error| error.to_string())?;
 
     Ok(HeadReply {
         path,
@@ -318,13 +366,21 @@ pub fn local_head(state: State<AppState>, path: String) -> Result<HeadReply, Str
 }
 
 #[tauri::command]
-pub fn local_discard(state: State<AppState>, path: String) -> Result<(), String> {
-    git::discard(&state.workspace()?, &path).map_err(|error| error.to_string())
+pub fn local_discard(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<(), String> {
+    git::discard(&state.workspace_for(root.as_deref())?, &path).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn local_commit(state: State<AppState>, message: String) -> Result<Committed, String> {
-    git::commit(&state.workspace()?, &message).map_err(|error| error.to_string())
+pub fn local_commit(
+    state: State<AppState>,
+    root: Option<String>,
+    message: String,
+) -> Result<Committed, String> {
+    git::commit(&state.workspace_for(root.as_deref())?, &message).map_err(|error| error.to_string())
 }
 
 /// Commit title and description.
@@ -336,8 +392,11 @@ pub struct CommitMessage {
 
 /// Has the AI write a commit message from the diff of the listed files; sends that diff to the Claude CLI.
 #[tauri::command]
-pub async fn local_commit_message(state: State<'_, AppState>) -> Result<CommitMessage, String> {
-    let workspace = state.workspace()?;
+pub async fn local_commit_message(
+    state: State<'_, AppState>,
+    root: Option<String>,
+) -> Result<CommitMessage, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
 
     tauri::async_runtime::spawn_blocking(move || {
         let diff = git::diff_text(&workspace).map_err(|error| error.to_string())?;
@@ -421,6 +480,49 @@ mod tests {
     }
 
     #[test]
+    fn a_root_reaches_its_own_project_and_no_other_folder() {
+        let data = tempfile::tempdir().unwrap();
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let stranger = tempfile::tempdir().unwrap();
+
+        fs::write(first.path().join("a.txt"), "first").unwrap();
+        fs::write(second.path().join("b.txt"), "second").unwrap();
+
+        let (state, ids) = state_with_projects(data.path(), &[first.path(), second.path()]);
+        let first_root = fs::canonicalize(first.path())
+            .unwrap()
+            .display()
+            .to_string();
+        let second_root = fs::canonicalize(second.path())
+            .unwrap()
+            .display()
+            .to_string();
+
+        state.select_project(&ids[1]).unwrap();
+
+        // * The open workspace is the second project, yet the first one stays reachable by its root.
+        let other = state.workspace_for(Some(&first_root)).unwrap();
+
+        assert_eq!(other.read("a.txt").unwrap(), "first");
+        assert_eq!(
+            state
+                .workspace_for(Some(&second_root))
+                .unwrap()
+                .read("b.txt")
+                .unwrap(),
+            "second"
+        );
+        assert_eq!(
+            state.workspace_for(None).unwrap().read("b.txt").unwrap(),
+            "second"
+        );
+        assert!(state
+            .workspace_for(Some(&stranger.path().display().to_string()))
+            .is_err());
+    }
+
+    #[test]
     fn failed_selection_keeps_the_current_workspace() {
         let data = tempfile::tempdir().unwrap();
         let open = tempfile::tempdir().unwrap();
@@ -485,6 +587,7 @@ pub fn agent_send(
     model: Option<String>,
     mode: Option<String>,
     agent_team: bool,
+    root: Option<String>,
 ) -> Result<(), String> {
     let cli = Cli::parse(&cli).ok_or("Chưa hỗ trợ CLI này.")?;
 
@@ -499,7 +602,7 @@ pub fn agent_send(
         return Err("Chế độ không hợp lệ.".to_string());
     }
 
-    let root = state.workspace()?.root().to_path_buf();
+    let root = state.workspace_for(root.as_deref())?.root().to_path_buf();
     // * Saved API keys go to the Claude CLI only; Codex has no key of its own here.
     let mut environment = if cli == Cli::Claude {
         app.state::<CredentialStore>().environment()
@@ -548,8 +651,16 @@ pub struct ChatReply {
 }
 
 #[tauri::command]
-pub fn chat_load(state: State<AppState>, conversation: Option<i64>) -> Result<ChatReply, String> {
-    let workspace = state.workspace()?.root().display().to_string();
+pub fn chat_load(
+    state: State<AppState>,
+    root: Option<String>,
+    conversation: Option<i64>,
+) -> Result<ChatReply, String> {
+    let workspace = state
+        .workspace_for(root.as_deref())?
+        .root()
+        .display()
+        .to_string();
     let history = state
         .chats
         .lock()
@@ -562,8 +673,15 @@ pub fn chat_load(state: State<AppState>, conversation: Option<i64>) -> Result<Ch
 
 /// The conversations of the open workspace, the most recently used first.
 #[tauri::command]
-pub fn chat_list(state: State<AppState>) -> Result<Vec<Conversation>, String> {
-    let workspace = state.workspace()?.root().display().to_string();
+pub fn chat_list(
+    state: State<AppState>,
+    root: Option<String>,
+) -> Result<Vec<Conversation>, String> {
+    let workspace = state
+        .workspace_for(root.as_deref())?
+        .root()
+        .display()
+        .to_string();
 
     state
         .chats
@@ -693,8 +811,16 @@ pub fn chat_new(state: State<AppState>, workspace: String) -> Result<i64, String
 }
 
 #[tauri::command]
-pub fn chat_delete(state: State<AppState>, conversation: i64) -> Result<(), String> {
-    let workspace = state.workspace()?.root().display().to_string();
+pub fn chat_delete(
+    state: State<AppState>,
+    root: Option<String>,
+    conversation: i64,
+) -> Result<(), String> {
+    let workspace = state
+        .workspace_for(root.as_deref())?
+        .root()
+        .display()
+        .to_string();
 
     state
         .chats

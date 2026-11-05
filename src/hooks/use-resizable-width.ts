@@ -77,12 +77,13 @@ export function useResizableWidth(
         }
 
         // * With the handle on the leading (left or top) edge dragging left (or up) makes the panel larger; on the trailing edge it is the other way round.
-        const next = clamp(
+        const wanted =
             current.startWidth +
-                direction *
-                    (current.start -
-                        (axis === 'x' ? event.clientX : event.clientY)),
-        );
+            direction *
+                (current.start -
+                    (axis === 'x' ? event.clientX : event.clientY));
+
+        const next = clamp(wanted);
 
         cancelAnimationFrame(frame.current ?? 0);
         frame.current = requestAnimationFrame(() => setWidth(next));

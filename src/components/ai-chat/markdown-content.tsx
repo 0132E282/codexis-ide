@@ -191,7 +191,11 @@ const baseComponents: Components = {
     table: ({ node: _node, className, ...props }) => (
         <div className="my-3 overflow-x-auto rounded-lg border border-border">
             <table
-                className={cn('w-full border-collapse text-left', className)}
+                // * Wider than the panel, the table scrolls sideways (its box has overflow-x-auto) instead of squeezing the columns into one word per line.
+                className={cn(
+                    'w-full min-w-[40rem] border-collapse text-left',
+                    className,
+                )}
                 {...props}
             />
         </div>

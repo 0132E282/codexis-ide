@@ -19,13 +19,11 @@ function failure(message: string, status: number): AxiosError {
     });
 }
 
-/** `root` names the project on the web; the IDE has one open project, so it is dropped. */
-function without(body: Body, ...keys: string[]): Record<string, unknown> {
-    const rest = { ...body };
+/** The project a call is for: the viewer sends the full path of its folder as `root`. */
+function rootOf(source: Body | Record<string, unknown>): string | undefined {
+    const root = source?.root;
 
-    ['root', ...keys].forEach((key) => delete rest[key]);
-
-    return rest;
+    return typeof root === 'string' ? root : undefined;
 }
 
 async function call<T>(
@@ -56,12 +54,12 @@ export const api = {
 
         switch (path(url)) {
             case '/ai-chat/local/tree':
-                return call('workspace_tree');
+                return call('workspace_tree', { root: rootOf(query) });
             case '/ai-chat/local/file': {
                 const mime = mediaMime(String(query.path ?? ''));
 
                 if (mime !== null) {
-                    return readMedia(String(query.path), mime)
+                    return readMedia(String(query.path), mime, rootOf(query))
                         .then((image) => ({
                             data: { path: query.path, image } as T,
                         }))
@@ -77,16 +75,20 @@ export const api = {
 
                 return call<{ content: string }>('workspace_read', {
                     path: query.path,
+                    root: rootOf(query),
                 }).then(({ data }) => ({
                     data: { path: query.path, content: data.content } as T,
                 }));
             }
             case '/ai-chat/local/head':
-                return call('local_head', { path: query.path });
+                return call('local_head', {
+                    path: query.path,
+                    root: rootOf(query),
+                });
             case '/ai-chat/local/changes':
-                return call('local_changes');
+                return call('local_changes', { root: rootOf(query) });
             case '/ai-chat/local/branches':
-                return call('local_branches');
+                return call('local_branches', { root: rootOf(query) });
             default:
                 return Promise.reject(unwired('GET', url));
         }
@@ -98,11 +100,17 @@ export const api = {
     ): Reply<T> => {
         switch (path(url)) {
             case '/ai-chat/local/discard':
-                return call('local_discard', { path: data?.path });
+                return call('local_discard', {
+                    path: data?.path,
+                    root: rootOf(data),
+                });
             case '/ai-chat/local/commit':
-                return call('local_commit', without(data));
+                return call('local_commit', {
+                    message: data?.message,
+                    root: rootOf(data),
+                });
             case '/ai-chat/local/commit-message':
-                return call('local_commit_message');
+                return call('local_commit_message', { root: rootOf(data) });
             default:
                 return Promise.reject(unwired('POST', url));
         }
@@ -116,6 +124,7 @@ export const api = {
             return call<unknown>('local_put_file', {
                 path: data?.path,
                 content: data?.content,
+                root: rootOf(data),
             }).then(() => ({ data: { path: data?.path } as T }));
         }
 

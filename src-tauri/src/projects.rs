@@ -192,10 +192,22 @@ impl ProjectStore {
             return Err(ProjectError::TooMany);
         }
 
+        let folders = real_folders(&new.folders)?;
+
+        // * The same folders again is the same project: it is handed back, not saved a second time.
+        if let Some(known) = self
+            .saved
+            .projects
+            .iter()
+            .find(|project| !folders.is_empty() && same_folders(&project.folders, &folders))
+        {
+            return Ok(known.clone());
+        }
+
         let project = Project {
             id: self.next_id(),
             name: name.to_string(),
-            folders: real_folders(&new.folders)?,
+            folders,
             env: checked_env(new.env)?,
         };
         let mut next = self.saved.clone();
@@ -319,6 +331,11 @@ fn write_saved(connection: &mut Connection, saved: &Saved) -> Result<()> {
     write(connection).map_err(|_| ProjectError::SaveFailed)
 }
 
+/// Whether both lists hold the same folders, in any order.
+fn same_folders(left: &[String], right: &[String]) -> bool {
+    left.len() == right.len() && left.iter().all(|folder| right.contains(folder))
+}
+
 /// Each folder as a real path, which must be an existing directory; repeats are dropped.
 fn real_folders(folders: &[String]) -> Result<Vec<String>> {
     let mut real: Vec<String> = Vec::with_capacity(folders.len());
@@ -413,6 +430,20 @@ mod tests {
             added.folders,
             [fs::canonicalize(&folder).unwrap().display().to_string()]
         );
+    }
+
+    #[test]
+    fn adding_the_same_folders_returns_the_existing_project() {
+        let (dir, mut store) = store();
+        let folder = dir.path().join("app");
+
+        fs::create_dir(&folder).unwrap();
+
+        let first = store.add(new_project("app", &[&folder])).unwrap();
+        let again = store.add(new_project("other name", &[&folder])).unwrap();
+
+        assert_eq!(again, first);
+        assert_eq!(store.projects().len(), 1);
     }
 
     #[test]

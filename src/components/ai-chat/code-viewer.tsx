@@ -315,6 +315,10 @@ function typedLines(before: string, after: string, shown: number): string {
     ].join('\n');
 }
 
+/** Width of the sidebar and the width the chat gets back when it is opened again. */
+const SIDEBAR_WIDTH = 256;
+const CHAT_OPEN_WIDTH = 384;
+
 export function CodeViewer({
     repo,
     repos,
@@ -330,6 +334,7 @@ export function CodeViewer({
     aiSelection,
     onActiveFile,
     onEditorVisible,
+    chatCollapsed = false,
     onMarkedFiles,
 }: {
     /** * The project whose files are shown. */
@@ -376,11 +381,13 @@ export function CodeViewer({
     onActiveFile?: (path: string | null) => void;
     /** * Whether the editor column (an open file or the change list) is showing; false leaves its room to the host. */
     onEditorVisible?: (visible: boolean) => void;
+    /** The chat is closed; when it opens again the columns make room for it. */
+    chatCollapsed?: boolean;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
     onMarkedFiles?: (paths: string[]) => void;
 }) {
     const { copy: copyPath } = useCopyToClipboard();
-    // * Either column can be dragged out to the full width: the chat then shrinks away (and clips its content) instead of being pushed off the screen.
+    // * Either column can be dragged out to the full width: the chat then shrinks, and closes once it is too narrow to use.
     const fileWidth = useResizableWidth(
         'ai-chat.width.file',
         704,
@@ -390,11 +397,28 @@ export function CodeViewer({
     const treeWidth = useResizableWidth(
         'ai-chat.width.tree',
         256,
-        180,
+        256,
         window.innerWidth,
     );
+
+    // * The chat was opened again: the columns give back the room it needs, or it would be squeezed shut at once.
+    const wasCollapsed = useRef(chatCollapsed);
+
+    useEffect(() => {
+        if (wasCollapsed.current && !chatCollapsed) {
+            const room = window.innerWidth - SIDEBAR_WIDTH - CHAT_OPEN_WIDTH;
+
+            treeWidth.shrinkTo(room - 320);
+            fileWidth.shrinkTo(room - Math.min(treeWidth.width, room - 320));
+        }
+
+        wasCollapsed.current = chatCollapsed;
+    }, [chatCollapsed, fileWidth, treeWidth]);
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
-    const sourceName = localRoot ? `Máy local · ${localRoot}` : repo;
+    // * The local repo is addressed by its full path; only the folder name is shown.
+    const sourceName = localRoot
+        ? `Máy local · ${localRoot.split('/').pop() || localRoot}`
+        : repo;
     const [paths, setPaths] = useState<string[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState('');
@@ -1690,48 +1714,50 @@ export function CodeViewer({
                     label="Đổi độ rộng cây thư mục"
                     {...treeWidth.handleProps}
                 />
-                <header className="flex h-12 items-center justify-between gap-2 border-b px-3">
-                    {repos.length > 1 ? (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <button
-                                    type="button"
-                                    aria-label="Chọn dự án để xem tệp"
-                                    className="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                >
-                                    <span className="truncate">
-                                        {sourceName}
-                                    </span>
-                                    <ChevronDown
-                                        aria-hidden="true"
-                                        className="size-4 shrink-0 text-muted-foreground"
-                                    />
-                                </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                                {repos.map((item) => (
-                                    <DropdownMenuItem
-                                        key={item}
-                                        onSelect={() => onViewRepo(item)}
-                                        className="justify-between gap-3"
+                {(repos.length > 1 || headerActions) && (
+                    <header className="flex h-12 items-center gap-2 border-b px-3">
+                        {repos.length > 1 ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        aria-label="Chọn dự án để xem tệp"
+                                        className="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     >
                                         <span className="truncate">
-                                            {item.startsWith('local:')
-                                                ? `Máy local · ${item.slice(6)}`
-                                                : item}
+                                            {sourceName}
                                         </span>
-                                        {item === repo && (
-                                            <Check aria-hidden="true" />
-                                        )}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    ) : null}
-                    <span className="ml-auto flex shrink-0 items-center gap-0.5">
-                        {headerActions}
-                    </span>
-                </header>
+                                        <ChevronDown
+                                            aria-hidden="true"
+                                            className="size-4 shrink-0 text-muted-foreground"
+                                        />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    {repos.map((item) => (
+                                        <DropdownMenuItem
+                                            key={item}
+                                            onSelect={() => onViewRepo(item)}
+                                            className="justify-between gap-3"
+                                        >
+                                            <span className="truncate">
+                                                {item.startsWith('local:')
+                                                    ? `Máy local · ${item.slice(6)}`
+                                                    : item}
+                                            </span>
+                                            {item === repo && (
+                                                <Check aria-hidden="true" />
+                                            )}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : null}
+                        <span className="mx-auto flex shrink-0 items-center gap-0.5">
+                            {headerActions}
+                        </span>
+                    </header>
+                )}
                 {localRoot !== null && (
                     <Tabs
                         value={view}

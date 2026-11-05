@@ -47,7 +47,7 @@ export function LocalBranchPopover({ root }: { root: string }) {
                     title={`Nhánh và worktree của dự án${data?.current ? ` · đang ở ${data.current}` : ''}`}
                     className={triggerClass}
                 >
-                    <GitBranch aria-hidden="true" />
+                    <GitBranch aria-hidden="true" className="size-5" />
                     <BranchName name={data?.current} />
                 </Button>
             </PopoverTrigger>

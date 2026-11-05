@@ -256,7 +256,7 @@ export function Composer({
                 </div>
             )}
             <div
-                className="@container cursor-text rounded-md border bg-card p-3"
+                className="relative @container cursor-text rounded-md border bg-card p-3"
                 onMouseDown={(event) => {
                     // * A click on the empty parts of the box (not a button or the text itself) lands in the message field.
                     if (
@@ -320,7 +320,7 @@ export function Composer({
                     <ul
                         role="listbox"
                         aria-label="Lệnh"
-                        className="mb-2 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
+                        className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
                     >
                         {suggestions.map((skill, index) => (
                             <li

@@ -1,11 +1,11 @@
 [package]
-name = "rynox-ide"
+name = "codexis-ide"
 version = "0.1.0"
 description = "Codexis IDE: the Code tab of the AI chat as a desktop app"
 edition = "2021"
 
 [lib]
-name = "rynox_ide_lib"
+name = "codexis_ide_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
