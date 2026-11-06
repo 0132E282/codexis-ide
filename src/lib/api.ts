@@ -111,6 +111,15 @@ export const api = {
                 });
             case '/ai-chat/local/commit-message':
                 return call('local_commit_message', { root: rootOf(data) });
+            case '/ai-chat/inline-ask':
+                return call('inline_ask', {
+                    root: rootOf(data),
+                    path: data?.path,
+                    startLine: data?.startLine,
+                    endLine: data?.endLine,
+                    text: data?.text,
+                    question: data?.question,
+                });
             default:
                 return Promise.reject(unwired('POST', url));
         }

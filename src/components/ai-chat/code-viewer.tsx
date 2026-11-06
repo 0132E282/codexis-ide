@@ -126,6 +126,7 @@ function TreeItems({
     onSelect,
     marked,
     onMark,
+    onAttach,
     changed,
     changedDirs,
     actions,
@@ -139,6 +140,8 @@ function TreeItems({
     /** * Files picked with Cmd/Ctrl+click (several at once, tagged in the chat). */
     marked: Set<string>;
     onMark: (path: string) => void;
+    /** Double click on a file: it is attached to the chat message. */
+    onAttach?: (path: string) => void;
     changed: Map<string, AiChatProposal['action']>;
     changedDirs: Set<string>;
     actions: FileActions;
@@ -178,6 +181,9 @@ function TreeItems({
                         >
                             <button
                                 type="button"
+                                onDoubleClick={() =>
+                                    isDir ? undefined : onAttach?.(node.path)
+                                }
                                 onClick={(event) =>
                                     isDir
                                         ? onToggle(node.path)
@@ -266,6 +272,7 @@ function TreeItems({
                                 onSelect={onSelect}
                                 marked={marked}
                                 onMark={onMark}
+                                onAttach={onAttach}
                                 changed={changed}
                                 changedDirs={changedDirs}
                                 actions={actions}
@@ -317,6 +324,8 @@ function typedLines(before: string, after: string, shown: number): string {
 
 /** Width of the sidebar and the width the chat gets back when it is opened again. */
 const SIDEBAR_WIDTH = 256;
+// * The file tree can be dragged this wide at most.
+const TREE_MAX_WIDTH = 640;
 const CHAT_OPEN_WIDTH = 384;
 
 export function CodeViewer({
@@ -335,6 +344,8 @@ export function CodeViewer({
     onActiveFile,
     onEditorVisible,
     chatCollapsed = false,
+    tabsEnd,
+    onAttachFile,
     onMarkedFiles,
 }: {
     /** * The project whose files are shown. */
@@ -383,6 +394,10 @@ export function CodeViewer({
     onEditorVisible?: (visible: boolean) => void;
     /** The chat is closed; when it opens again the columns make room for it. */
     chatCollapsed?: boolean;
+    /** Buttons pinned to the right end of the tab bar. */
+    tabsEnd?: ReactNode;
+    /** Double click on a file of the tree: the chat attaches it (path inside the project). */
+    onAttachFile?: (path: string) => void;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
     onMarkedFiles?: (paths: string[]) => void;
 }) {
@@ -398,7 +413,7 @@ export function CodeViewer({
         'ai-chat.width.tree',
         256,
         256,
-        window.innerWidth,
+        TREE_MAX_WIDTH,
     );
 
     // * The chat was opened again: the columns give back the room it needs, or it would be squeezed shut at once.
@@ -436,6 +451,11 @@ export function CodeViewer({
     }, [marked, onMarkedFiles]);
     // * Files open as tabs (the active one is `selected`); an unsaved edit of a tab that is not active waits in `drafts`.
     const [tabs, setTabs] = useState<string[]>([]);
+    // * Like VS Code: a file opened by a click is a preview tab (italic) that the next opened file replaces; typing or saving keeps it.
+    const [previewTab, setPreviewTab] = useState<string | null>(null);
+    const previewRef = useRef<string | null>(null);
+
+    previewRef.current = previewTab;
     // * A tab being dragged and the tab it would land on: dropping moves it to that position.
     const [draggedTab, setDraggedTab] = useState<string | null>(null);
     const [dropTab, setDropTab] = useState<string | null>(null);
@@ -574,6 +594,7 @@ export function CodeViewer({
             shownRepo.current = repo;
             drafts.current.clear();
             setTabs([]);
+            setPreviewTab(null);
             setSelected(null);
         }
     }, [repo]);
@@ -711,9 +732,18 @@ export function CodeViewer({
 
         loadedStatus.current = change?.status;
 
-        setTabs((current) =>
-            current.includes(path) ? current : [...current, path],
-        );
+        setTabs((current) => {
+            if (current.includes(path)) {
+                return current;
+            }
+
+            const replaced = previewRef.current;
+
+            return replaced !== null && current.includes(replaced)
+                ? current.map((item) => (item === replaced ? path : item))
+                : [...current, path];
+        });
+        setPreviewTab((current) => (tabs.includes(path) ? current : path));
         setView('files');
         setSelected(path);
         stopTyping.current();
@@ -978,6 +1008,13 @@ export function CodeViewer({
     useEffect(() => {
         onEditorVisible?.(editorVisible);
     }, [editorVisible, onEditorVisible]);
+
+    // * The first edit keeps the preview tab.
+    useEffect(() => {
+        if (draft !== null && selected !== null && selected === previewTab) {
+            setPreviewTab(null);
+        }
+    }, [draft, selected, previewTab]);
 
     const isDirty = (path: string) =>
         path === selected ? draft !== null : drafts.current.has(path);
@@ -1352,13 +1389,24 @@ export function CodeViewer({
                                                         ? undefined
                                                         : void openFile(path)
                                                 }
+                                                onDoubleClick={() =>
+                                                    path === previewTab
+                                                        ? setPreviewTab(null)
+                                                        : undefined
+                                                }
                                                 className="flex min-w-0 items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                             >
                                                 <FileIcon
                                                     name={name}
                                                     className="size-4 shrink-0"
                                                 />
-                                                <span className="truncate">
+                                                <span
+                                                    className={cn(
+                                                        'truncate',
+                                                        path === previewTab &&
+                                                            'italic',
+                                                    )}
+                                                >
                                                     {name}
                                                 </span>
                                                 {isDirty(path) && (
@@ -1442,6 +1490,11 @@ export function CodeViewer({
                                 </ContextMenu>
                             );
                         })}
+                        {tabsEnd !== undefined && (
+                            <div className="sticky right-0 ml-auto flex shrink-0 items-center gap-1 bg-background pl-1">
+                                {tabsEnd}
+                            </div>
+                        )}
                     </div>
                     <div className="flex h-12 items-center justify-between gap-2 border-b px-3 text-xs text-muted-foreground">
                         <span className="truncate" dir="rtl">
@@ -1818,6 +1871,7 @@ export function CodeViewer({
                                     void openFile(path);
                                 }}
                                 marked={marked}
+                                onAttach={onAttachFile}
                                 onMark={(path) =>
                                     setMarked((current) => {
                                         const next = new Set(current);

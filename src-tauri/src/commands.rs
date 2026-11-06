@@ -7,9 +7,12 @@ use crate::credentials::CredentialStore;
 use crate::git::{self, Branches, Change, Committed};
 use crate::profiles::{self, ProfileStore};
 use crate::projects::{NewProject, Project, ProjectStore};
+use crate::remote::{self, Remote};
+use crate::terminal;
 use crate::vscode;
 use crate::workspace::{Workspace, WorkspaceError};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::{Mutex, RwLock};
 use tauri::ipc::{InvokeBody, Request};
@@ -302,6 +305,64 @@ pub fn open_in_vscode(
     .map_err(|error| error.to_string())
 }
 
+/// Opens a shell in the project folder; the panel reads it through the `terminal-data` event.
+#[tauri::command]
+pub fn terminal_open(
+    app: AppHandle,
+    state: State<AppState>,
+    terminals: State<terminal::Terminals>,
+    id: String,
+    root: Option<String>,
+    columns: u16,
+    rows: u16,
+) -> Result<(), String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    terminals
+        .open(app, id, workspace.root(), columns, rows)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn terminal_write(
+    terminals: State<terminal::Terminals>,
+    id: String,
+    data: String,
+) -> Result<(), String> {
+    terminals
+        .write(&id, &data)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn terminal_resize(
+    terminals: State<terminal::Terminals>,
+    id: String,
+    columns: u16,
+    rows: u16,
+) -> Result<(), String> {
+    terminals
+        .resize(&id, columns, rows)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn terminal_close(terminals: State<terminal::Terminals>, id: String) -> Result<(), String> {
+    terminals.close(&id).map_err(|error| error.to_string())
+}
+
+/// Starts the server a phone connects to (or returns the running one): the address and pairing token for the QR code.
+#[tauri::command]
+pub fn remote_start(app: AppHandle, remote: State<Remote>) -> Result<remote::Info, String> {
+    remote.start(&app)
+}
+
+/// Stops the phone server: every phone is dropped and the token stops working.
+#[tauri::command]
+pub fn remote_stop(app: AppHandle, remote: State<Remote>) {
+    remote.stop(&app);
+}
+
 #[derive(Debug, Serialize)]
 pub struct ChangesReply {
     git: bool,
@@ -414,11 +475,85 @@ pub async fn local_commit_message(
     .map_err(|_| "AI chưa viết được nội dung.".to_string())?
 }
 
+/// Question about a snippet picked in the editor: the file, lines and code go to the Claude CLI.
+fn inline_prompt(path: &str, start_line: u32, end_line: u32, text: &str, question: &str) -> String {
+    let lines = if start_line == 0 || end_line == 0 {
+        "cả tệp".to_string()
+    } else if start_line == end_line {
+        format!("dòng {start_line}")
+    } else {
+        format!("dòng {start_line}-{end_line}")
+    };
+
+    format!(
+        "Trả lời ngắn gọn, đúng trọng tâm, bằng đúng ngôn ngữ của câu hỏi. Chỉ trả lời, không sửa tệp.\n\n\
+         Tệp: {path} ({lines})\n```\n{text}\n```\n\nCâu hỏi: {question}"
+    )
+}
+
+/// Answer of the AI to an inline question; `conversation` is a fixed tag, no history is kept.
+#[derive(Serialize)]
+pub struct InlineAnswer {
+    answer: String,
+    conversation: String,
+}
+
+/// Answers a question about picked lines with the Claude CLI run in the project root; denied files are refused.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn inline_ask(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+    start_line: u32,
+    end_line: u32,
+    text: String,
+    question: String,
+) -> Result<InlineAnswer, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    // * Same guard as reading a file: a denied name (.env, keys...) or a path outside the root never reaches the AI.
+    let relative = workspace
+        .allowed_relative(&path)
+        .map_err(|error| error.to_string())?;
+
+    if question.trim().is_empty() {
+        return Err("Hãy nhập câu hỏi.".to_string());
+    }
+
+    let environment = app.state::<CredentialStore>().environment();
+    let prompt = inline_prompt(&relative, start_line, end_line, &text, question.trim());
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let answer = agent::ask_once(workspace.root(), &prompt, &environment)
+            .ok_or("AI chưa trả lời được. Kiểm tra Claude đã đăng nhập chưa.")?;
+
+        Ok(InlineAnswer {
+            answer,
+            conversation: "inline".to_string(),
+        })
+    })
+    .await
+    .map_err(|_| "AI chưa trả lời được.".to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::projects::EnvVar;
     use std::fs;
+
+    #[test]
+    fn inline_prompt_names_file_lines_code_and_question() {
+        let prompt = inline_prompt("src/a.rs", 3, 5, "let x = 1;", "Giải thích");
+
+        assert!(prompt.contains("Tệp: src/a.rs (dòng 3-5)"));
+        assert!(prompt.contains("```\nlet x = 1;\n```"));
+        assert!(prompt.ends_with("Câu hỏi: Giải thích"));
+        assert!(inline_prompt("a", 4, 4, "", "q").contains("(dòng 4)"));
+        assert!(inline_prompt("a", 0, 0, "", "q").contains("(cả tệp)"));
+    }
 
     fn state_with_projects(dir: &Path, folders: &[&Path]) -> (AppState, Vec<String>) {
         let state = AppState::new(
@@ -588,6 +723,8 @@ pub fn agent_send(
     mode: Option<String>,
     agent_team: bool,
     root: Option<String>,
+    extra_roots: Option<Vec<String>>,
+    worktree: Option<String>,
 ) -> Result<(), String> {
     let cli = Cli::parse(&cli).ok_or("Chưa hỗ trợ CLI này.")?;
 
@@ -603,6 +740,31 @@ pub fn agent_send(
     }
 
     let root = state.workspace_for(root.as_deref())?.root().to_path_buf();
+    // * Worktree mode: each project of the turn (the chat's own and the added ones) is worked on in its own branch and copy kept in the app's data folder, so the projects themselves stay untouched.
+    let in_worktree = |project: &Path| -> Result<std::path::PathBuf, String> {
+        let Some(name) = worktree.as_deref() else {
+            return Ok(project.to_path_buf());
+        };
+        let base = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?
+            .join("worktrees")
+            .join(&format!("{:x}", Sha256::digest(project.to_string_lossy().as_bytes()))[..12]);
+
+        git::ensure_worktree(project, &base, name).map_err(|error| error.to_string())
+    };
+    // * More projects of the same chat: only saved projects are accepted, and the CLI may then also work in their folders.
+    let add_dirs = extra_roots
+        .unwrap_or_default()
+        .iter()
+        .map(|extra| {
+            let workspace = state.workspace_for(Some(extra))?;
+
+            in_worktree(workspace.root()).map(|folder| folder.display().to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let root = in_worktree(&root)?;
     // * Saved API keys go to the Claude CLI only; Codex has no key of its own here.
     let mut environment = if cli == Cli::Claude {
         app.state::<CredentialStore>().environment()
@@ -626,6 +788,7 @@ pub fn agent_send(
             session.as_deref(),
             model.as_deref(),
             mode.as_deref(),
+            &add_dirs,
             &environment,
             |event| {
                 let _ = app.emit(

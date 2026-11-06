@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import logo from '@/assets/logo.png';
@@ -11,7 +11,13 @@ import type { Attachment } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { useTypewriter } from '@/hooks/use-typewriter';
-import { errorText, ide, onAgentEvent, pickFiles } from '@/lib/ide';
+import {
+    errorText,
+    ide,
+    onAgentEvent,
+    onRemoteSend,
+    pickFiles,
+} from '@/lib/ide';
 import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
 import type { AgentCli, ChatHistory, Step, Subagent } from '@/lib/ide';
@@ -25,6 +31,8 @@ type Turn = {
     cli: AgentCli;
     /** What the AI did, step by step, while this session ran; a turn loaded from the history has only its `answer`. */
     steps?: Step[];
+    /** What each sub-agent of this turn did inside itself, by the id of the call that started it. */
+    sub?: Record<string, Step[]>;
     /** Loaded from the saved history: shown at once, not typed out. */
     restored?: boolean;
 };
@@ -149,6 +157,71 @@ function AttachmentView({ path, name }: { path: string; name: string }) {
     );
 }
 
+const READ_ONLY_CHOICES: ChoiceHandlers = {
+    interactive: false,
+    answer: null,
+    onChoose: () => undefined,
+};
+
+/** What one sub-agent did and is doing: its words and tool calls, live, apart from the conversation of the main agent. */
+function SubagentView({
+    id,
+    turns,
+    onBack,
+}: {
+    id: string;
+    turns: Turn[];
+    onBack: () => void;
+}) {
+    const owner = turns.find((turn) => turn.sub?.[id] !== undefined);
+    const call = turns
+        .flatMap((turn) => turn.steps ?? [])
+        .find((step) => step.kind === 'tool' && step.id === id);
+    const steps = owner?.sub?.[id] ?? [];
+    const finished = call?.kind === 'tool' && call.status !== 'running';
+
+    return (
+        <div className="min-w-0 space-y-4">
+            <button
+                type="button"
+                onClick={onBack}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+                <ArrowLeft aria-hidden="true" className="size-4" />
+                Quay lại cuộc trò chuyện
+            </button>
+            {call?.kind === 'tool' && (
+                <div className="rounded-lg border bg-card px-3 py-2">
+                    <p className="font-semibold">
+                        {call.name}{' '}
+                        <span className="font-normal text-muted-foreground">
+                            {call.description}
+                        </span>
+                    </p>
+                    {call.input !== '' && (
+                        <pre className="mt-1 max-h-32 overflow-auto font-mono text-xs/5 break-words whitespace-pre-wrap text-muted-foreground">
+                            {call.input}
+                        </pre>
+                    )}
+                </div>
+            )}
+            {steps.length > 0 ? (
+                <TurnSteps
+                    steps={steps}
+                    running={!finished}
+                    choices={READ_ONLY_CHOICES}
+                />
+            ) : (
+                <p className="text-sm text-muted-foreground">
+                    {finished
+                        ? 'Sub-agent này không ghi lại bước nào.'
+                        : 'Sub-agent đang bắt đầu…'}
+                </p>
+            )}
+        </div>
+    );
+}
+
 // * Memoised: dragging the panel edge re-renders the panel on every frame, and a long markdown answer must not be parsed again each time.
 const TurnView = memo(function TurnView({
     turn,
@@ -230,7 +303,11 @@ const TurnView = memo(function TurnView({
     );
 });
 
+// * The chat can be dragged this wide at most, so the file beside it keeps the larger share.
+const CHAT_MAX_WIDTH = 560;
+
 /** Chat with an AI CLI in the open project: each message is one CLI turn, and the CLI's session id keeps the conversation going. Turns and session ids are saved per workspace, so reopening it continues the same CLI conversation. */
+
 export function ChatPanel({
     root,
     fill,
@@ -241,9 +318,18 @@ export function ChatPanel({
     onSubagents,
     collapsed,
     onTooNarrow,
+    viewSubagent,
+    onLeaveSubagent,
+    attachFile,
     headerStart,
     headerActions,
+    projects = [],
+    acceptsRemote = false,
 }: {
+    /** The open pane takes the messages the phone app sends; the others ignore them. */
+    acceptsRemote?: boolean;
+    /** Saved projects (folder + name): the ones other than this chat's can be added to a turn. */
+    projects?: { root: string; name: string }[];
     /** Folder of the project this chat belongs to: every command of the panel is addressed to it, so it keeps working while another project is open. */
     root: string;
     fill: boolean;
@@ -261,6 +347,12 @@ export function ChatPanel({
     collapsed: boolean;
     /** Told when the editor columns have squeezed the chat narrower than it can be used; the app then closes it. */
     onTooNarrow: () => void;
+    /** The sub-agent picked in the sidebar: the chat shows what it is doing instead of the conversation. */
+    viewSubagent: string | null;
+    /** A file double-clicked in the tree: it joins the attachments of the message. */
+    attachFile: { path: string; n: number } | null;
+    /** Back from the view of a sub-agent to the conversation. */
+    onLeaveSubagent: () => void;
     /** Button at the left end of the bar at the top of the chat (folds the sidebar). */
     headerStart?: ReactNode;
     /** Buttons for the right end of that bar (branch, editor, terminal). */
@@ -274,6 +366,10 @@ export function ChatPanel({
     // * Claude only: the permission mode, and whether its experimental agent teams are on.
     const [mode, setMode] = useState('auto');
     const [agentTeam, setAgentTeam] = useState(false);
+    // * Other projects the AI may also work in; kept for the whole chat, changed between messages.
+    const [extraRoots, setExtraRoots] = useState<string[]>([]);
+    // * Worktree mode: the turns of this conversation run on their own git branch, in a copy of the project.
+    const [worktree, setWorktree] = useState(false);
     const [models, setModels] = useState<Partial<Record<AgentCli, string>>>({});
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [attachError, setAttachError] = useState<string | null>(null);
@@ -295,7 +391,7 @@ export function ChatPanel({
         'rynox.chat-width',
         384,
         200,
-        window.innerWidth,
+        CHAT_MAX_WIDTH,
         'x',
         'trailing',
     );
@@ -535,43 +631,59 @@ export function ChatPanel({
                         input: string;
                         before?: string;
                         after?: string;
+                        parent?: string;
+                    };
+                    const step: Step = {
+                        kind: 'tool',
+                        id: call.id,
+                        name: call.name,
+                        description: call.description,
+                        input: call.input,
+                        change:
+                            call.before !== undefined &&
+                            call.after !== undefined
+                                ? { before: call.before, after: call.after }
+                                : undefined,
+                        output: null,
+                        status: 'running',
                     };
 
-                    update(runId, (turn) =>
+                    update(runId, (turn) => {
                         // * The CLI can send the same call again: it is shown once.
-                        turn.steps?.some(
-                            (step) =>
-                                step.kind === 'tool' && step.id === call.id,
-                        )
-                            ? turn
-                            : {
+                        const list =
+                            call.parent === undefined
+                                ? turn.steps
+                                : turn.sub?.[call.parent];
+
+                        if (
+                            list?.some(
+                                (item) =>
+                                    item.kind === 'tool' && item.id === call.id,
+                            )
+                        ) {
+                            return turn;
+                        }
+
+                        return call.parent === undefined
+                            ? {
                                   ...turn,
                                   // * Words before a tool call and the answer after it must not run together.
                                   answer: turn.answer
                                       ? `${turn.answer}\n\n`
                                       : '',
-                                  steps: [
-                                      ...(turn.steps ?? []),
-                                      {
-                                          kind: 'tool',
-                                          id: call.id,
-                                          name: call.name,
-                                          description: call.description,
-                                          input: call.input,
-                                          change:
-                                              call.before !== undefined &&
-                                              call.after !== undefined
-                                                  ? {
-                                                        before: call.before,
-                                                        after: call.after,
-                                                    }
-                                                  : undefined,
-                                          output: null,
-                                          status: 'running',
-                                      },
-                                  ],
-                              },
-                    );
+                                  steps: [...(turn.steps ?? []), step],
+                              }
+                            : {
+                                  ...turn,
+                                  sub: {
+                                      ...turn.sub,
+                                      [call.parent]: [
+                                          ...(turn.sub?.[call.parent] ?? []),
+                                          step,
+                                      ],
+                                  },
+                              };
+                    });
                 } catch {
                     // * A malformed event is not shown.
                 }
@@ -581,19 +693,55 @@ export function ChatPanel({
                         id: string;
                         output: string;
                         error: boolean;
+                        parent?: string;
                     };
-
-                    update(runId, (turn) => ({
-                        ...turn,
-                        steps: turn.steps?.map((step) =>
+                    const finish = (
+                        list: Step[] | undefined,
+                    ): Step[] | undefined =>
+                        list?.map((step) =>
                             step.kind === 'tool' && step.id === result.id
                                 ? {
                                       ...step,
                                       output: result.output,
-                                      status: result.error ? 'error' : 'ok',
+                                      status: result.error
+                                          ? ('error' as const)
+                                          : ('ok' as const),
                                   }
                                 : step,
-                        ),
+                        );
+
+                    update(runId, (turn) =>
+                        result.parent === undefined
+                            ? { ...turn, steps: finish(turn.steps) }
+                            : {
+                                  ...turn,
+                                  sub: {
+                                      ...turn.sub,
+                                      [result.parent]:
+                                          finish(turn.sub?.[result.parent]) ??
+                                          [],
+                                  },
+                              },
+                    );
+                } catch {
+                    // * A malformed event is not shown.
+                }
+            } else if (kind === 'subtext') {
+                try {
+                    const spoken = JSON.parse(payload) as {
+                        parent: string;
+                        text: string;
+                    };
+
+                    update(runId, (turn) => ({
+                        ...turn,
+                        sub: {
+                            ...turn.sub,
+                            [spoken.parent]: [
+                                ...(turn.sub?.[spoken.parent] ?? []),
+                                { kind: 'text', text: spoken.text },
+                            ],
+                        },
                     }));
                 } catch {
                     // * A malformed event is not shown.
@@ -704,6 +852,30 @@ export function ChatPanel({
         ]);
     };
 
+    // * A double click in the tree attaches that file (once; a click on one already attached changes nothing).
+    useEffect(() => {
+        if (attachFile === null) {
+            return;
+        }
+
+        const path = `${root.replace(/\/$/, '')}/${attachFile.path}`;
+
+        setAttachments((current) =>
+            current.some((item) => item.path === path)
+                ? current
+                : [
+                      ...current,
+                      {
+                          id: `attachment-${attachmentCounter.current++}`,
+                          name: attachFile.path.split('/').pop() ?? path,
+                          path,
+                          preview: null,
+                      },
+                  ],
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attachFile]);
+
     const removeAttachment = (id: string) => {
         const removed = attachments.find((item) => item.id === id);
 
@@ -755,6 +927,12 @@ export function ChatPanel({
             target === 'claude' ? mode : null,
             target === 'claude' && agentTeam,
             root,
+            extraRoots.filter((extra) =>
+                projects.some((project) => project.root === extra),
+            ),
+            worktree && conversation.current !== null
+                ? `c${conversation.current}`
+                : undefined,
         ).catch((caught) => {
             runs.current.delete(id);
             drafts.current.delete(id);
@@ -803,6 +981,21 @@ export function ChatPanel({
 
         startTurn(prompt, cli, [], true);
     };
+
+    // * A message from the phone app is sent as if it was typed here; one that arrives while a turn runs is ignored.
+    const remoteSend = useRef<(prompt: string) => void>(() => undefined);
+
+    remoteSend.current = (prompt) => {
+        if (acceptsRemote && !busy && prompt.trim() !== '') {
+            startTurn(prompt.trim(), cli, [], true);
+        }
+    };
+
+    useEffect(() => {
+        const stop = onRemoteSend((prompt) => remoteSend.current(prompt));
+
+        return () => void stop.then((unlisten) => unlisten());
+    }, []);
 
     // * A turn that ended on a limit error is sent again to the next AI of the saved order; when none is left the turn says so.
     useEffect(() => {
@@ -884,17 +1077,28 @@ export function ChatPanel({
                             </p>
                         </div>
                     )}
-                    {turns.map((turn, index) => (
-                        <TurnView
-                            key={turn.id}
-                            turn={turn}
-                            interactive={
-                                index === turns.length - 1 && !turn.running
-                            }
-                            followUp={turns[index + 1]?.prompt ?? null}
-                            onChoose={choose}
+                    {viewSubagent !== null ? (
+                        <SubagentView
+                            id={viewSubagent}
+                            turns={turns}
+                            onBack={onLeaveSubagent}
                         />
-                    ))}
+                    ) : (
+                        <>
+                            {turns.map((turn, index) => (
+                                <TurnView
+                                    key={turn.id}
+                                    turn={turn}
+                                    interactive={
+                                        index === turns.length - 1 &&
+                                        !turn.running
+                                    }
+                                    followUp={turns[index + 1]?.prompt ?? null}
+                                    onChoose={choose}
+                                />
+                            ))}
+                        </>
+                    )}
                     <div ref={bottom} />
                 </div>
             </div>
@@ -924,6 +1128,18 @@ export function ChatPanel({
                 onPasteFiles={pasteFiles}
                 onPastePaths={pastePaths}
                 onRemoveAttachment={removeAttachment}
+                projectName={
+                    projects.find((project) => project.root === root)?.name ??
+                    root.split('/').pop() ??
+                    root
+                }
+                otherProjects={projects.filter(
+                    (project) => project.root !== root,
+                )}
+                extraRoots={extraRoots}
+                worktree={worktree}
+                onWorktreeChange={setWorktree}
+                onExtraRootsChange={setExtraRoots}
             />
         </section>
     );

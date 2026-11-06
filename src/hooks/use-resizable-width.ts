@@ -134,9 +134,22 @@ export function useResizableWidth(
         [clamp],
     );
 
+    // * Sets the width to `value` (clamped) and keeps it, like the end of a drag does.
+    const setTo = useCallback(
+        (value: number) => {
+            const next = clamp(value);
+
+            latest.current = next;
+            setWidth(next);
+            save();
+        },
+        [clamp, save],
+    );
+
     return {
         width,
         shrinkTo,
+        setTo,
         handleProps: {
             role: 'separator' as const,
             'aria-orientation': (axis === 'x' ? 'vertical' : 'horizontal') as

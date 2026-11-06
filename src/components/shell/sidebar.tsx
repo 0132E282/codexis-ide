@@ -5,6 +5,7 @@ import {
     FolderOpen,
     Plus,
     Settings,
+    Smartphone,
     Trash2,
 } from 'lucide-react';
 import { Fragment, useState } from 'react';
@@ -48,10 +49,12 @@ export function Sidebar({
     currentConversation,
     subagents,
     onOpenConversation,
+    onOpenSubagent,
     onDeleteConversation,
     onNewChat,
     onOpenSettings,
     onOpenUsage,
+    onConnectPhone,
 }: {
     projects: Project[];
     /** Saved project that is the open workspace, if any. */
@@ -63,7 +66,8 @@ export function Sidebar({
     onSelect: (id: string) => void;
     onSelectStartup: () => void;
     onCreated: (project: Project) => void;
-    onRemove: (id: string) => void;
+    /** `null` is the startup folder shown while no project is saved: it is only hidden. */
+    onRemove: (id: string | null) => void;
     /** Conversations of the open project, the most recently used first. */
     conversations: ChatConversation[];
     /** The conversation shown in the chat; null until it is loaded. */
@@ -71,12 +75,16 @@ export function Sidebar({
     /** Sub-agents the AI has started in the shown conversation's running turn. */
     subagents: Subagent[];
     onOpenConversation: (id: number) => void;
+    /** Shows what a sub-agent did: its call opens in the chat. */
+    onOpenSubagent: (id: string) => void;
     onDeleteConversation: (id: number) => void;
     /** Starts a new conversation with the AI in the open project. */
     onNewChat: () => void;
     /** Opens the chat settings on `tab`. */
     onOpenSettings: (tab: SettingsTab) => void;
     onOpenUsage: () => void;
+    /** Opens the dialog that pairs the phone app. */
+    onConnectPhone: () => void;
 }) {
     const [query, setQuery] = useState('');
     const needle = plain(query.trim());
@@ -91,7 +99,7 @@ export function Sidebar({
     return (
         <aside
             aria-label="Thanh bên"
-            className="flex w-64 shrink-0 flex-col border-r bg-background max-[900px]:w-48"
+            className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
             {/* * The title bar overlays the window (macOS): the logo sits in the row of the window buttons, to their right. */}
             <div
@@ -180,26 +188,22 @@ export function Sidebar({
                                     </span>
                                     <span
                                         title="Số cuộc trò chuyện"
-                                        className="shrink-0 text-xs text-muted-foreground tabular-nums group-hover:invisible"
+                                        className="mr-6 shrink-0 text-xs text-muted-foreground tabular-nums"
                                     >
                                         {active ? conversations.length : ''}
                                     </span>
                                 </button>
-                                {row.id !== null && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        aria-label={`Xóa dự án ${row.name} khỏi danh sách`}
-                                        title="Xóa khỏi danh sách (không xóa thư mục)"
-                                        onClick={() =>
-                                            onRemove(row.id as string)
-                                        }
-                                        className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                                    >
-                                        <Trash2 aria-hidden="true" />
-                                    </Button>
-                                )}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    aria-label={`Xóa dự án ${row.name} khỏi danh sách`}
+                                    title="Xóa khỏi danh sách (không xóa thư mục)"
+                                    onClick={() => onRemove(row.id)}
+                                    className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                                >
+                                    <Trash2 aria-hidden="true" />
+                                </Button>
                             </div>
                             {active && (
                                 <button
@@ -256,7 +260,7 @@ export function Sidebar({
                                                         conversation.id,
                                                     )
                                                 }
-                                                className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-hover/chat:opacity-100 focus-visible:opacity-100"
+                                                className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-50 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
                                             >
                                                 <Trash2 aria-hidden="true" />
                                             </Button>
@@ -273,25 +277,34 @@ export function Sidebar({
                                                                     key={
                                                                         agent.id
                                                                     }
-                                                                    title={
-                                                                        agent.label
-                                                                    }
-                                                                    className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground"
                                                                 >
-                                                                    <span
-                                                                        aria-hidden="true"
-                                                                        className={cn(
-                                                                            'size-1.5 shrink-0 rounded-full',
-                                                                            agent.done
-                                                                                ? 'bg-muted-foreground/50'
-                                                                                : 'animate-pulse bg-primary',
-                                                                        )}
-                                                                    />
-                                                                    <span className="truncate">
-                                                                        {
+                                                                    <button
+                                                                        type="button"
+                                                                        title={
                                                                             agent.label
                                                                         }
-                                                                    </span>
+                                                                        onClick={() =>
+                                                                            onOpenSubagent(
+                                                                                agent.id,
+                                                                            )
+                                                                        }
+                                                                        className="flex w-full items-center gap-2 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                                    >
+                                                                        <span
+                                                                            aria-hidden="true"
+                                                                            className={cn(
+                                                                                'size-1.5 shrink-0 rounded-full',
+                                                                                agent.done
+                                                                                    ? 'bg-muted-foreground/50'
+                                                                                    : 'animate-pulse bg-primary',
+                                                                            )}
+                                                                        />
+                                                                        <span className="truncate">
+                                                                            {
+                                                                                agent.label
+                                                                            }
+                                                                        </span>
+                                                                    </button>
                                                                 </li>
                                                             ),
                                                         )}
@@ -340,6 +353,10 @@ export function Sidebar({
                         <DropdownMenuItem onSelect={onOpenUsage}>
                             <ChartColumn aria-hidden="true" />
                             Thống kê
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={onConnectPhone}>
+                            <Smartphone aria-hidden="true" />
+                            Kết nối điện thoại
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

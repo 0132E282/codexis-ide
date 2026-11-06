@@ -122,7 +122,7 @@ export function UsageDialog({
                             Đang tải…
                         </p>
                     ) : (
-                        <ul className="flex flex-col gap-2">
+                        <ul className="flex flex-col gap-4">
                             {stats.clis.map((usage) => (
                                 <UsageRow
                                     key={usage.cli}
@@ -191,7 +191,7 @@ function UsageRow({
     ];
 
     return (
-        <li className={cn('flex flex-col gap-3 rounded-md border p-3 text-sm')}>
+        <li className="flex flex-col gap-4 rounded-lg border p-4 text-sm">
             <div className="flex items-center gap-2">
                 <Icon aria-hidden="true" className="size-5 shrink-0" />
                 <span
@@ -203,13 +203,10 @@ function UsageRow({
                     {CLI_LABELS[usage.cli]}
                 </span>
             </div>
-            <dl className="flex flex-nowrap justify-between gap-x-4 overflow-hidden">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
                 {stats.map((stat) => (
-                    <div
-                        key={stat.label}
-                        className="flex items-baseline gap-1.5 whitespace-nowrap"
-                    >
-                        <dt className="shrink-0 text-xs text-muted-foreground">
+                    <div key={stat.label} className="flex flex-col gap-0.5">
+                        <dt className="text-xs text-muted-foreground">
                             {stat.label}
                         </dt>
                         <dd className="font-medium tabular-nums">
@@ -219,22 +216,31 @@ function UsageRow({
                 ))}
             </dl>
             {limits !== undefined && limits !== null ? (
-                <div className="flex flex-col gap-1.5 text-xs">
+                <div className="flex flex-col gap-3 border-t pt-4 text-xs">
                     {limits.map((limit) => (
                         <div
                             key={limit.label}
-                            className="flex items-center gap-3"
+                            className="flex flex-col gap-1.5"
                         >
-                            <span className="w-10 shrink-0 text-muted-foreground">
-                                {LIMIT_LABELS[limit.label] ?? limit.label}
-                            </span>
+                            <div className="flex items-baseline justify-between gap-3">
+                                <span className="min-w-0 font-medium">
+                                    {LIMIT_LABELS[limit.label] ?? limit.label}
+                                </span>
+                                <span className="shrink-0 text-muted-foreground tabular-nums">
+                                    <span className="font-medium text-foreground">
+                                        {limit.percent}%
+                                    </span>
+                                    {limit.resets !== null &&
+                                        ` · Đặt lại ${formatReset(limit.resets)}`}
+                                </span>
+                            </div>
                             <div
                                 role="progressbar"
                                 aria-label={limit.label}
                                 aria-valuemin={0}
                                 aria-valuemax={100}
                                 aria-valuenow={limit.percent}
-                                className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
+                                className="h-2 w-full overflow-hidden rounded-full bg-muted"
                             >
                                 <div
                                     className={cn(
@@ -244,14 +250,6 @@ function UsageRow({
                                     style={{ width: `${limit.percent}%` }}
                                 />
                             </div>
-                            <span className="w-8 shrink-0 text-right tabular-nums">
-                                {limit.percent}%
-                            </span>
-                            {limit.resets !== null && (
-                                <span className="shrink-0 text-muted-foreground">
-                                    Đặt lại {formatReset(limit.resets)}
-                                </span>
-                            )}
                         </div>
                     ))}
                 </div>
@@ -260,7 +258,7 @@ function UsageRow({
                     Đang đọc /usage…
                 </p>
             ) : (
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-3 border-t pt-4 text-xs">
                     <div
                         role="progressbar"
                         aria-label={`Mức sử dụng 7 ngày của ${CLI_LABELS[usage.cli]}`}

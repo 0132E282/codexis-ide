@@ -1,69 +1,44 @@
 import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { Trash2, X } from 'lucide-react';
+import { Columns2, Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-
-export type ActivityEntry = {
-    id: number;
-    time: string;
-    level: 'info' | 'ok' | 'error';
-    text: string;
-};
-
-// * ANSI colour and symbol of each log level.
-const LEVEL = {
-    info: { color: '36', prefix: '›' },
-    ok: { color: '32', prefix: '✓' },
-    error: { color: '31', prefix: '✗' },
-} as const;
+import { ide, onTerminalData, onTerminalExit } from '@/lib/ide';
+import { cn } from '@/lib/utils';
 
 const THEME = {
     dark: { background: '#09090b', foreground: '#e4e4e7' },
     light: { background: '#fafafa', foreground: '#27272a' },
 } as const;
 
+/** Unique per mount, so a shell that is still closing never shares its id with the one that replaces it. */
+let sessionCounter = 0;
 
-/** * Terminal (a side-panel column, drawn by xterm.js): it logs what this chat page did (sends, repo reads, pull requests) and runs the commands typed on its last line. */
-export function ActivityTerminal({
-    entries,
-    onClear,
-    onClose,
-    onRun,
-    name,
+/** One real shell in the project folder, drawn by xterm.js; everything typed goes straight to it. */
+function ShellTerminal({
+    root,
+    visible,
+    onEnded,
 }: {
-    entries: ActivityEntry[];
-    onClear: () => void;
-    onClose: () => void;
-    /** Runs a typed command in the open local project; null when there is none (the terminal then only shows the log). */
-    onRun: ((command: string) => Promise<void>) | null;
-    /** Folder name of the open local project, shown in the shell-style prompt. */
-    name: string | null;
+    root: string | undefined;
+    /** Hidden terminals stay alive (their shell goes on) but are not drawn. */
+    visible: boolean;
+    onEnded: () => void;
 }) {
-    const prompt = `\x1b[1m${name ?? ''} %\x1b[0m `;
-    const promptText = useRef(prompt);
-
-    useEffect(() => {
-        promptText.current = prompt;
-    }, [prompt]);
-
     const host = useRef<HTMLDivElement>(null);
-    const term = useRef<Terminal | null>(null);
-    const lastId = useRef(-1);
-    const [ready, setReady] = useState(false);
-
-    // * Typing state lives in refs: xterm's key handler is created once, so it must not close over render values.
-    const line = useRef('');
-    const history = useRef<string[]>([]);
-    const recall = useRef<number | null>(null);
-    const running = useRef(false);
-    const run = useRef(onRun);
+    const refit = useRef<() => void>(() => undefined);
+    const ended = useRef(onEnded);
 
     useEffect(() => {
-        run.current = onRun;
-    }, [onRun]);
+        ended.current = onEnded;
+    }, [onEnded]);
 
-    // * One xterm for the panel's life, sized to its column. Loaded on demand: xterm is browser-only (CommonJS, breaks SSR).
+    useEffect(() => {
+        if (visible) {
+            refit.current();
+        }
+    }, [visible]);
+
     useEffect(() => {
         const element = host.current;
 
@@ -71,22 +46,20 @@ export function ActivityTerminal({
             return;
         }
 
+        const sessionId = `shell-${sessionCounter++}`;
         let cancelled = false;
         let cleanup = () => {};
 
         void Promise.all([
             import('@xterm/xterm'),
             import('@xterm/addon-fit'),
-        ]).then(([xterm, addon]) => {
+        ]).then(async ([xterm, addon]) => {
             if (cancelled) {
                 return;
             }
 
-            const instance = new xterm.Terminal({
-                convertEol: true,
+            const instance: Terminal = new xterm.Terminal({
                 cursorBlink: true,
-                cursorStyle: 'bar',
-                cursorInactiveStyle: 'none',
                 fontSize: 12,
                 fontFamily:
                     'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -97,170 +70,238 @@ export function ActivityTerminal({
             });
             const fit = new addon.FitAddon();
 
-            const setLine = (value: string) => {
-                line.current = value;
-                instance.write(`\r\x1b[2K${promptText.current}${value}`);
-            };
-
-            const browse = (step: -1 | 1) => {
-                const list = history.current;
-                const next =
-                    recall.current === null
-                        ? step === -1
-                            ? list.length - 1
-                            : null
-                        : recall.current + step;
-
-                if (next === null || next < 0 || next >= list.length) {
-                    recall.current = null;
-                    setLine('');
-
-                    return;
-                }
-
-                recall.current = next;
-                setLine(list[next]);
-            };
-
-            const submit = async () => {
-                const value = line.current.trim();
-
-                if (value === '') {
-                    return;
-                }
-
-                history.current.push(value);
-                recall.current = null;
-                line.current = '';
-                instance.write('\r\x1b[2K');
-                running.current = true;
-
-                try {
-                    await run.current?.(value);
-                } finally {
-                    running.current = false;
-
-                    if (term.current === instance) {
-                        setLine('');
-                    }
-                }
-            };
-
-            instance.onData((data) => {
-                if (run.current === null || running.current) {
-                    return;
-                }
-
-                if (data === '\r') {
-                    void submit();
-                } else if (data === '\x7f') {
-                    if (line.current !== '') {
-                        setLine(line.current.slice(0, -1));
-                    }
-                } else if (data === '\x1b[A') {
-                    browse(-1);
-                } else if (data === '\x1b[B') {
-                    browse(1);
-                } else if (data >= ' ' && !data.startsWith('\x1b')) {
-                    setLine(line.current + data.replace(/[\r\n]+/g, ' '));
-                }
-            });
-
             instance.loadAddon(fit);
             instance.open(element);
-            fit.fit();
-            instance.focus();
-            term.current = instance;
-            lastId.current = -1;
-            setReady(true);
 
-            const observer = new ResizeObserver(() => fit.fit());
+            const fitNow = () => {
+                // * A hidden terminal has no size to fit to.
+                if (element.offsetWidth === 0 || element.offsetHeight === 0) {
+                    return;
+                }
+
+                fit.fit();
+                void ide
+                    .terminalResize(sessionId, instance.cols, instance.rows)
+                    .catch(() => undefined);
+            };
+
+            fit.fit();
+            refit.current = fitNow;
+
+            const stops = await Promise.all([
+                onTerminalData((event) => {
+                    if (event.id === sessionId) {
+                        instance.write(event.data);
+                    }
+                }),
+                onTerminalExit((id) => {
+                    if (id === sessionId) {
+                        instance.writeln('\r\n\x1b[90m[Shell đã thoát]\x1b[0m');
+                        ended.current();
+                    }
+                }),
+            ]);
+
+            const input = instance.onData((data) => {
+                void ide.terminalWrite(sessionId, data).catch(() => undefined);
+            });
+            const observer = new ResizeObserver(fitNow);
 
             observer.observe(element);
 
             cleanup = () => {
                 observer.disconnect();
+                input.dispose();
+                stops.forEach((stop) => stop());
+                void ide.terminalClose(sessionId).catch(() => undefined);
                 instance.dispose();
-                term.current = null;
             };
+
+            if (cancelled) {
+                cleanup();
+
+                return;
+            }
+
+            try {
+                await ide.terminalOpen(
+                    sessionId,
+                    instance.cols,
+                    instance.rows,
+                    root,
+                );
+                instance.focus();
+            } catch (caught) {
+                instance.writeln(
+                    `\x1b[31m${caught instanceof Error ? caught.message : String(caught)}\x1b[0m`,
+                );
+            }
         });
 
         return () => {
             cancelled = true;
             cleanup();
-            setReady(false);
         };
-    }, []);
+    }, [root]);
 
-    // * Writes the entries it has not shown yet above the prompt line; an emptied log clears the screen.
-    useEffect(() => {
-        const instance = term.current;
+    return (
+        // * xterm sits out of flow so its fitted pixel width never feeds back into the width of the column.
+        <div
+            className={cn(
+                'relative min-h-0 min-w-0 flex-1',
+                !visible && 'hidden',
+            )}
+        >
+            <div
+                ref={host}
+                className="absolute inset-0 overflow-hidden px-3 py-2"
+            />
+        </div>
+    );
+}
 
-        if (!ready || instance === null) {
+/** Terminal panel: real shells of this machine in the open project, several at once, and two side by side. */
+export function ActivityTerminal({
+    onClose,
+    root,
+}: {
+    onClose: () => void;
+    /** Folder of the open project (the shells start there). */
+    root: string | undefined;
+}) {
+    const counter = useRef(2);
+    const [terminals, setTerminals] = useState([
+        { id: 1, title: 'Terminal 1' },
+    ]);
+    const [active, setActive] = useState(1);
+    // * The terminal drawn beside the active one (null: only one on screen).
+    const [split, setSplit] = useState<number | null>(null);
+
+    const add = () => {
+        const id = counter.current++;
+
+        setTerminals((current) => [
+            ...current,
+            { id, title: `Terminal ${id}` },
+        ]);
+        setActive(id);
+    };
+
+    const divide = () => {
+        if (split !== null) {
+            setSplit(null);
+
             return;
         }
 
-        if (entries.length === 0) {
-            instance.reset();
-            instance.writeln('\x1b[90mChưa có hoạt động nào.\x1b[0m');
-            lastId.current = -1;
-        } else {
-            if (lastId.current === -1) {
-                instance.reset();
-            }
+        const other = terminals.find((terminal) => terminal.id !== active);
 
-            instance.write('\r\x1b[2K');
+        if (other !== undefined) {
+            setSplit(other.id);
 
-            for (const entry of entries) {
-                if (entry.id <= lastId.current) {
-                    continue;
-                }
-
-                // * A run command is echoed like a shell line (`name % command`), the rest as a coloured log line.
-                if (entry.text.startsWith('$ ')) {
-                    instance.writeln(
-                        `${promptText.current}${entry.text.slice(2)}`,
-                    );
-                    lastId.current = entry.id;
-
-                    continue;
-                }
-
-                const { color, prefix } = LEVEL[entry.level];
-
-                instance.writeln(
-                    `\x1b[90m${entry.time}\x1b[0m \x1b[${color}m${prefix}\x1b[0m ${entry.text}`,
-                );
-                lastId.current = entry.id;
-            }
+            return;
         }
 
-        if (onRun !== null) {
-            instance.write(`${promptText.current}${line.current}`);
+        const id = counter.current++;
+
+        setTerminals((current) => [
+            ...current,
+            { id, title: `Terminal ${id}` },
+        ]);
+        setSplit(id);
+    };
+
+    const remove = (id: number) => {
+        const left = terminals.filter((terminal) => terminal.id !== id);
+
+        if (left.length === 0) {
+            onClose();
+
+            return;
         }
-    }, [entries, ready, onRun, prompt]);
+
+        setTerminals(left);
+
+        if (split === id) {
+            setSplit(null);
+        }
+
+        if (active === id) {
+            const next =
+                left.find((terminal) => terminal.id !== split) ?? left[0];
+
+            setActive(next.id);
+            setSplit((current) => (current === next.id ? null : current));
+        }
+    };
 
     return (
-        // * Fills the side panel it sits in (a column beside the chat, like an editor's terminal dock).
+        // * Fills the side panel it sits in (a dock below the editor, like an editor's terminal).
         <section
-            aria-label="Nhật ký hoạt động"
+            aria-label="Terminal"
             className="flex h-full min-h-0 flex-col bg-zinc-50 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
         >
-            <header className="flex h-9 shrink-0 items-center justify-between border-b border-zinc-200 px-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                <span>
-                    Terminal
-                    {onRun === null && ' · mở một dự án local để chạy lệnh'}
-                </span>
-                <span className="flex items-center gap-1">
+            <header className="flex h-9 shrink-0 items-center justify-between border-b border-zinc-200 px-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+                    {terminals.map((terminal) => (
+                        <span
+                            key={terminal.id}
+                            className={cn(
+                                'flex shrink-0 items-center rounded-sm',
+                                (terminal.id === active ||
+                                    terminal.id === split) &&
+                                    'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100',
+                            )}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActive(terminal.id);
+                                    setSplit((current) =>
+                                        current === terminal.id
+                                            ? null
+                                            : current,
+                                    );
+                                }}
+                                className="px-2 py-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            >
+                                {terminal.title}
+                            </button>
+                            <button
+                                type="button"
+                                aria-label={`Đóng ${terminal.title}`}
+                                onClick={() => remove(terminal.id)}
+                                className="rounded-sm p-1 hover:bg-zinc-300 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:hover:bg-zinc-700"
+                            >
+                                <X aria-hidden="true" className="size-3" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+                <span className="flex shrink-0 items-center gap-1">
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Xoá nhật ký"
-                        onClick={onClear}
+                        aria-label="Thêm terminal"
+                        onClick={add}
                         className="size-7 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     >
-                        <Trash2 aria-hidden="true" />
+                        <Plus aria-hidden="true" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Chia đôi terminal"
+                        aria-pressed={split !== null}
+                        onClick={divide}
+                        className={cn(
+                            'size-7 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100',
+                            split !== null && 'bg-zinc-200 dark:bg-zinc-800',
+                        )}
+                    >
+                        <Columns2 aria-hidden="true" />
                     </Button>
                     <Button
                         type="button"
@@ -274,14 +315,28 @@ export function ActivityTerminal({
                     </Button>
                 </span>
             </header>
-            {/* * xterm sits out of flow so its fitted pixel width never feeds back into the column's own width (which made the panel grow by itself). */}
-            <div className="relative min-h-0 min-w-0 flex-1">
-                <div
-                    ref={host}
-                    role="log"
-                    aria-live="polite"
-                    className="absolute inset-0 overflow-hidden px-3 py-2"
-                />
+            <div className="flex min-h-0 flex-1">
+                {terminals.map((terminal) => (
+                    <div
+                        key={terminal.id}
+                        className={cn(
+                            'flex min-h-0 min-w-0 flex-1',
+                            terminal.id !== active &&
+                                terminal.id !== split &&
+                                'hidden',
+                            terminal.id === split &&
+                                'order-last border-l border-zinc-200 dark:border-zinc-800',
+                        )}
+                    >
+                        <ShellTerminal
+                            root={root}
+                            visible={
+                                terminal.id === active || terminal.id === split
+                            }
+                            onEnded={() => remove(terminal.id)}
+                        />
+                    </div>
+                ))}
             </div>
         </section>
     );

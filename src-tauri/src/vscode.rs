@@ -1,5 +1,7 @@
 //! Hand-off to VS Code: opens the project folder, or one file at a line, in the editor the person already uses.
-//! The window is reused when one is open. Only allowed files are handed over (same guards as reading them).
+//! Opens in a new window (one already showing this folder is just focused),
+//! so the person's other VS Code windows are left alone.
+//! Only allowed files are handed over (same guards as reading them).
 
 use crate::workspace::{Workspace, WorkspaceError};
 use std::path::Path;
@@ -10,7 +12,7 @@ const MAC_LAUNCHER: &str = "/Applications/Visual Studio Code.app/Contents/Resour
 
 /// Arguments of `code`: the folder, plus `--goto file:line` for a file.
 pub fn args(root: &Path, file: Option<(&Path, u32)>) -> Vec<String> {
-    let mut args = vec!["--reuse-window".to_string(), root.display().to_string()];
+    let mut args = vec!["--new-window".to_string(), root.display().to_string()];
 
     if let Some((file, line)) = file {
         args.push("--goto".to_string());
@@ -77,14 +79,14 @@ mod tests {
 
     #[test]
     fn folder_only() {
-        assert_eq!(args(Path::new("/p"), None), ["--reuse-window", "/p"]);
+        assert_eq!(args(Path::new("/p"), None), ["--new-window", "/p"]);
     }
 
     #[test]
     fn file_at_a_line_never_below_one() {
         assert_eq!(
             args(Path::new("/p"), Some((Path::new("/p/a.rs"), 12))),
-            ["--reuse-window", "/p", "--goto", "/p/a.rs:12"],
+            ["--new-window", "/p", "--goto", "/p/a.rs:12"],
         );
         assert_eq!(
             args(Path::new("/p"), Some((Path::new("/p/a.rs"), 0)))[3],

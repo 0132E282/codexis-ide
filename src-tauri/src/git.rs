@@ -59,6 +59,7 @@ pub enum GitError {
     Workspace(WorkspaceError),
     NothingToCommit,
     CommitFailed,
+    WorktreeFailed,
 }
 
 impl GitError {
@@ -67,6 +68,9 @@ impl GitError {
             Self::Workspace(error) => error.message(),
             Self::NothingToCommit => "Không có thay đổi nào để commit.",
             Self::CommitFailed => "Không commit được. Kiểm tra tên và email git của bạn.",
+            Self::WorktreeFailed => {
+                "Không tạo được worktree. Dự án cần là kho git đã có ít nhất một commit."
+            }
         }
     }
 }
@@ -81,7 +85,7 @@ impl std::error::Error for GitError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Workspace(error) => Some(error),
-            Self::NothingToCommit | Self::CommitFailed => None,
+            Self::NothingToCommit | Self::CommitFailed | Self::WorktreeFailed => None,
         }
     }
 }
@@ -384,6 +388,50 @@ pub fn commit(workspace: &Workspace, message: &str) -> Result<Committed, GitErro
     })
 }
 
+/// Folder to run an AI turn in on its own branch: a git worktree `name` under `base` (made on the first call, reused after), on branch `codexis/<name>`.
+/// `root` may be a folder inside the repository: the same folder inside the worktree is returned.
+pub fn ensure_worktree(root: &Path, base: &Path, name: &str) -> Result<PathBuf, GitError> {
+    let valid = !name.is_empty()
+        && name.len() <= 64
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-');
+
+    if !valid {
+        return Err(GitError::WorktreeFailed);
+    }
+
+    let top = run(root, &["rev-parse", "--show-toplevel"])
+        .map(|out| PathBuf::from(text(&out).trim()))
+        .ok_or(GitError::WorktreeFailed)?;
+    let inside = root
+        .canonicalize()
+        .ok()
+        .and_then(|full| {
+            top.canonicalize()
+                .ok()
+                .and_then(|top| full.strip_prefix(top).ok().map(Path::to_path_buf))
+        })
+        .ok_or(GitError::WorktreeFailed)?;
+    let folder = base.join(name);
+
+    if !folder.join(".git").exists() {
+        fs::create_dir_all(base).map_err(|_| GitError::WorktreeFailed)?;
+
+        let branch = format!("codexis/{name}");
+        let path = folder.to_string_lossy();
+        // * A branch left from an earlier worktree of this name is reused instead of failing.
+        let created = run(&top, &["worktree", "add", "-b", &branch, &path]).is_some()
+            || run(&top, &["worktree", "add", &path, &branch]).is_some();
+
+        if !created {
+            return Err(GitError::WorktreeFailed);
+        }
+    }
+
+    Ok(folder.join(inside))
+}
+
 /// Local branches and worktrees (a worktree shows its folder name, never its full path).
 pub fn branches(workspace: &Workspace) -> Branches {
     let root = workspace.root();
@@ -481,6 +529,46 @@ mod tests {
         git(dir.path(), &["commit", "-q", "-m", "first"]);
 
         dir
+    }
+
+    #[test]
+    fn worktree_is_made_once_and_keeps_the_subfolder() {
+        let dir = repo();
+        let inner = dir.path().join("app");
+
+        fs::create_dir(&inner).unwrap();
+        fs::write(inner.join("b.txt"), "x\n").unwrap();
+        git(dir.path(), &["add", "."]);
+        git(dir.path(), &["commit", "-q", "-m", "second"]);
+
+        let base = TempDir::new().unwrap();
+        let first = ensure_worktree(&inner, base.path(), "c1").unwrap();
+
+        assert!(first.join("b.txt").is_file());
+        assert!(first.ends_with("c1/app"));
+        assert_eq!(ensure_worktree(&inner, base.path(), "c1").unwrap(), first);
+        assert_eq!(
+            ensure_worktree(&inner, base.path(), "../x"),
+            Err(GitError::WorktreeFailed)
+        );
+    }
+
+    #[test]
+    fn second_worktree_name_works_and_a_non_git_folder_fails() {
+        let dir = repo();
+        let base = TempDir::new().unwrap();
+        let first = ensure_worktree(dir.path(), base.path(), "c1").unwrap();
+        let second = ensure_worktree(dir.path(), base.path(), "c2").unwrap();
+
+        assert_ne!(first, second);
+        assert!(second.join("a.txt").is_file());
+
+        let plain = TempDir::new().unwrap();
+
+        assert_eq!(
+            ensure_worktree(plain.path(), base.path(), "c3"),
+            Err(GitError::WorktreeFailed)
+        );
     }
 
     #[test]

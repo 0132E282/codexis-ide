@@ -62,6 +62,8 @@ export type ChatConversation = {
 };
 
 export const ide = {
+    windowButtonsVisible: (visible: boolean) =>
+        invoke<void>('window_buttons_visible', { visible }),
     info: () => invoke<ProjectInfo>('workspace_info'),
     tree: (root?: string) =>
         invoke<{ paths: string[]; truncated: boolean }>('workspace_tree', {
@@ -93,6 +95,18 @@ export const ide = {
         invoke<ProjectInfo>('projects_select', { id }),
     openInVscode: (path?: string, line?: number, root?: string) =>
         invoke<void>('open_in_vscode', { path, line, root }),
+    /** Starts the server the phone app connects to (or returns the running one); its address and token go into the QR code. */
+    remoteStart: () => invoke<RemoteInfo>('remote_start'),
+    /** Stops that server: every phone is dropped and the token stops working. */
+    remoteStop: () => invoke<void>('remote_stop'),
+    /** Opens a shell in the project folder; its output arrives through `onTerminalData`. */
+    terminalOpen: (id: string, columns: number, rows: number, root?: string) =>
+        invoke<void>('terminal_open', { id, columns, rows, root }),
+    terminalWrite: (id: string, data: string) =>
+        invoke<void>('terminal_write', { id, data }),
+    terminalResize: (id: string, columns: number, rows: number) =>
+        invoke<void>('terminal_resize', { id, columns, rows }),
+    terminalClose: (id: string) => invoke<void>('terminal_close', { id }),
     /** Starts one chat turn; the answer arrives through `onAgentEvent`, tagged with `runId`. */
     agentSend: (
         runId: string,
@@ -107,6 +121,10 @@ export const ide = {
         agentTeam: boolean,
         /** Folder of the project the turn runs in (its `root`). */
         root?: string,
+        /** Folders of more saved projects the AI may also work in during this turn. */
+        extraRoots?: string[],
+        /** Runs the turn in a git worktree of this name (own branch, project untouched). */
+        worktree?: string,
     ) =>
         invoke<void>('agent_send', {
             runId,
@@ -117,6 +135,8 @@ export const ide = {
             mode,
             agentTeam,
             root,
+            extraRoots,
+            worktree,
         }),
     /** Saves a pasted image or file in the app cache; resolves to the path to put in the message as `@path`. */
     saveAttachment: async (file: File) =>
@@ -167,6 +187,7 @@ export type AgentEvent = {
         | 'delta'
         | 'tool'
         | 'toolresult'
+        | 'subtext'
         | 'subagent'
         | 'subagentdone'
         | 'error'
@@ -174,9 +195,39 @@ export type AgentEvent = {
     text: string;
 };
 
+/** What the phone app needs to connect (the QR code holds it). */
+export type RemoteInfo = { host: string; port: number; token: string };
+
+/** Listens to messages the phone app sends to the chat; resolves to the function that stops listening. */
+export const onRemoteSend = (handler: (prompt: string) => void) =>
+    listen<{ prompt: string }>('remote-send', ({ payload }) =>
+        handler(payload.prompt),
+    );
+
+/** Listens to phones connecting or leaving (the number now connected). */
+export const onRemoteConnected = (handler: (count: number) => void) =>
+    Promise.all([
+        listen<number>('remote-connected', ({ payload }) => handler(payload)),
+        listen<number>('remote-disconnected', ({ payload }) =>
+            handler(payload),
+        ),
+    ]).then((stops) => () => stops.forEach((stop) => stop()));
+
 /** Listens to the events of chat turns; resolves to the function that stops listening. */
 export const onAgentEvent = (handler: (event: AgentEvent) => void) =>
     listen<AgentEvent>('agent-event', ({ payload }) => handler(payload));
+
+/** Listens to what the shells of the terminal panel print. */
+export const onTerminalData = (
+    handler: (event: { id: string; data: string }) => void,
+) =>
+    listen<{ id: string; data: string }>('terminal-data', ({ payload }) =>
+        handler(payload),
+    );
+
+/** Listens to shells that ended (the id of each). */
+export const onTerminalExit = (handler: (id: string) => void) =>
+    listen<string>('terminal-exit', ({ payload }) => handler(payload));
 
 /** Native folder picker; resolves to the chosen folders (empty when cancelled). */
 export async function pickFolders(): Promise<string[]> {

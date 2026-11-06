@@ -8,10 +8,13 @@ pub mod db;
 pub mod git;
 pub mod profiles;
 pub mod projects;
+pub mod remote;
 pub mod settings;
+pub mod terminal;
 pub mod tools;
 pub mod usage;
 pub mod vscode;
+pub mod window_buttons;
 pub mod workspace;
 
 use tauri::Manager;
@@ -26,11 +29,14 @@ pub fn run() {
             let chats = chats::ChatStore::open(database.clone());
 
             app.manage(commands::AppState::new(store, chats));
+            app.manage(terminal::Terminals::default());
+            app.manage(remote::Remote::default());
             credentials::setup(app, &database)?;
             profiles::setup(app, &database)?;
             usage::setup(app, &database)?;
             settings::setup(app, &database)?;
             tools::setup(app, &database)?;
+            window_buttons::hide_at_startup(app.handle());
 
             Ok(())
         })
@@ -45,6 +51,12 @@ pub fn run() {
             commands::workspace_read_media,
             commands::workspace_write,
             commands::open_in_vscode,
+            commands::terminal_open,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::terminal_close,
+            commands::remote_start,
+            commands::remote_stop,
             commands::local_put_file,
             commands::local_changes,
             commands::local_branches,
@@ -52,6 +64,7 @@ pub fn run() {
             commands::local_discard,
             commands::local_commit,
             commands::local_commit_message,
+            commands::inline_ask,
             commands::agent_send,
             commands::attachment_save,
             commands::attachment_read,
@@ -84,6 +97,7 @@ pub fn run() {
             commands::chat_delete,
             commands::chat_save_turn,
             commands::chat_save_session,
+            window_buttons::window_buttons_visible,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Codexis IDE");

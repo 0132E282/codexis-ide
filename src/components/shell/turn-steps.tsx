@@ -72,7 +72,8 @@ function ToolRow({ label, children }: { label: string; children: ReactNode }) {
 /** One tool call: a single line (name and what it works on) that opens into its command, result or diff. */
 function ToolView({ step }: { step: ToolStep }) {
     // * A failed call opens by itself: that is the one worth reading.
-    const [open, setOpen] = useState(step.status === 'error');
+    const [toggled, setToggled] = useState<boolean | null>(null);
+    const open = toggled ?? step.status === 'error';
     const summary = step.description || step.input;
     const hasDetail =
         step.change !== undefined ||
@@ -85,7 +86,7 @@ function ToolView({ step }: { step: ToolStep }) {
                 type="button"
                 aria-expanded={open}
                 disabled={!hasDetail}
-                onClick={() => setOpen((current) => !current)}
+                onClick={() => setToggled(!open)}
                 className="flex w-full min-w-0 items-baseline gap-2 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
                 <ChevronRight

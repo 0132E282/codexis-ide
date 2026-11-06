@@ -101,15 +101,22 @@ fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     Ok(connection)
 }
 
-/// Files made before conversations could be archived lack the column.
-fn add_archived_column(connection: &Connection) -> rusqlite::Result<()> {
+/// Adds `column` to `table` (with its `definition`) when a file made by an older version lacks it.
+///
+/// `table`, `column` and `definition` are fixed names written in this file, never user input.
+fn add_column_if_missing(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> rusqlite::Result<()> {
     let has_column = connection
-        .prepare("SELECT 1 FROM pragma_table_info('chat_turns') WHERE name = 'archived'")?
-        .exists([])?;
+        .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")?
+        .exists([table, column])?;
 
     if !has_column {
         connection.execute(
-            "ALTER TABLE chat_turns ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
             [],
         )?;
     }
@@ -117,20 +124,24 @@ fn add_archived_column(connection: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Files made before conversations could be archived lack the column.
+fn add_archived_column(connection: &Connection) -> rusqlite::Result<()> {
+    add_column_if_missing(
+        connection,
+        "chat_turns",
+        "archived",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+}
+
 /// Files made before conversations were listed lack the column.
 fn add_conversation_column(connection: &Connection) -> rusqlite::Result<()> {
-    let has_column = connection
-        .prepare("SELECT 1 FROM pragma_table_info('chat_turns') WHERE name = 'conversation'")?
-        .exists([])?;
-
-    if !has_column {
-        connection.execute(
-            "ALTER TABLE chat_turns ADD COLUMN conversation INTEGER NOT NULL DEFAULT 0",
-            [],
-        )?;
-    }
-
-    Ok(())
+    add_column_if_missing(
+        connection,
+        "chat_turns",
+        "conversation",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
 }
 
 /// Turns saved before conversations were listed (conversation 0) are grouped: each workspace's current turns become one conversation (with its CLI session ids), its archived turns another.
@@ -188,4 +199,93 @@ pub fn in_memory() -> Connection {
     add_archived_column(&connection).expect("schema");
 
     connection
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn column_exists(connection: &Connection, table: &str, column: &str) -> bool {
+        connection
+            .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
+            .unwrap()
+            .exists([table, column])
+            .unwrap()
+    }
+
+    #[test]
+    fn missing_column_is_added_with_its_default() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        connection
+            .execute_batch("CREATE TABLE things (id INTEGER); INSERT INTO things VALUES (1);")
+            .unwrap();
+        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
+
+        let flag: i64 = connection
+            .query_row("SELECT flag FROM things", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(flag, 7);
+    }
+
+    #[test]
+    fn adding_an_existing_column_twice_keeps_the_rows() {
+        let connection = Connection::open_in_memory().unwrap();
+
+        connection
+            .execute_batch("CREATE TABLE things (id INTEGER); INSERT INTO things VALUES (1);")
+            .unwrap();
+        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
+        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
+
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM things", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn old_chat_turns_are_upgraded_and_grouped_into_a_conversation() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("old.db");
+        let old = Connection::open(&file).unwrap();
+
+        old.execute_batch(
+            "CREATE TABLE chat_turns (
+                workspace TEXT NOT NULL,
+                id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                cli TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                error TEXT,
+                PRIMARY KEY (workspace, id)
+            );
+            INSERT INTO chat_turns VALUES ('w', 't1', 0, 'claude', 'hello', 'hi', NULL);
+            INSERT INTO chat_turns VALUES ('w', 't2', 1, 'claude', 'again', 'yes', NULL);",
+        )
+        .unwrap();
+        drop(old);
+
+        let connection = open(&file).unwrap();
+
+        assert!(column_exists(&connection, "chat_turns", "archived"));
+        assert!(column_exists(&connection, "chat_turns", "conversation"));
+
+        let (turns, groups): (i64, i64) = connection
+            .query_row(
+                "SELECT COUNT(*), COUNT(DISTINCT conversation) FROM chat_turns WHERE conversation != 0",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        let conversations: i64 = connection
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!((turns, groups, conversations), (2, 1, 1));
+    }
 }

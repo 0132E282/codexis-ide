@@ -99,6 +99,25 @@ impl Cli {
     }
 }
 
+/// Gives the CLI access to more project folders (`--add-dir`), next to the one it runs in.
+pub fn with_add_dirs(cli: Cli, mut args: Vec<String>, add_dirs: &[String]) -> Vec<String> {
+    for (offset, dir) in add_dirs.iter().enumerate() {
+        match cli {
+            Cli::Claude => {
+                args.push("--add-dir".to_string());
+                args.push(dir.clone());
+            }
+            // * Like `-m`, the flag belongs to `exec`, so it goes right after it, before `resume`.
+            Cli::Codex => {
+                args.insert(1 + offset * 2, "--add-dir".to_string());
+                args.insert(2 + offset * 2, dir.clone());
+            }
+        }
+    }
+
+    args
+}
+
 /// What the chat receives while a turn runs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "text", rename_all = "lowercase")]
@@ -108,10 +127,12 @@ pub enum Event {
     Text(String),
     /// A piece of the answer that is still being written; the chat appends it as it is.
     Delta(String),
-    /// A tool call of the agent, as JSON `{"id", "name", "description", "input"}`: the chat shows it as a step.
+    /// A tool call of the agent, as JSON `{"id", "name", "description", "input"}`: the chat shows it as a step. A call made inside a sub-agent also has `"parent"`, the id of that sub-agent.
     Tool(String),
-    /// What a tool call returned, as JSON `{"id", "output", "error"}`.
+    /// What a tool call returned, as JSON `{"id", "output", "error"}` (and `"parent"` inside a sub-agent).
     ToolResult(String),
+    /// Words a sub-agent wrote, as JSON `{"parent", "text"}`.
+    SubText(String),
     /// A sub-agent the agent started: JSON `{"id": ..., "label": ...}`, listed in the sidebar while it works.
     Subagent(String),
     /// The id of a sub-agent that has finished.
@@ -143,7 +164,11 @@ pub fn parse_line(cli: Cli, line: &str) -> Vec<Event> {
         (Cli::Claude, Some("stream_event")) => {
             let event = &value["event"];
 
-            if event["type"] == "content_block_delta" && event["delta"]["type"] == "text_delta" {
+            // * What a sub-agent writes is shown in its own view, not in the answer of the main agent.
+            if value["parent_tool_use_id"].is_null()
+                && event["type"] == "content_block_delta"
+                && event["delta"]["type"] == "text_delta"
+            {
                 text(event["delta"].get("text"))
                     .map(Event::Delta)
                     .into_iter()
@@ -152,38 +177,56 @@ pub fn parse_line(cli: Cli, line: &str) -> Vec<Event> {
                 Vec::new()
             }
         }
-        (Cli::Claude, Some("assistant")) => value["message"]["content"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|part| match part["type"].as_str() {
-                Some("text") => text(part.get("text"))
-                    .map(Event::Text)
-                    .into_iter()
-                    .collect(),
-                // * What a sub-agent does inside itself (it names its parent call) is not shown as steps of the main agent.
-                Some("tool_use") if !value["parent_tool_use_id"].is_null() => Vec::new(),
-                // * A sub-agent is a `Task` (newer CLIs: `Agent`) call of the main agent.
-                Some("tool_use") if is_subagent_call(part) => {
-                    vec![tool_started(part), subagent_started(part)]
-                }
-                Some("tool_use") => vec![tool_started(part)],
-                _ => Vec::new(),
-            })
-            .collect(),
-        // * The results of tool calls; for a sub-agent the result also means it is done.
-        (Cli::Claude, Some("user")) if value["parent_tool_use_id"].is_null() => value["message"]
-            ["content"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|part| part["type"] == "tool_result")
-            .flat_map(|part| {
-                let id = part["tool_use_id"].as_str().unwrap_or_default().to_string();
+        (Cli::Claude, Some("assistant")) => {
+            // * Set for what happens inside a sub-agent: the id of the call that started it.
+            let parent = value["parent_tool_use_id"].as_str();
 
-                [tool_finished(part), Event::SubagentDone(id)]
-            })
-            .collect(),
+            value["message"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|part| match (part["type"].as_str(), parent) {
+                    (Some("text"), None) => text(part.get("text"))
+                        .map(Event::Text)
+                        .into_iter()
+                        .collect(),
+                    (Some("text"), Some(parent)) => text(part.get("text"))
+                        .map(|text| {
+                            Event::SubText(
+                                serde_json::json!({"parent": parent, "text": text}).to_string(),
+                            )
+                        })
+                        .into_iter()
+                        .collect(),
+                    // * A sub-agent is a `Task` (newer CLIs: `Agent`) call of the main agent.
+                    (Some("tool_use"), None) if is_subagent_call(part) => {
+                        vec![tool_started(part, None), subagent_started(part)]
+                    }
+                    (Some("tool_use"), parent) => vec![tool_started(part, parent)],
+                    _ => Vec::new(),
+                })
+                .collect()
+        }
+        // * The results of tool calls; for a sub-agent the result also means it is done.
+        (Cli::Claude, Some("user")) => {
+            let parent = value["parent_tool_use_id"].as_str();
+
+            value["message"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|part| part["type"] == "tool_result")
+                .flat_map(|part| {
+                    let id = part["tool_use_id"].as_str().unwrap_or_default().to_string();
+                    let finished = tool_finished(part, parent);
+
+                    match parent {
+                        None => vec![finished, Event::SubagentDone(id)],
+                        Some(_) => vec![finished],
+                    }
+                })
+                .collect()
+        }
         (Cli::Claude, Some("result")) if value["is_error"] == true => text(value.get("result"))
             .map(Event::Error)
             .into_iter()
@@ -212,7 +255,7 @@ const MAX_TOOL_DETAIL_CHARS: usize = 80;
 const MAX_TOOL_OUTPUT_CHARS: usize = 2000;
 
 /// The step for a `tool_use` part: tool name, the AI's own description of the call and what it works on (command, path, pattern...); an edit of a file also carries the text before and after, so the chat can show it as a diff.
-fn tool_started(part: &serde_json::Value) -> Event {
+fn tool_started(part: &serde_json::Value, parent: Option<&str>) -> Event {
     let input = &part["input"];
     let target = ["command", "file_path", "path", "pattern", "url", "prompt"]
         .iter()
@@ -224,6 +267,10 @@ fn tool_started(part: &serde_json::Value) -> Event {
         "description": input["description"].as_str().unwrap_or_default(),
         "input": cut(target, MAX_TOOL_OUTPUT_CHARS),
     });
+
+    if let Some(parent) = parent {
+        step["parent"] = parent.into();
+    }
 
     if let Some((before, after)) = file_change(part) {
         step["before"] = cut(&before, MAX_TOOL_OUTPUT_CHARS).into();
@@ -260,7 +307,7 @@ fn file_change(part: &serde_json::Value) -> Option<(String, String)> {
 }
 
 /// The result of a tool call (`tool_result` part): its text, cut to a size the chat can show, and whether it failed.
-fn tool_finished(part: &serde_json::Value) -> Event {
+fn tool_finished(part: &serde_json::Value, parent: Option<&str>) -> Event {
     let output = match &part["content"] {
         serde_json::Value::String(text) => text.clone(),
         serde_json::Value::Array(parts) => parts
@@ -271,14 +318,17 @@ fn tool_finished(part: &serde_json::Value) -> Event {
         _ => String::new(),
     };
 
-    Event::ToolResult(
-        serde_json::json!({
-            "id": part["tool_use_id"].as_str().unwrap_or_default(),
-            "output": cut(&output, MAX_TOOL_OUTPUT_CHARS),
-            "error": part["is_error"] == true,
-        })
-        .to_string(),
-    )
+    let mut result = serde_json::json!({
+        "id": part["tool_use_id"].as_str().unwrap_or_default(),
+        "output": cut(&output, MAX_TOOL_OUTPUT_CHARS),
+        "error": part["is_error"] == true,
+    });
+
+    if let Some(parent) = parent {
+        result["parent"] = parent.into();
+    }
+
+    Event::ToolResult(result.to_string())
 }
 
 /// `text` cut to `limit` characters.
@@ -359,6 +409,7 @@ pub fn run_turn(
     session: Option<&str>,
     model: Option<&str>,
     mode: Option<&str>,
+    add_dirs: &[String],
     environment: &[(&str, String)],
     emit: impl Fn(Event),
 ) {
@@ -373,7 +424,7 @@ pub fn run_turn(
     };
 
     let spawned = Command::new(program)
-        .args(cli.args(session, model, mode))
+        .args(with_add_dirs(cli, cli.args(session, model, mode), add_dirs))
         .current_dir(root)
         .envs(environment.iter().map(|(name, value)| (name, value)))
         .stdin(Stdio::piped())
@@ -474,6 +525,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn extra_projects_become_add_dir_flags() {
+        let dirs = vec!["/a".to_string(), "/b".to_string()];
+        let claude = with_add_dirs(Cli::Claude, Cli::Claude.args(None, None, None), &dirs);
+
+        assert_eq!(
+            claude[claude.len() - 4..],
+            ["--add-dir", "/a", "--add-dir", "/b"]
+        );
+
+        let codex = with_add_dirs(Cli::Codex, Cli::Codex.args(Some("s"), None, None), &dirs);
+
+        assert_eq!(
+            codex[..6],
+            ["exec", "--add-dir", "/a", "--add-dir", "/b", "resume"]
+        );
+        assert_eq!(
+            with_add_dirs(Cli::Claude, Cli::Claude.args(None, None, None), &[]),
+            Cli::Claude.args(None, None, None)
+        );
+    }
+
+    #[test]
     fn claude_init_gives_session_and_assistant_gives_text() {
         let init = r#"{"type":"system","subtype":"init","session_id":"abc"}"#;
         let reply = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Hi"}]}}"#;
@@ -491,9 +564,10 @@ mod tests {
     /// The JSON carried by a tool, sub-agent or result event.
     fn payload(event: &Event) -> serde_json::Value {
         match event {
-            Event::Tool(json) | Event::ToolResult(json) | Event::Subagent(json) => {
-                serde_json::from_str(json).unwrap()
-            }
+            Event::Tool(json)
+            | Event::ToolResult(json)
+            | Event::Subagent(json)
+            | Event::SubText(json) => serde_json::from_str(json).unwrap(),
             other => panic!("event without a payload: {other:?}"),
         }
     }
@@ -568,9 +642,26 @@ mod tests {
             payload(&started[1]),
             serde_json::json!({"id": "t1", "label": "reviewer: Check the diff"})
         );
-        // * What happens inside a sub-agent is not a step of the main agent.
-        assert!(parse_line(Cli::Claude, inner).is_empty());
-        assert!(parse_line(Cli::Claude, inner_result).is_empty());
+        // * What happens inside a sub-agent is a step of that sub-agent (it names its parent), not of the main agent, and does not end it.
+        let inner_call = parse_line(Cli::Claude, inner);
+        let inner_done = parse_line(Cli::Claude, inner_result);
+
+        assert_eq!(payload(&inner_call[0])["parent"], "t1");
+        assert_eq!(inner_done.len(), 1);
+        assert_eq!(payload(&inner_done[0])["parent"], "t1");
+    }
+
+    #[test]
+    fn claude_sub_agent_words_stay_out_of_the_answer() {
+        let words = r#"{"type":"assistant","parent_tool_use_id":"t1","message":{"content":[{"type":"text","text":"working"}]}}"#;
+        let delta = r#"{"type":"stream_event","parent_tool_use_id":"t1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"wor"}}}"#;
+        let spoken = parse_line(Cli::Claude, words);
+
+        assert_eq!(
+            payload(&spoken[0]),
+            serde_json::json!({"parent": "t1", "text": "working"})
+        );
+        assert!(parse_line(Cli::Claude, delta).is_empty());
     }
 
     #[test]
