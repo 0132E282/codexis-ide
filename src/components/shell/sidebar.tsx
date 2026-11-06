@@ -8,7 +8,7 @@ import {
     Smartphone,
     Trash2,
 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useState } from 'react';
 import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
 import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Input } from '@/components/ui/input';
-import { NewProjectDialog } from '@/components/shell/new-project-dialog';
 import type { ChatConversation, Project, Subagent } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
-const IS_MAC = navigator.userAgent.includes('Macintosh');
+// * Opened rarely: fetched when the browser is idle after first paint (the button shows meanwhile).
+const loadNewProjectDialog = () =>
+    import('@/components/shell/new-project-dialog').then((module) => ({
+        default: module.NewProjectDialog,
+    }));
+const NewProjectDialog = lazy(loadNewProjectDialog);
 
 /** Lower case without accents, so "du an" finds "Dự án". */
 const plain = (text: string) =>
@@ -87,6 +91,15 @@ export function Sidebar({
     onConnectPhone: () => void;
 }) {
     const [query, setQuery] = useState('');
+
+    useEffect(() => {
+        const timer = window.setTimeout(
+            () => void loadNewProjectDialog(),
+            1500,
+        );
+
+        return () => window.clearTimeout(timer);
+    }, []);
     const needle = plain(query.trim());
     const rows: { id: string | null; name: string }[] =
         projects.length > 0
@@ -96,31 +109,30 @@ export function Sidebar({
               : [];
     const visible = rows.filter((row) => plain(row.name).includes(needle));
 
+    const newProjectButton = (
+        <Button type="button" variant="ghost" size="sm" className="gap-1.5">
+            <Plus aria-hidden="true" />
+            Thêm mới dự án
+        </Button>
+    );
+
     return (
         <aside
             aria-label="Thanh bên"
             className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
-            {/* * The title bar overlays the window (macOS): the logo sits in the row of the window buttons, to their right. */}
-            <div
-                className={`flex h-12 shrink-0 items-center gap-2 select-none ${IS_MAC ? 'pl-[4.5rem]' : 'pl-4'}`}
-            >
+            {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the logo sits at the left edge. */}
+            <div className="flex h-12 shrink-0 items-center gap-2 pl-4 select-none">
                 <img src={logo} alt="" className="size-7" />
                 <span className="text-lg font-semibold">Codexis</span>
             </div>
             <div className="flex items-center justify-between px-3 pb-2 text-sm">
                 <span className="text-muted-foreground">Dự án</span>
-                <NewProjectDialog onCreated={onCreated}>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1.5"
-                    >
-                        <Plus aria-hidden="true" />
-                        Thêm mới dự án
-                    </Button>
-                </NewProjectDialog>
+                <Suspense fallback={newProjectButton}>
+                    <NewProjectDialog onCreated={onCreated}>
+                        {newProjectButton}
+                    </NewProjectDialog>
+                </Suspense>
             </div>
             <div className="px-2 pb-2">
                 <Input
@@ -147,6 +159,11 @@ export function Sidebar({
                         {error}
                     </p>
                 )}
+                {needle === '' && rows.length === 0 && error === null && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                        Chưa có dự án nào. Chọn "Thêm mới dự án" để bắt đầu.
+                    </p>
+                )}
                 {needle !== '' && visible.length === 0 && (
                     <p className="px-3 py-2 text-sm text-muted-foreground">
                         Không tìm thấy dự án.
@@ -167,7 +184,7 @@ export function Sidebar({
                                             : onSelect(row.id)
                                     }
                                     className={cn(
-                                        'flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent/60',
+                                        'flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                                         active &&
                                             'bg-accent text-accent-foreground hover:bg-accent',
                                     )}

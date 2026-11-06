@@ -141,7 +141,7 @@ export function SettingsDialog({
                 }
             }}
         >
-            <DialogContent className="flex h-[min(66vh,48rem)] w-[min(62vw,64rem)] max-w-[calc(100vw-2rem)] flex-col sm:max-w-[calc(100vw-2rem)]">
+            <DialogContent className="flex h-[min(66vh,48rem)] w-[min(74vw,80rem)] max-w-[calc(100vw-2rem)] flex-col sm:max-w-[calc(100vw-2rem)]">
                 <DialogHeader>
                     <DialogTitle>Cài đặt chat</DialogTitle>
                     <DialogDescription className="sr-only">

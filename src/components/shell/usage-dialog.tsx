@@ -10,10 +10,10 @@ import {
 } from '@/components/ui/dialog';
 import { ClaudeIcon, CodexIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
-import { ideAuth, type LimitUsage } from '@/lib/ide-auth';
+import { ideAuth, type AuthProvider, type LimitUsage } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
 import { LIMIT_LABELS, formatReset, limitColor } from '@/lib/limit-usage';
-import { ideUsage, type CliUsage, type UsageStats } from '@/lib/ide-usage';
+import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { cn } from '@/lib/utils';
 
 const CLI_LABELS: Record<CliUsage['cli'], string> = {
@@ -44,6 +44,16 @@ const formatShortTime = (seconds: number): string =>
         timeStyle: 'short',
     });
 
+/** One account of a CLI with its own numbers (a CLI with several accounts is shown once per account). */
+type AccountRow = {
+    key: string;
+    id: number;
+    label: string;
+    usage: CliUsage;
+    /** Plan limits (Claude only): undefined while they load, null when unreadable or not offered. */
+    limits: LimitUsage[] | null | undefined;
+};
+
 /** AI statistics ("Thống kê AI"): turns, estimated tokens and models of each CLI, and which one stopped at its limit. */
 export function UsageDialog({
     open,
@@ -52,12 +62,8 @@ export function UsageDialog({
     open: boolean;
     onClose: () => void;
 }) {
-    const [stats, setStats] = useState<UsageStats | null>(null);
+    const [rows, setRows] = useState<AccountRow[] | null>(null);
     const [failure, setFailure] = useState<string | null>(null);
-    // * Claude's own `/usage` (slow): undefined while it loads, null when it cannot be read.
-    const [limits, setLimits] = useState<LimitUsage[] | null | undefined>(
-        undefined,
-    );
 
     // * Read again each time the dialog opens: the numbers change after every turn.
     useEffect(() => {
@@ -66,24 +72,89 @@ export function UsageDialog({
         }
 
         let cancelled = false;
+        const setLimitsOf = (key: string, limits: LimitUsage[] | null) =>
+            setRows(
+                (current) =>
+                    current?.map((row) =>
+                        row.key === key ? { ...row, limits } : row,
+                    ) ?? null,
+            );
 
         setFailure(null);
-        ideUsage
-            .stats()
-            .then((next) => !cancelled && setStats(next))
-            .catch((caught) => !cancelled && setFailure(errorText(caught)));
-        setLimits(undefined);
         ideProfiles
             .list()
-            .then((all) => {
-                const active = all.find(
-                    (profile) => profile.cli === 'claude' && profile.active,
+            .then(async (all) => {
+                const accounts = all.filter(
+                    (profile) =>
+                        profile.cli === 'claude' || profile.cli === 'codex',
+                );
+                const entries = await Promise.all(
+                    accounts.map(async (profile) => ({
+                        profile,
+                        usage: await ideUsage.statsProfile(
+                            profile.cli as CliUsage['cli'],
+                            profile.id,
+                        ),
+                        // * Sign-in state: its login name (email) names the account; null when it cannot be read.
+                        status: await ideAuth
+                            .statusProfile(
+                                profile.cli as AuthProvider,
+                                profile.id,
+                            )
+                            .catch(() => null),
+                    })),
+                );
+                // * An account that is not signed in is left out; one whose state cannot be read stays.
+                const connected = entries.filter(
+                    ({ status }) => status === null || status.loggedIn,
                 );
 
-                return ideAuth.claudeUsage(active?.id ?? 0);
+                if (cancelled) {
+                    return;
+                }
+
+                const accountsOf = (cli: string) =>
+                    connected.filter(({ profile }) => profile.cli === cli)
+                        .length;
+                const next = connected.map(
+                    ({ profile, usage, status }): AccountRow => {
+                        const login = status?.account ?? null;
+                        const cli = profile.cli as CliUsage['cli'];
+
+                        return {
+                            key: `${cli}:${profile.id}`,
+                            id: profile.id,
+                            // * "Claude / name" once there are several accounts of that CLI.
+                            label:
+                                accountsOf(cli) > 1
+                                    ? `${CLI_LABELS[cli]} / ${login ?? profile.name}`
+                                    : CLI_LABELS[cli],
+                            usage,
+                            // * Claude's own `/usage` is slow: it fills in per account when it arrives.
+                            limits: cli === 'claude' ? undefined : null,
+                        };
+                    },
+                );
+
+                setRows(next);
+
+                // * Each Claude account is read with its own login.
+                for (const row of next) {
+                    if (row.usage.cli !== 'claude') {
+                        continue;
+                    }
+
+                    ideAuth
+                        .claudeUsage(row.id)
+                        .then((limits) => {
+                            if (!cancelled) {
+                                setLimitsOf(row.key, limits);
+                            }
+                        })
+                        .catch(() => !cancelled && setLimitsOf(row.key, null));
+                }
             })
-            .then((next) => !cancelled && setLimits(next))
-            .catch(() => !cancelled && setLimits(null));
+            .catch((caught) => !cancelled && setFailure(errorText(caught)));
 
         return () => {
             cancelled = true;
@@ -91,10 +162,7 @@ export function UsageDialog({
     }, [open]);
 
     // * Share of the last 7 days' turns: the CLIs do not report their remaining quota, so use is shown against each other.
-    const total = (stats?.clis ?? []).reduce(
-        (sum, usage) => sum + usage.turns7d,
-        0,
-    );
+    const total = (rows ?? []).reduce((sum, row) => sum + row.usage.turns7d, 0);
 
     return (
         <Dialog
@@ -117,28 +185,28 @@ export function UsageDialog({
                         <p role="alert" className="text-sm text-destructive">
                             {failure}
                         </p>
-                    ) : stats === null ? (
+                    ) : rows === null ? (
                         <p className="text-sm text-muted-foreground">
                             Đang tải…
                         </p>
+                    ) : rows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            Chưa có tài khoản AI nào được kết nối.
+                        </p>
                     ) : (
                         <ul className="flex flex-col gap-4">
-                            {stats.clis.map((usage) => (
+                            {rows.map((row) => (
                                 <UsageRow
-                                    key={usage.cli}
-                                    usage={usage}
+                                    key={row.key}
+                                    label={row.label}
+                                    usage={row.usage}
                                     share={
-                                        total === 0 ? 0 : usage.turns7d / total
+                                        total === 0
+                                            ? 0
+                                            : row.usage.turns7d / total
                                     }
-                                    limits={
-                                        usage.cli === 'claude'
-                                            ? limits
-                                            : undefined
-                                    }
-                                    limitsPending={
-                                        usage.cli === 'claude' &&
-                                        limits === undefined
-                                    }
+                                    limits={row.limits}
+                                    limitsPending={row.limits === undefined}
                                 />
                             ))}
                         </ul>
@@ -162,11 +230,14 @@ export function UsageDialog({
 }
 
 function UsageRow({
+    label,
     usage,
     share,
     limits,
     limitsPending,
 }: {
+    /** "Claude", or "Claude / account name" when the CLI has several accounts. */
+    label: string;
     usage: CliUsage;
     share: number;
     /** Plan limits from the CLI's own `/usage` (Claude only); null when unreadable. */
@@ -200,7 +271,7 @@ function UsageRow({
                         CLI_COLORS[usage.cli].text,
                     )}
                 >
-                    {CLI_LABELS[usage.cli]}
+                    {label}
                 </span>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
@@ -261,7 +332,7 @@ function UsageRow({
                 <div className="flex items-center gap-3 border-t pt-4 text-xs">
                     <div
                         role="progressbar"
-                        aria-label={`Mức sử dụng 7 ngày của ${CLI_LABELS[usage.cli]}`}
+                        aria-label={`Mức sử dụng 7 ngày của ${label}`}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={Math.round(share * 100)}

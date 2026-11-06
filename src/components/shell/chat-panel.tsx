@@ -1,313 +1,27 @@
-import { ArrowLeft, FileText } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import logo from '@/assets/logo.png';
-import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
-import { MarkdownContent } from '@/components/ai-chat/markdown-content';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
+import { MessageList } from '@/components/shell/chat/message-list';
+import { useAgentTurns } from '@/components/shell/chat/use-agent-turns';
+import { useAttachments } from '@/components/shell/chat/use-attachments';
+import { useChatSession } from '@/components/shell/chat/use-chat-session';
+import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
+import { useTooNarrow } from '@/components/shell/chat/use-too-narrow';
 import { Composer } from '@/components/shell/composer';
-import { TurnSteps } from '@/components/shell/turn-steps';
-import type { Attachment } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
-import { useTypewriter } from '@/hooks/use-typewriter';
-import {
-    errorText,
-    ide,
-    onAgentEvent,
-    onRemoteSend,
-    pickFiles,
-} from '@/lib/ide';
-import { ideSettings } from '@/lib/ide-settings';
-import { ideUsage } from '@/lib/ide-usage';
-import type { AgentCli, ChatHistory, Step, Subagent } from '@/lib/ide';
-
-type Turn = {
-    id: string;
-    prompt: string;
-    answer: string;
-    error: string | null;
-    running: boolean;
-    cli: AgentCli;
-    /** What the AI did, step by step, while this session ran; a turn loaded from the history has only its `answer`. */
-    steps?: Step[];
-    /** What each sub-agent of this turn did inside itself, by the id of the call that started it. */
-    sub?: Record<string, Step[]>;
-    /** Loaded from the saved history: shown at once, not typed out. */
-    restored?: boolean;
-};
-
-/** The chat closes when the editor columns squeeze it narrower than this (px). */
-const CHAT_TOO_NARROW = 220;
-/** Time after it opens during which a narrow chat is not closed again. */
-const REOPEN_GRACE_MS = 800;
-
-// * A tool call that an older version wrote into the saved answer.
-const OLD_TOOL_LINES = /^> ⚙ .*$/gm;
-
-const ATTACHMENT_LINE = /^@(\/.+)$/;
-// * Pasted files are saved as `<8 hex digits>-<name>`: the digits are not part of the name the person sees.
-const SAVED_PREFIX = /^[0-9a-f]{8}-/;
-
-/** A message's `@/path` lines are attached files: they are shown as chips, the rest is the typed text. */
-function splitPrompt(prompt: string) {
-    const files: { path: string; name: string }[] = [];
-    const lines: string[] = [];
-
-    for (const line of prompt.split('\n')) {
-        const path = ATTACHMENT_LINE.exec(line)?.[1].trim();
-
-        if (path === undefined) {
-            lines.push(line);
-        } else {
-            const base = path.split('/').pop() ?? path;
-
-            files.push({ path, name: base.replace(SAVED_PREFIX, '') });
-        }
-    }
-
-    return { text: lines.join('\n').trim(), files };
-}
-
-/** The text of a message with each `/command` at the start of a line (or after a space) highlighted. */
-function HighlightedText({ text }: { text: string }) {
-    return text
-        .split(/((?:^|(?<=\s))\/[\w:-]+(?=\s|$))/g)
-        .map((piece, index) =>
-            index % 2 === 1 ? (
-                <span key={index} className="font-medium text-primary">
-                    {piece}
-                </span>
-            ) : (
-                piece
-            ),
-        );
-}
-
-const IMAGE_TYPES: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-};
-
-/** An attached file in the message: an image is shown as a picture, anything else (or an image that cannot be read) as a chip. */
-function AttachmentView({ path, name }: { path: string; name: string }) {
-    const type = IMAGE_TYPES[(path.split('.').pop() ?? '').toLowerCase()];
-    const [source, setSource] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (type === undefined) {
-            return;
-        }
-
-        let url: string | null = null;
-        let cancelled = false;
-
-        ide.readAttachment(path)
-            .then((bytes) => {
-                if (!cancelled) {
-                    url = URL.createObjectURL(new Blob([bytes], { type }));
-                    setSource(url);
-                }
-            })
-            .catch(() => undefined);
-
-        return () => {
-            cancelled = true;
-
-            if (url !== null) {
-                URL.revokeObjectURL(url);
-            }
-        };
-    }, [path, type]);
-
-    if (source !== null) {
-        return (
-            <img
-                src={source}
-                alt={name}
-                title={name}
-                className="size-20 rounded-lg border object-cover"
-            />
-        );
-    }
-
-    // * An image that is still loading, or cannot be read, shows the app logo in the same square.
-    if (type !== undefined) {
-        return (
-            <img
-                src={logo}
-                alt={name}
-                title={name}
-                className="size-20 rounded-lg border bg-card object-contain p-4 opacity-60"
-            />
-        );
-    }
-
-    return (
-        <span
-            title={path}
-            className="flex max-w-60 items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1.5 text-xs text-muted-foreground"
-        >
-            <FileText aria-hidden="true" className="size-4 shrink-0" />
-            <span className="truncate">{name}</span>
-        </span>
-    );
-}
-
-const READ_ONLY_CHOICES: ChoiceHandlers = {
-    interactive: false,
-    answer: null,
-    onChoose: () => undefined,
-};
-
-/** What one sub-agent did and is doing: its words and tool calls, live, apart from the conversation of the main agent. */
-function SubagentView({
-    id,
-    turns,
-    onBack,
-}: {
-    id: string;
-    turns: Turn[];
-    onBack: () => void;
-}) {
-    const owner = turns.find((turn) => turn.sub?.[id] !== undefined);
-    const call = turns
-        .flatMap((turn) => turn.steps ?? [])
-        .find((step) => step.kind === 'tool' && step.id === id);
-    const steps = owner?.sub?.[id] ?? [];
-    const finished = call?.kind === 'tool' && call.status !== 'running';
-
-    return (
-        <div className="min-w-0 space-y-4">
-            <button
-                type="button"
-                onClick={onBack}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-                <ArrowLeft aria-hidden="true" className="size-4" />
-                Quay lại cuộc trò chuyện
-            </button>
-            {call?.kind === 'tool' && (
-                <div className="rounded-lg border bg-card px-3 py-2">
-                    <p className="font-semibold">
-                        {call.name}{' '}
-                        <span className="font-normal text-muted-foreground">
-                            {call.description}
-                        </span>
-                    </p>
-                    {call.input !== '' && (
-                        <pre className="mt-1 max-h-32 overflow-auto font-mono text-xs/5 break-words whitespace-pre-wrap text-muted-foreground">
-                            {call.input}
-                        </pre>
-                    )}
-                </div>
-            )}
-            {steps.length > 0 ? (
-                <TurnSteps
-                    steps={steps}
-                    running={!finished}
-                    choices={READ_ONLY_CHOICES}
-                />
-            ) : (
-                <p className="text-sm text-muted-foreground">
-                    {finished
-                        ? 'Sub-agent này không ghi lại bước nào.'
-                        : 'Sub-agent đang bắt đầu…'}
-                </p>
-            )}
-        </div>
-    );
-}
-
-// * Memoised: dragging the panel edge re-renders the panel on every frame, and a long markdown answer must not be parsed again each time.
-const TurnView = memo(function TurnView({
-    turn,
-    interactive,
-    followUp,
-    onChoose,
-}: {
-    turn: Turn;
-    /** Whether a choice card of this turn can still be answered (the last turn, once it has ended). */
-    interactive: boolean;
-    /** The message the user sent after this turn, which marks the option picked. */
-    followUp: string | null;
-    onChoose: (text: string) => void;
-}) {
-    const choices: ChoiceHandlers = { interactive, answer: followUp, onChoose };
-    const typed = useTypewriter(turn.answer, turn.restored !== true);
-    const { text, files } = splitPrompt(turn.prompt);
-
-    return (
-        <div className="min-w-0 space-y-3">
-            <div className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-2">
-                {files.length > 0 && (
-                    <ul className="flex flex-wrap justify-end gap-2">
-                        {files.map((file) => (
-                            <li key={file.path}>
-                                <AttachmentView
-                                    path={file.path}
-                                    name={file.name}
-                                />
-                            </li>
-                        ))}
-                    </ul>
-                )}
-                {text !== '' && (
-                    <p className="rounded-2xl bg-muted px-4 py-2.5 break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
-                        <HighlightedText text={text} />
-                    </p>
-                )}
-            </div>
-            {turn.steps !== undefined && turn.steps.length > 0 ? (
-                <TurnSteps
-                    steps={turn.steps}
-                    running={turn.running}
-                    choices={choices}
-                />
-            ) : (
-                typed !== '' && (
-                    <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                        <MarkdownContent content={typed} choices={choices} />
-                    </div>
-                )
-            )}
-            {turn.running && turn.answer === '' && turn.steps === undefined && (
-                <p
-                    role="status"
-                    className="flex items-center gap-2 text-muted-foreground"
-                >
-                    Đang trả lời
-                    <span
-                        aria-hidden="true"
-                        className="flex items-center gap-1"
-                    >
-                        {[0, 150, 300].map((delay) => (
-                            <span
-                                key={delay}
-                                style={{ animationDelay: `${delay}ms` }}
-                                className="size-1.5 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none"
-                            />
-                        ))}
-                    </span>
-                </p>
-            )}
-            {turn.error !== null && (
-                <p role="alert" className="text-destructive">
-                    {turn.error}
-                </p>
-            )}
-        </div>
-    );
-});
+import { pickFiles } from '@/lib/ide';
+import type { AgentCli, Subagent } from '@/lib/ide';
 
 // * The chat can be dragged this wide at most, so the file beside it keeps the larger share.
 const CHAT_MAX_WIDTH = 560;
 
-/** Chat with an AI CLI in the open project: each message is one CLI turn, and the CLI's session id keeps the conversation going. Turns and session ids are saved per workspace, so reopening it continues the same CLI conversation. */
+const NO_PROJECTS: { root: string; name: string }[] = [];
 
+// * The chat has no project row above the box.
+const clearNoProject = () => undefined;
+
+/** Chat with an AI CLI in the open project: each message is one CLI turn, and the CLI's session id keeps the conversation going. Turns and session ids are saved per workspace, so reopening it continues the same CLI conversation. */
 export function ChatPanel({
     root,
     fill,
@@ -323,7 +37,7 @@ export function ChatPanel({
     attachFile,
     headerStart,
     headerActions,
-    projects = [],
+    projects = NO_PROJECTS,
     acceptsRemote = false,
 }: {
     /** The open pane takes the messages the phone app sends; the others ignore them. */
@@ -358,11 +72,10 @@ export function ChatPanel({
     /** Buttons for the right end of that bar (branch, editor, terminal). */
     headerActions?: ReactNode;
 }) {
-    const [subagents, setSubagents] = useState<Subagent[]>([]);
-    const [turns, setTurns] = useState<Turn[]>([]);
     const [text, setText] = useState('');
     const [cli, setCli] = useState<AgentCli>('claude');
     // * The model is picked per CLI; none means the CLI's own default.
+    const [models, setModels] = useState<Partial<Record<AgentCli, string>>>({});
     // * Claude only: the permission mode, and whether its experimental agent teams are on.
     const [mode, setMode] = useState('auto');
     const [agentTeam, setAgentTeam] = useState(false);
@@ -370,21 +83,6 @@ export function ChatPanel({
     const [extraRoots, setExtraRoots] = useState<string[]>([]);
     // * Worktree mode: the turns of this conversation run on their own git branch, in a copy of the project.
     const [worktree, setWorktree] = useState(false);
-    const [models, setModels] = useState<Partial<Record<AgentCli, string>>>({});
-    const [attachments, setAttachments] = useState<Attachment[]>([]);
-    const [attachError, setAttachError] = useState<string | null>(null);
-    const attachmentCounter = useRef(0);
-    // * One session per CLI: a Claude session id means nothing to Codex.
-    const sessions = useRef<Partial<Record<AgentCli, string>>>({});
-    const runs = useRef(new Map<string, AgentCli>());
-    // * Turns being answered, updated at once (state is not): the finished turn is saved from here.
-    const drafts = useRef(new Map<string, Turn>());
-    // * Key of the saved history; null while it is not loaded (or could not be), and nothing is saved then.
-    const workspace = useRef<string | null>(null);
-    // * The conversation the turns are saved into; null until the history is loaded.
-    const conversation = useRef<number | null>(null);
-    const notify = useRef({ onConversation, onChanged, onTooNarrow });
-    const counter = useRef(0);
     const bottom = useRef<HTMLDivElement>(null);
     const section = useRef<HTMLElement>(null);
     const width = useResizableWidth(
@@ -395,649 +93,89 @@ export function ChatPanel({
         'x',
         'trailing',
     );
-    const busy = turns.some((turn) => turn.running);
-
-    // * Watches the width the chat really has: the editor columns can squeeze it, and below this width it cannot be read, so it closes.
-    useEffect(() => {
-        const element = section.current;
-
-        if (element === null || fill || collapsed) {
-            return;
-        }
-
-        // * Just opened again: the columns are still making room, so it is not judged yet.
-        const openedAt = performance.now();
-        const observer = new ResizeObserver(([entry]) => {
-            if (
-                entry.contentRect.width < CHAT_TOO_NARROW &&
-                performance.now() - openedAt > REOPEN_GRACE_MS
-            ) {
-                notify.current.onTooNarrow();
-            }
-        });
-
-        observer.observe(element);
-
-        return () => observer.disconnect();
-    }, [fill, collapsed]);
-    // * Set after each render: the agent events are listened to once, and the move to the next AI needs the latest state.
-    const failover = useRef<((finished: Turn) => void) | null>(null);
-    // * The CLIs already tried for a message that is being moved from one AI to the next, by turn id.
-    const chains = useRef(new Map<string, AgentCli[]>());
-    const handledNewChat = useRef(newChat);
-
-    useEffect(() => {
-        notify.current = { onConversation, onChanged, onTooNarrow };
+    const attachmentState = useAttachments(root, attachFile);
+    const { attachments, attachError } = attachmentState;
+    const session = useChatSession({
+        root,
+        newChat,
+        openConversation,
+        onConversation,
+        onChanged,
+        onSubagents,
+        onRestoreCli: setCli,
+        onReset: attachmentState.reset,
     });
+    const { turns, busy } = session;
 
-    useEffect(() => {
-        onSubagents(subagents);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [subagents]);
+    useTooNarrow(section, !fill && !collapsed, onTooNarrow);
 
-    // * Shows a loaded conversation: `replace` swaps the turns, otherwise they go before what was typed while it loaded.
-    const apply = (history: ChatHistory, replace: boolean) => {
-        workspace.current = history.workspace;
-        conversation.current = history.conversation;
-        sessions.current = replace
-            ? { ...history.sessions }
-            : { ...history.sessions, ...sessions.current };
-
-        const last = history.turns.at(-1);
-
-        if (last !== undefined) {
-            setCli(last.cli);
-        }
-
-        const restored = history.turns.map((turn) => ({
-            ...turn,
-            // * Turns saved by an older version hold the tool calls as `> ⚙ {json}` lines; they are not part of the answer.
-            answer: turn.answer
-                .replace(OLD_TOOL_LINES, '')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim(),
-            running: false,
-            restored: true,
-        }));
-
-        setTurns((current) => (replace ? restored : [...restored, ...current]));
-        notify.current.onConversation(history.conversation);
-    };
-
-    useEffect(() => {
-        let cancelled = false;
-
-        ide.chatLoad(undefined, root)
-            .then((history) => !cancelled && apply(history, false))
-            // * No saved history: the chat still works, it is just not kept.
-            .catch(() => undefined);
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    useEffect(() => {
-        if (
-            openConversation === null ||
-            openConversation === conversation.current ||
-            busy
-        ) {
-            return;
-        }
-
-        void ide
-            .chatLoad(openConversation, root)
-            .then((history) => {
-                apply(history, true);
-                setAttachments([]);
-                setAttachError(null);
-            })
-            .catch(() => undefined);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [openConversation]);
-
-    useEffect(() => {
-        if (newChat === handledNewChat.current) {
-            return;
-        }
-
-        handledNewChat.current = newChat;
-
-        // * Not while a turn is being answered: it would be saved into the new conversation.
-        if (busy || workspace.current === null) {
-            return;
-        }
-
-        void ide
-            .chatNew(workspace.current)
-            .then((id) => {
-                conversation.current = id;
-                sessions.current = {};
-                setTurns([]);
-                setAttachments([]);
-                setAttachError(null);
-                notify.current.onConversation(id);
-                notify.current.onChanged();
-            })
-            .catch(() => undefined);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [newChat]);
-
-    // * Only sizes and the error text go to the statistics; the model is not known to the chat.
-    const recordUsage = (turn: Turn): Promise<boolean> =>
-        ideUsage
-            .record({
-                cli: turn.cli,
-                promptCharacters: turn.prompt.length,
-                answerCharacters: turn.answer.length,
-                model: null,
-                error: turn.error,
-            })
-            .catch(() => false);
-
-    const persist = (turn: Turn) => {
-        if (workspace.current !== null && conversation.current !== null) {
-            void ide
-                .chatSaveTurn(workspace.current, conversation.current, {
-                    id: turn.id,
-                    cli: turn.cli,
-                    prompt: turn.prompt,
-                    answer: turn.answer,
-                    error: turn.error,
-                })
-                .then(() => notify.current.onChanged())
-                .catch((caught) => console.error(errorText(caught)));
-        } else {
-            console.error(
-                'Chưa lưu được lượt chat: chưa tải xong cuộc trò chuyện.',
-            );
-        }
-    };
-
-    useEffect(() => {
-        const update = (id: string, change: (turn: Turn) => Turn) => {
-            const draft = drafts.current.get(id);
-
-            if (draft !== undefined) {
-                drafts.current.set(id, change(draft));
-            }
-
-            setTurns((current) =>
-                current.map((turn) => (turn.id === id ? change(turn) : turn)),
-            );
-        };
-        const stop = onAgentEvent(({ runId, kind, text: payload }) => {
-            const runCli = runs.current.get(runId);
-
-            if (runCli === undefined) {
-                return;
-            }
-
-            if (kind === 'session') {
-                sessions.current[runCli] = payload;
-
-                if (
-                    workspace.current !== null &&
-                    conversation.current !== null
-                ) {
-                    void ide
-                        .chatSaveSession(
-                            workspace.current,
-                            conversation.current,
-                            runCli,
-                            payload,
-                        )
-                        .catch(() => undefined);
-                }
-            } else if (kind === 'text') {
-                update(runId, (turn) => ({
-                    ...turn,
-                    answer: turn.answer
-                        ? `${turn.answer}\n\n${payload}`
-                        : payload,
-                    steps: [
-                        ...(turn.steps ?? []),
-                        { kind: 'text', text: payload },
-                    ],
-                }));
-            } else if (kind === 'delta') {
-                // * A piece of the answer still being written: appended as it is, to the last step when that is text.
-                update(runId, (turn) => {
-                    const steps = [...(turn.steps ?? [])];
-                    const last = steps[steps.length - 1];
-
-                    if (last?.kind === 'text') {
-                        steps[steps.length - 1] = {
-                            kind: 'text',
-                            text: last.text + payload,
-                        };
-                    } else {
-                        steps.push({ kind: 'text', text: payload });
-                    }
-
-                    return {
-                        ...turn,
-                        answer: turn.answer + payload,
-                        steps,
-                    };
-                });
-            } else if (kind === 'tool') {
-                try {
-                    const call = JSON.parse(payload) as {
-                        id: string;
-                        name: string;
-                        description: string;
-                        input: string;
-                        before?: string;
-                        after?: string;
-                        parent?: string;
-                    };
-                    const step: Step = {
-                        kind: 'tool',
-                        id: call.id,
-                        name: call.name,
-                        description: call.description,
-                        input: call.input,
-                        change:
-                            call.before !== undefined &&
-                            call.after !== undefined
-                                ? { before: call.before, after: call.after }
-                                : undefined,
-                        output: null,
-                        status: 'running',
-                    };
-
-                    update(runId, (turn) => {
-                        // * The CLI can send the same call again: it is shown once.
-                        const list =
-                            call.parent === undefined
-                                ? turn.steps
-                                : turn.sub?.[call.parent];
-
-                        if (
-                            list?.some(
-                                (item) =>
-                                    item.kind === 'tool' && item.id === call.id,
-                            )
-                        ) {
-                            return turn;
-                        }
-
-                        return call.parent === undefined
-                            ? {
-                                  ...turn,
-                                  // * Words before a tool call and the answer after it must not run together.
-                                  answer: turn.answer
-                                      ? `${turn.answer}\n\n`
-                                      : '',
-                                  steps: [...(turn.steps ?? []), step],
-                              }
-                            : {
-                                  ...turn,
-                                  sub: {
-                                      ...turn.sub,
-                                      [call.parent]: [
-                                          ...(turn.sub?.[call.parent] ?? []),
-                                          step,
-                                      ],
-                                  },
-                              };
-                    });
-                } catch {
-                    // * A malformed event is not shown.
-                }
-            } else if (kind === 'toolresult') {
-                try {
-                    const result = JSON.parse(payload) as {
-                        id: string;
-                        output: string;
-                        error: boolean;
-                        parent?: string;
-                    };
-                    const finish = (
-                        list: Step[] | undefined,
-                    ): Step[] | undefined =>
-                        list?.map((step) =>
-                            step.kind === 'tool' && step.id === result.id
-                                ? {
-                                      ...step,
-                                      output: result.output,
-                                      status: result.error
-                                          ? ('error' as const)
-                                          : ('ok' as const),
-                                  }
-                                : step,
-                        );
-
-                    update(runId, (turn) =>
-                        result.parent === undefined
-                            ? { ...turn, steps: finish(turn.steps) }
-                            : {
-                                  ...turn,
-                                  sub: {
-                                      ...turn.sub,
-                                      [result.parent]:
-                                          finish(turn.sub?.[result.parent]) ??
-                                          [],
-                                  },
-                              },
-                    );
-                } catch {
-                    // * A malformed event is not shown.
-                }
-            } else if (kind === 'subtext') {
-                try {
-                    const spoken = JSON.parse(payload) as {
-                        parent: string;
-                        text: string;
-                    };
-
-                    update(runId, (turn) => ({
-                        ...turn,
-                        sub: {
-                            ...turn.sub,
-                            [spoken.parent]: [
-                                ...(turn.sub?.[spoken.parent] ?? []),
-                                { kind: 'text', text: spoken.text },
-                            ],
-                        },
-                    }));
-                } catch {
-                    // * A malformed event is not shown.
-                }
-            } else if (kind === 'subagent') {
-                try {
-                    const started = JSON.parse(payload) as {
-                        id: string;
-                        label: string;
-                    };
-
-                    setSubagents((current) =>
-                        current.some((agent) => agent.id === started.id)
-                            ? current
-                            : [...current, { ...started, done: false }],
-                    );
-                } catch {
-                    // * A malformed event is not shown.
-                }
-            } else if (kind === 'subagentdone') {
-                setSubagents((current) =>
-                    current.map((agent) =>
-                        agent.id === payload ? { ...agent, done: true } : agent,
-                    ),
-                );
-            } else if (kind === 'error') {
-                update(runId, (turn) => ({ ...turn, error: payload }));
-            } else {
-                runs.current.delete(runId);
-                // * They stay listed (done) until the next message starts; a turn that ends cannot leave one "working".
-                setSubagents((current) =>
-                    current.map((agent) => ({ ...agent, done: true })),
-                );
-                update(runId, (turn) => ({ ...turn, running: false }));
-
-                const finished = drafts.current.get(runId);
-
-                if (finished !== undefined) {
-                    persist(finished);
-                    void recordUsage(finished).then(
-                        (limited) => limited && failover.current?.(finished),
-                    );
-                    drafts.current.delete(runId);
-                }
-            }
-        });
-
-        return () => void stop.then((unlisten) => unlisten());
-    }, []);
+    const { choose, sendFromComposer } = useAgentTurns({
+        root,
+        projects,
+        cli,
+        onCli: setCli,
+        models,
+        mode,
+        agentTeam,
+        extraRoots,
+        worktree,
+        acceptsRemote,
+        session,
+        onComposerSent: () => {
+            setText('');
+            attachmentState.clearAfterSend();
+        },
+    });
 
     useEffect(() => {
         bottom.current?.scrollIntoView({ block: 'end' });
     }, [turns]);
 
     // * A picked file goes into the message as `@path`: both CLIs read the file from that path.
-    const addFiles = () =>
-        void pickFiles().then((paths) => {
-            if (paths.length === 0) {
-                return;
-            }
+    const addFiles = useCallback(
+        () =>
+            void pickFiles().then((paths) => {
+                if (paths.length === 0) {
+                    return;
+                }
 
-            setText(
-                (current) =>
-                    `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${paths.map((path) => `@${path}`).join('\n')} `,
-            );
-        });
-
-    const releasePreview = (attachment: Attachment) => {
-        if (attachment.preview !== null) {
-            URL.revokeObjectURL(attachment.preview);
-        }
-    };
-
-    // * Pasted images and files are saved by the backend; the message then points the CLI at them with `@path`.
-    const pasteFiles = (files: File[]) => {
-        setAttachError(null);
-        files.forEach((file) =>
-            ide
-                .saveAttachment(file)
-                .then((path) =>
-                    setAttachments((current) => [
-                        ...current,
-                        {
-                            id: `attachment-${attachmentCounter.current++}`,
-                            name: file.name || 'tệp',
-                            path,
-                            preview: file.type.startsWith('image/')
-                                ? URL.createObjectURL(file)
-                                : null,
-                        },
-                    ]),
-                )
-                .catch((caught) => setAttachError(errorText(caught))),
-        );
-    };
-
-    // * A path on disk is attached as it is: nothing to copy.
-    const pastePaths = (paths: string[]) => {
-        setAttachError(null);
-        setAttachments((current) => [
-            ...current,
-            ...paths.map((path) => ({
-                id: `attachment-${attachmentCounter.current++}`,
-                name: path.split('/').pop() ?? path,
-                path,
-                preview: null,
-            })),
-        ]);
-    };
-
-    // * A double click in the tree attaches that file (once; a click on one already attached changes nothing).
-    useEffect(() => {
-        if (attachFile === null) {
-            return;
-        }
-
-        const path = `${root.replace(/\/$/, '')}/${attachFile.path}`;
-
-        setAttachments((current) =>
-            current.some((item) => item.path === path)
-                ? current
-                : [
-                      ...current,
-                      {
-                          id: `attachment-${attachmentCounter.current++}`,
-                          name: attachFile.path.split('/').pop() ?? path,
-                          path,
-                          preview: null,
-                      },
-                  ],
-        );
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attachFile]);
-
-    const removeAttachment = (id: string) => {
-        const removed = attachments.find((item) => item.id === id);
-
-        if (removed !== undefined) {
-            releasePreview(removed);
-        }
-
-        setAttachments((current) => current.filter((item) => item.id !== id));
-    };
-
-    const startTurn = (
-        prompt: string,
-        target: AgentCli,
-        tried: AgentCli[],
-        fromComposer: boolean,
-    ) => {
-        setSubagents([]);
-        // * Unique across restarts: saved turns keep their ids.
-        const id = `run-${Date.now().toString(36)}-${counter.current++}`;
-        const turn: Turn = {
-            id,
-            prompt,
-            answer: '',
-            error: null,
-            running: true,
-            cli: target,
-        };
-
-        runs.current.set(id, target);
-        chains.current.set(id, tried);
-        drafts.current.set(id, turn);
-
-        if (fromComposer) {
-            setText('');
-            attachments.forEach(releasePreview);
-            setAttachments([]);
-            setAttachError(null);
-        }
-
-        setTurns((current) => [...current, turn]);
-        // * Saved at once, then again when the turn ends: a message is not lost when the answer never finishes (the app is closed, the CLI stalls).
-        persist(turn);
-        ide.agentSend(
-            id,
-            target,
-            prompt,
-            sessions.current[target] ?? null,
-            models[target] ?? null,
-            target === 'claude' ? mode : null,
-            target === 'claude' && agentTeam,
-            root,
-            extraRoots.filter((extra) =>
-                projects.some((project) => project.root === extra),
-            ),
-            worktree && conversation.current !== null
-                ? `c${conversation.current}`
-                : undefined,
-        ).catch((caught) => {
-            runs.current.delete(id);
-            drafts.current.delete(id);
-
-            const failed = {
-                ...turn,
-                error: errorText(caught),
-                running: false,
-            };
-
-            setTurns((current) =>
-                current.map((item) => (item.id === id ? failed : item)),
-            );
-            persist(failed);
-            recordUsage(failed);
-        });
-    };
-
-    // * A picked option (or the typed "Khác…" answer) is the next message; `choose` stays the same function so the memoised turns do not re-render.
-    const sendChoice = useRef((_text: string) => {});
-
-    useEffect(() => {
-        sendChoice.current = (picked) => {
-            if (!busy) {
-                startTurn(picked, cli, [], false);
-            }
-        };
-    });
-
-    const choose = useCallback(
-        (picked: string) => sendChoice.current(picked),
+                setText(
+                    (current) =>
+                        `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${paths.map((path) => `@${path}`).join('\n')} `,
+                );
+            }),
         [],
     );
 
-    const send = () => {
-        const prompt = [
-            text.trim(),
-            ...attachments.map((attachment) => `@${attachment.path}`),
-        ]
-            .filter((part) => part !== '')
-            .join('\n');
-
-        if (prompt === '' || busy) {
-            return;
-        }
-
-        startTurn(prompt, cli, [], true);
-    };
-
-    // * A message from the phone app is sent as if it was typed here; one that arrives while a turn runs is ignored.
-    const remoteSend = useRef<(prompt: string) => void>(() => undefined);
-
-    remoteSend.current = (prompt) => {
-        if (acceptsRemote && !busy && prompt.trim() !== '') {
-            startTurn(prompt.trim(), cli, [], true);
-        }
-    };
-
-    useEffect(() => {
-        const stop = onRemoteSend((prompt) => remoteSend.current(prompt));
-
-        return () => void stop.then((unlisten) => unlisten());
-    }, []);
-
-    // * A turn that ended on a limit error is sent again to the next AI of the saved order; when none is left the turn says so.
-    useEffect(() => {
-        failover.current = (finished) => {
-            void ideSettings
-                .get()
-                .then((settings) => {
-                    if (!settings.fallbackEnabled || busy) {
-                        return;
-                    }
-
-                    const tried = [
-                        ...(chains.current.get(finished.id) ?? []),
-                        finished.cli,
-                    ];
-                    const next = settings.fallbackOrder.find(
-                        (candidate) => !tried.includes(candidate),
-                    );
-
-                    if (next === undefined) {
-                        const exhausted = {
-                            ...finished,
-                            running: false,
-                            error: `${finished.error ?? ''}\nTất cả AI trong danh sách đã hết hạn mức.`.trim(),
-                        };
-
-                        setTurns((current) =>
-                            current.map((turn) =>
-                                turn.id === finished.id ? exhausted : turn,
-                            ),
-                        );
-                        persist(exhausted);
-
-                        return;
-                    }
-
-                    setCli(next);
-                    startTurn(finished.prompt, next, tried, false);
-                })
-                .catch(() => undefined);
-        };
+    // * Stable, so the message box (memoised) does not re-render on every streamed piece of an answer.
+    const send = useStableCallback(() => {
+        sendFromComposer(
+            [
+                text.trim(),
+                ...attachments.map((attachment) => `@${attachment.path}`),
+            ]
+                .filter((part) => part !== '')
+                .join('\n'),
+        );
     });
+    const chooseModel = useCallback(
+        (chosen: AgentCli, model: string | null) => {
+            setCli(chosen);
+            setModels((all) => ({
+                ...all,
+                [chosen]: model ?? undefined,
+            }));
+        },
+        [],
+    );
+    const projectName =
+        projects.find((project) => project.root === root)?.name ??
+        root.split('/').pop() ??
+        root;
+    const otherProjects = useMemo(
+        () => projects.filter((project) => project.root !== root),
+        [projects, root],
+    );
 
     return (
         <section
@@ -1066,45 +204,16 @@ export function ChatPanel({
                     {headerActions}
                 </span>
             </header>
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
-                {/* * One centred column, as wide as the message box: a wide panel keeps lines readable instead of pushing the two sides apart. */}
-                <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6">
-                    {turns.length === 0 && (
-                        <div className="flex flex-col items-center gap-3 pt-[20vh] text-center">
-                            <img src={logo} alt="" className="size-12" />
-                            <p className="text-sm text-muted-foreground">
-                                Nhắn tin để làm việc với AI trong dự án này.
-                            </p>
-                        </div>
-                    )}
-                    {viewSubagent !== null ? (
-                        <SubagentView
-                            id={viewSubagent}
-                            turns={turns}
-                            onBack={onLeaveSubagent}
-                        />
-                    ) : (
-                        <>
-                            {turns.map((turn, index) => (
-                                <TurnView
-                                    key={turn.id}
-                                    turn={turn}
-                                    interactive={
-                                        index === turns.length - 1 &&
-                                        !turn.running
-                                    }
-                                    followUp={turns[index + 1]?.prompt ?? null}
-                                    onChoose={choose}
-                                />
-                            ))}
-                        </>
-                    )}
-                    <div ref={bottom} />
-                </div>
-            </div>
+            <MessageList
+                ref={bottom}
+                turns={turns}
+                viewSubagent={viewSubagent}
+                onLeaveSubagent={onLeaveSubagent}
+                onChoose={choose}
+            />
             <Composer
                 project={null}
-                onClearProject={() => undefined}
+                onClearProject={clearNoProject}
                 value={text}
                 onChange={setText}
                 onSubmit={send}
@@ -1115,27 +224,15 @@ export function ChatPanel({
                 onModeChange={setMode}
                 agentTeam={agentTeam}
                 onAgentTeamChange={setAgentTeam}
-                onChoose={(chosen, model) => {
-                    setCli(chosen);
-                    setModels((all) => ({
-                        ...all,
-                        [chosen]: model ?? undefined,
-                    }));
-                }}
+                onChoose={chooseModel}
                 onAddFiles={addFiles}
                 attachments={attachments}
                 attachError={attachError}
-                onPasteFiles={pasteFiles}
-                onPastePaths={pastePaths}
-                onRemoveAttachment={removeAttachment}
-                projectName={
-                    projects.find((project) => project.root === root)?.name ??
-                    root.split('/').pop() ??
-                    root
-                }
-                otherProjects={projects.filter(
-                    (project) => project.root !== root,
-                )}
+                onPasteFiles={attachmentState.pasteFiles}
+                onPastePaths={attachmentState.pastePaths}
+                onRemoveAttachment={attachmentState.removeAttachment}
+                projectName={projectName}
+                otherProjects={otherProjects}
                 extraRoots={extraRoots}
                 worktree={worktree}
                 onWorktreeChange={setWorktree}

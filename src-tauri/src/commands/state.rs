@@ -1,0 +1,314 @@
+use super::files::Info;
+use super::projects::ProjectsReply;
+use crate::chats::ChatStore;
+use crate::projects::{NewProject, Project, ProjectStore};
+use crate::workspace::{Workspace, WorkspaceError};
+use std::path::Path;
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
+
+/// Environment variable naming the project folder to open (falls back to the current folder).
+pub const WORKSPACE_ENV: &str = "RYNOX_WORKSPACE";
+
+/// The open workspace and the saved project it came from (None for the start-up folder).
+#[derive(Debug)]
+struct Active {
+    workspace: Result<Workspace, WorkspaceError>,
+    project: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct AppState {
+    active: RwLock<Active>,
+    projects: Mutex<ProjectStore>,
+    chats: Mutex<ChatStore>,
+}
+
+impl AppState {
+    /// Start-up folder: `RYNOX_WORKSPACE`, else the project opened last time, else the current folder.
+    pub fn new(projects: ProjectStore, chats: ChatStore) -> Self {
+        let active = match std::env::var_os(WORKSPACE_ENV) {
+            Some(root) => Active {
+                workspace: Workspace::open(Path::new(&root)),
+                project: None,
+            },
+            None => Self::last_opened(&projects).unwrap_or_else(|| Active {
+                workspace: Workspace::open(&std::env::current_dir().unwrap_or_default()),
+                project: None,
+            }),
+        };
+
+        Self {
+            active: RwLock::new(active),
+            projects: Mutex::new(projects),
+            chats: Mutex::new(chats),
+        }
+    }
+
+    fn last_opened(projects: &ProjectStore) -> Option<Active> {
+        let project = projects.get(projects.selected()?)?;
+        let workspace = Workspace::open(Path::new(project.folders.first()?)).ok()?;
+
+        Some(Active {
+            workspace: Ok(workspace),
+            project: Some(project.id.clone()),
+        })
+    }
+
+    fn read_active(&self) -> RwLockReadGuard<'_, Active> {
+        self.active.read().expect("workspace lock poisoned")
+    }
+
+    fn lock_projects(&self) -> MutexGuard<'_, ProjectStore> {
+        self.projects.lock().expect("projects lock poisoned")
+    }
+
+    pub(super) fn lock_chats(&self) -> MutexGuard<'_, ChatStore> {
+        self.chats.lock().expect("chats lock poisoned")
+    }
+
+    /// A copy of the open workspace (cheap: it only holds the root path), so no lock is held while a command runs.
+    pub(super) fn workspace(&self) -> Result<Workspace, String> {
+        self.read_active()
+            .workspace
+            .clone()
+            .map_err(|error| error.to_string())
+    }
+
+    /// The workspace at `root`, so several projects can stay open at once: `None` is the open workspace. Any other root must be the open one or the first folder of a saved project, so a caller can never reach a folder the user did not add.
+    pub(super) fn workspace_for(&self, root: Option<&str>) -> Result<Workspace, String> {
+        let active = self.workspace()?;
+        let Some(root) = root else {
+            return Ok(active);
+        };
+
+        if Path::new(root) == active.root() {
+            return Ok(active);
+        }
+
+        let known = self
+            .lock_projects()
+            .projects()
+            .iter()
+            .any(|project| project.folders.first().is_some_and(|folder| folder == root));
+
+        if !known {
+            return Err(WorkspaceError::Denied.to_string());
+        }
+
+        Workspace::open(Path::new(root)).map_err(|error| error.to_string())
+    }
+
+    /// The root path of the workspace at `root`, the key chats are stored under.
+    pub(super) fn workspace_key(&self, root: Option<&str>) -> Result<String, String> {
+        Ok(self.workspace_for(root)?.root().display().to_string())
+    }
+
+    pub(super) fn list_projects(&self) -> ProjectsReply {
+        let projects = self.lock_projects();
+
+        ProjectsReply {
+            projects: projects.projects().to_vec(),
+            selected: self.read_active().project.clone(),
+        }
+    }
+
+    pub(super) fn add_project(&self, new: NewProject) -> Result<Project, String> {
+        self.lock_projects()
+            .add(new)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(super) fn remove_project(&self, id: &str) -> Result<(), String> {
+        let mut projects = self.lock_projects();
+
+        projects.remove(id).map_err(|error| error.to_string())?;
+
+        // The open workspace stays as it is; it just no longer belongs to a saved project.
+        let mut active = self.active.write().expect("workspace lock poisoned");
+
+        if active.project.as_deref() == Some(id) {
+            active.project = None;
+        }
+
+        Ok(())
+    }
+
+    /// Makes the project's first folder the workspace root. The new root goes through `Workspace::open` like any other, so every path rule of the sandbox applies to it.
+    pub(super) fn select_project(&self, id: &str) -> Result<Info, String> {
+        let mut projects = self.lock_projects();
+        let folder = projects
+            .get(id)
+            .ok_or(crate::projects::ProjectError::NotFound)
+            .and_then(|project| {
+                project
+                    .folders
+                    .first()
+                    .cloned()
+                    .ok_or(crate::projects::ProjectError::NoFolder)
+            })
+            .map_err(|error| error.to_string())?;
+        let workspace = Workspace::open(Path::new(&folder)).map_err(|error| error.to_string())?;
+
+        projects.select(id).map_err(|error| error.to_string())?;
+
+        let info = Info::of(&workspace);
+
+        *self.active.write().expect("workspace lock poisoned") = Active {
+            workspace: Ok(workspace),
+            project: Some(id.to_string()),
+        };
+
+        Ok(info)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::projects::EnvVar;
+    use std::fs;
+
+    fn state_with_projects(dir: &Path, folders: &[&Path]) -> (AppState, Vec<String>) {
+        let state = AppState::new(
+            ProjectStore::load(dir.join("rynox.db")),
+            ChatStore::open(dir.join("rynox.db")),
+        );
+        let ids = folders
+            .iter()
+            .enumerate()
+            .map(|(index, folder)| {
+                state
+                    .add_project(NewProject {
+                        name: format!("p{index}"),
+                        folders: vec![folder.display().to_string()],
+                        env: vec![EnvVar {
+                            key: "A".into(),
+                            value: "1".into(),
+                        }],
+                    })
+                    .unwrap()
+                    .id
+            })
+            .collect();
+
+        (state, ids)
+    }
+
+    #[test]
+    fn selecting_a_project_switches_the_root_and_keeps_the_sandbox() {
+        let data = tempfile::tempdir().unwrap();
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+
+        fs::write(first.path().join("a.txt"), "first").unwrap();
+        fs::write(second.path().join("b.txt"), "second").unwrap();
+        fs::write(second.path().join(".env"), "SECRET=1").unwrap();
+
+        let (state, ids) = state_with_projects(data.path(), &[first.path(), second.path()]);
+
+        state.select_project(&ids[0]).unwrap();
+        assert_eq!(state.workspace().unwrap().read("a.txt").unwrap(), "first");
+
+        let info = state.select_project(&ids[1]).unwrap();
+        let workspace = state.workspace().unwrap();
+
+        assert_eq!(
+            workspace.root(),
+            fs::canonicalize(second.path()).unwrap().as_path()
+        );
+        assert_eq!(
+            info.name,
+            second.path().file_name().unwrap().to_string_lossy()
+        );
+        assert_eq!(workspace.read("b.txt").unwrap(), "second");
+        assert!(workspace.read("a.txt").is_err());
+        assert_eq!(workspace.read("../a.txt"), Err(WorkspaceError::BadPath));
+        assert_eq!(workspace.read(".env"), Err(WorkspaceError::Denied));
+        assert_eq!(state.list_projects().selected, Some(ids[1].clone()));
+    }
+
+    #[test]
+    fn a_root_reaches_its_own_project_and_no_other_folder() {
+        let data = tempfile::tempdir().unwrap();
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let stranger = tempfile::tempdir().unwrap();
+
+        fs::write(first.path().join("a.txt"), "first").unwrap();
+        fs::write(second.path().join("b.txt"), "second").unwrap();
+
+        let (state, ids) = state_with_projects(data.path(), &[first.path(), second.path()]);
+        let first_root = fs::canonicalize(first.path())
+            .unwrap()
+            .display()
+            .to_string();
+        let second_root = fs::canonicalize(second.path())
+            .unwrap()
+            .display()
+            .to_string();
+
+        state.select_project(&ids[1]).unwrap();
+
+        // * The open workspace is the second project, yet the first one stays reachable by its root.
+        let other = state.workspace_for(Some(&first_root)).unwrap();
+
+        assert_eq!(other.read("a.txt").unwrap(), "first");
+        assert_eq!(
+            state
+                .workspace_for(Some(&second_root))
+                .unwrap()
+                .read("b.txt")
+                .unwrap(),
+            "second"
+        );
+        assert_eq!(
+            state.workspace_for(None).unwrap().read("b.txt").unwrap(),
+            "second"
+        );
+        assert!(state
+            .workspace_for(Some(&stranger.path().display().to_string()))
+            .is_err());
+    }
+
+    #[test]
+    fn failed_selection_keeps_the_current_workspace() {
+        let data = tempfile::tempdir().unwrap();
+        let open = tempfile::tempdir().unwrap();
+        let doomed = tempfile::tempdir().unwrap();
+        let doomed_path = doomed.path().to_path_buf();
+        let (state, ids) = state_with_projects(data.path(), &[open.path(), &doomed_path]);
+
+        state.select_project(&ids[0]).unwrap();
+        drop(doomed);
+
+        assert!(state.select_project(&ids[1]).is_err());
+        assert!(state.select_project("p99").is_err());
+        assert_eq!(state.list_projects().selected, Some(ids[0].clone()));
+        assert_eq!(
+            state.workspace().unwrap().root(),
+            fs::canonicalize(open.path()).unwrap().as_path()
+        );
+    }
+
+    #[test]
+    fn project_without_folders_cannot_be_opened_and_removal_unselects() {
+        let data = tempfile::tempdir().unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let (state, ids) = state_with_projects(data.path(), &[folder.path()]);
+        let empty = state
+            .add_project(NewProject {
+                name: "empty".into(),
+                folders: vec![],
+                env: vec![],
+            })
+            .unwrap();
+
+        assert!(state.select_project(&empty.id).is_err());
+
+        state.select_project(&ids[0]).unwrap();
+        state.remove_project(&ids[0]).unwrap();
+
+        assert_eq!(state.list_projects().selected, None);
+        assert!(state.workspace().is_ok());
+    }
+}

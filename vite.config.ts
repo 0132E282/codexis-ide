@@ -19,5 +19,33 @@ export default defineConfig({
         strictPort: true,
         watch: { ignored: ['**/src-tauri/**'] },
     },
-    build: { target: 'safari15', outDir: 'dist', emptyOutDir: true },
+    build: {
+        target: 'safari15',
+        outDir: 'dist',
+        emptyOutDir: true,
+        rollupOptions: {
+            output: {
+                // * Only libraries the first screen already loads are grouped (cacheable, parallel); monaco and xterm stay out so their lazy loading is untouched.
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) {
+                        return undefined;
+                    }
+
+                    if (
+                        /node_modules\/(@tiptap|prosemirror-|linkifyjs|orderedmap|rope-sequence|w3c-keyname|markdown-it|entities|mdurl|uc\.micro|linkify-it)/.test(
+                            id,
+                        )
+                    ) {
+                        return 'vendor-editor';
+                    }
+
+                    if (id.includes('node_modules/@radix-ui')) {
+                        return 'vendor-radix';
+                    }
+
+                    return undefined;
+                },
+            },
+        },
+    },
 });

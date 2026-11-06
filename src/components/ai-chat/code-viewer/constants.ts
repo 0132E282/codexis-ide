@@ -1,0 +1,21 @@
+export const CHANGE_BADGES = {
+    update: {
+        letter: 'M',
+        label: 'đã sửa',
+        className: 'text-yellow-600 dark:text-yellow-400',
+    },
+    create: {
+        letter: 'A',
+        label: 'thêm mới',
+        className: 'text-green-600 dark:text-green-400',
+    },
+} as const;
+
+// * How often an open local file is checked against the disk (the local file reads share a per-minute budget).
+export const LIVE_REFRESH_MS = 8000;
+
+/** Width of the sidebar and the width the chat gets back when it is opened again. */
+export const SIDEBAR_WIDTH = 256;
+// * The file tree can be dragged this wide at most.
+export const TREE_MAX_WIDTH = 640;
+export const CHAT_OPEN_WIDTH = 384;
