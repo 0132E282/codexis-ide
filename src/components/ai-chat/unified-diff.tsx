@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { unifiedDiff } from '@/lib/unified-diff';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 /** * A file's change as a unified diff (like a pull request): old and new line numbers, a +/− column, whole rows tinted, "@@" headers between the blocks. */
 export function UnifiedDiff({
@@ -15,7 +16,7 @@ export function UnifiedDiff({
     if (rows.length === 0) {
         return (
             <p className="px-4 py-3 text-xs text-muted-foreground">
-                Không có khác biệt.
+                {t('unified_diff.no_differences')}
             </p>
         );
     }
@@ -23,7 +24,7 @@ export function UnifiedDiff({
     return (
         <div
             role="table"
-            aria-label="Thay đổi của tệp"
+            aria-label={t('unified_diff.file_changes')}
             className="max-h-[85vh] overflow-auto font-mono text-[13px] leading-[1.6] select-text"
         >
             {/* * As wide as the longest line, so the row tints reach the end while the block scrolls sideways. */}
@@ -63,9 +64,9 @@ export function UnifiedDiff({
                                 role="cell"
                                 aria-label={
                                     row.kind === '+'
-                                        ? 'thêm'
+                                        ? t('unified_diff.added')
                                         : row.kind === '-'
-                                          ? 'xóa'
+                                          ? t('unified_diff.removed')
                                           : undefined
                                 }
                                 className={cn(

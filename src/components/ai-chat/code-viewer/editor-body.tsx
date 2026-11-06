@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { lazy, Suspense } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
@@ -88,7 +89,11 @@ export function EditorBody({
                     className="min-h-0 flex-1 overflow-auto p-4"
                     // * Editing happens in the code view (the rendered text cannot be written back to markdown without rewriting the file): a double click on the text opens it.
                     onDoubleClick={() => editable && onPreviewChange(false)}
-                    title={editable ? 'Bấm đúp để sửa' : undefined}
+                    title={
+                        editable
+                            ? t('editor_body.double_click_to_edit')
+                            : undefined
+                    }
                 >
                     <MarkdownContent content={content} />
                 </div>
@@ -97,7 +102,7 @@ export function EditorBody({
                     <Suspense
                         fallback={
                             <p className="m-4 text-sm text-muted-foreground">
-                                Đang tải...
+                                {t('common.loading')}
                             </p>
                         }
                     >

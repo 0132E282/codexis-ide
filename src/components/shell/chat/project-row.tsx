@@ -1,5 +1,6 @@
-import { ChevronDown, Laptop } from 'lucide-react';
+import { ChevronDown, Laptop, ShieldCheck, Users } from 'lucide-react';
 import { useState } from 'react';
+import { MODES } from '@/components/shell/chat/cli-options';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -7,11 +8,15 @@ import {
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import type { AgentCli } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
-/** The row under the message box: the projects the AI works in (this one, and others picked for the chat) and the worktree switch. */
+/** The row under the message box: the projects the AI works in (this one, and others picked for the chat), the worktree switch and (Claude only) the permission mode and agent team. */
 export function ProjectRow({
     busy,
     projectName,
@@ -20,6 +25,11 @@ export function ProjectRow({
     onExtraRootsChange,
     worktree,
     onWorktreeChange,
+    cli,
+    mode,
+    onModeChange,
+    agentTeam,
+    onAgentTeamChange,
 }: {
     busy: boolean;
     /** Name of the project this chat belongs to. */
@@ -32,11 +42,19 @@ export function ProjectRow({
     /** Worktree mode: the AI works on its own git branch, in a copy of the project. */
     worktree: boolean;
     onWorktreeChange: (on: boolean) => void;
+    cli: AgentCli;
+    mode: string;
+    onModeChange: (mode: string) => void;
+    agentTeam: boolean;
+    onAgentTeamChange: (on: boolean) => void;
 }) {
+    const modeLabel = t(
+        MODES.find((option) => option.value === mode)?.label ?? mode,
+    );
     const [projectSearch, setProjectSearch] = useState('');
 
     return (
-        <div className="mt-1 flex items-center px-2 text-sm">
+        <div className="mt-1 flex flex-wrap items-center px-2 text-sm">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
@@ -44,8 +62,8 @@ export function ProjectRow({
                         variant="ghost"
                         size="sm"
                         disabled={busy}
-                        aria-label="Chọn dự án đang làm"
-                        title="Dự án AI làm việc: chọn thêm để làm nhiều dự án trong một chat"
+                        aria-label={t('project_row.choose_working_projects')}
+                        title={t('project_row.projects_the_ai_works')}
                         className="max-w-full gap-1.5 text-muted-foreground"
                     >
                         <Laptop aria-hidden="true" />
@@ -70,8 +88,8 @@ export function ProjectRow({
                                 setProjectSearch(event.target.value)
                             }
                             onKeyDown={(event) => event.stopPropagation()}
-                            aria-label="Tìm dự án"
-                            placeholder="Tìm dự án..."
+                            aria-label={t('common.search_projects')}
+                            placeholder={t('common.search_projects2')}
                         />
                     </div>
                     <DropdownMenuCheckboxItem checked disabled>
@@ -79,7 +97,7 @@ export function ProjectRow({
                     </DropdownMenuCheckboxItem>
                     {otherProjects.length === 0 && (
                         <DropdownMenuItem disabled>
-                            Chưa có dự án khác. Thêm ở thanh bên.
+                            {t('project_row.no_other_projects_yet')}
                         </DropdownMenuItem>
                     )}
                     {otherProjects
@@ -109,7 +127,7 @@ export function ProjectRow({
                 </DropdownMenuContent>
             </DropdownMenu>
             <label
-                title="Chạy AI trên nhánh git riêng, trong bản sao của dự án; dự án gốc không bị đụng tới"
+                title={t('project_row.run_the_ai_on')}
                 className="ml-2 flex cursor-pointer items-center gap-1.5 text-muted-foreground"
             >
                 <Checkbox
@@ -119,6 +137,55 @@ export function ProjectRow({
                 />
                 Worktree
             </label>
+            {cli === 'claude' && (
+                <>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={busy}
+                                aria-label={t('project_row.choose_mode')}
+                                className="ml-1 gap-1.5 text-muted-foreground"
+                            >
+                                <ShieldCheck aria-hidden="true" />
+                                {modeLabel}
+                                <ChevronDown aria-hidden="true" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                            <DropdownMenuRadioGroup
+                                value={mode}
+                                onValueChange={onModeChange}
+                            >
+                                {MODES.map((option) => (
+                                    <DropdownMenuRadioItem
+                                        key={option.value}
+                                        value={option.value}
+                                        title={t(option.hint)}
+                                    >
+                                        {t(option.label)}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        aria-pressed={agentTeam}
+                        title={t('project_row.enable_agent_team_experimental')}
+                        onClick={() => onAgentTeamChange(!agentTeam)}
+                        className={`gap-1.5 ${agentTeam ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
+                    >
+                        <Users aria-hidden="true" />
+                        Agent team
+                    </Button>
+                </>
+            )}
         </div>
     );
 }

@@ -3,12 +3,16 @@ import { SourceCell, ToolTable, type ToolColumn } from './tool-table';
 
 const columns: ToolColumn<ToolEntry>[] = [
     {
-        header: 'Tên',
+        header: 'common.name',
         cell: (row) => <span className="font-medium">{row.name}</span>,
     },
-    { header: 'Mô tả', grow: true, cell: (row) => row.description || '—' },
     {
-        header: 'Nguồn',
+        header: 'common.description',
+        grow: true,
+        cell: (row) => row.description || '—',
+    },
+    {
+        header: 'common.source',
         clamp: false,
         cell: (row, detail) => (
             <SourceCell
@@ -29,7 +33,7 @@ export function SkillTab() {
             load={ideTools.skills}
             columns={columns}
             name={name}
-            emptyText="Chưa có skill nào được cấu hình."
+            emptyText={'skill_tab.no_skills_configured_yet'}
         />
     );
 }

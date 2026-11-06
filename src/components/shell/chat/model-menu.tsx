@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { AgentCli } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 // * Height of one menu item in pixels: the model list opens upward, its last item level with the AI it belongs to.
 const MENU_ITEM_HEIGHT = 32;
@@ -40,7 +41,7 @@ export function ModelMenu({
                     variant="ghost"
                     size="sm"
                     disabled={busy}
-                    aria-label="Chọn AI và model"
+                    aria-label={t('model_menu.choose_ai_and_model')}
                     className="gap-2 text-muted-foreground"
                 >
                     <CliIcon aria-hidden="true" className="size-5" />

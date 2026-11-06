@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -345,7 +346,9 @@ export function useFileSession({
                     .catch(() => setBaseline(null));
             }
         } catch (caught) {
-            setFileError(errorText(caught, 'Không mở được tệp.'));
+            setFileError(
+                errorText(caught, t('use_file_session.could_not_open_the')),
+            );
         }
     };
 
@@ -379,7 +382,9 @@ export function useFileSession({
                 drafts.current.delete(selected);
             }
         } catch (caught) {
-            setSaveError(errorText(caught, 'Không lưu được tệp.'));
+            setSaveError(
+                errorText(caught, t('use_file_session.could_not_save_the')),
+            );
         } finally {
             setSaving(false);
         }
@@ -404,7 +409,12 @@ export function useFileSession({
 
             return true;
         } catch (caught) {
-            toast.error(errorText(caught, `Không lưu được ${path}.`));
+            toast.error(
+                errorText(
+                    caught,
+                    t('use_file_session.could_not_save_path', { path }),
+                ),
+            );
 
             return false;
         }
@@ -452,9 +462,11 @@ export function useFileSession({
             isDirty(path) &&
             !(await persist(path, draftOf(path))) &&
             !(await confirm({
-                title: 'Đóng tệp chưa lưu',
-                description: `${path.split('/').pop()} chưa lưu được. Đóng và bỏ thay đổi?`,
-                action: 'Đóng và bỏ',
+                title: t('use_file_session.close_unsaved_file'),
+                description: t('use_file_session.name_could_not_be', {
+                    name: path.split('/').pop() ?? path,
+                }),
+                action: t('use_file_session.close_and_discard'),
             }))
         ) {
             return;
@@ -497,9 +509,11 @@ export function useFileSession({
         if (
             unsaved.length > 0 &&
             !(await confirm({
-                title: 'Đóng tệp chưa lưu',
-                description: `${unsaved.length} tệp chưa lưu được. Đóng và bỏ thay đổi?`,
-                action: 'Đóng và bỏ',
+                title: t('use_file_session.close_unsaved_file'),
+                description: t('use_file_session.count_files_could_not', {
+                    count: unsaved.length,
+                }),
+                action: t('use_file_session.close_and_discard'),
             }))
         ) {
             return;

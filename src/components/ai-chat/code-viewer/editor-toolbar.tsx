@@ -1,13 +1,13 @@
-import { Check, Code2, Eye, Undo2, X } from 'lucide-react';
+import { t } from '@/lib/i18n';
+import { Check, Code2, Eye, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { AiChatProposal } from '@/types';
 
-/** * The bar above the open file: its path, the markdown view switch, the AI edit buttons (apply / drop / take back), ask the AI and close. */
+/** * The buttons of the open file, shown at the end of the tab bar: the markdown view switch, the AI edit buttons (apply / drop / take back) and ask the AI. */
 export function EditorToolbar({
-    selected,
     preview,
     onPreviewChange,
     showPreviewSwitch,
@@ -18,9 +18,7 @@ export function EditorToolbar({
     showAsk,
     assistant,
     onAskTrigger,
-    onClose,
 }: {
-    selected: string;
     /** * The markdown is shown rendered instead of as code. */
     preview: boolean;
     onPreviewChange: (preview: boolean) => void;
@@ -34,19 +32,9 @@ export function EditorToolbar({
     showAsk: boolean;
     assistant?: AssistantIdentity;
     onAskTrigger: () => void;
-    onClose: (path: string) => void;
 }) {
     return (
-        <div className="flex h-12 items-center justify-between gap-2 border-b px-3 text-xs text-muted-foreground">
-            <span className="truncate" dir="rtl">
-                <bdi>
-                    {selected.split('/').slice(0, -1).join(' / ')}
-                    {selected.includes('/') && ' / '}
-                    <span className="font-medium text-foreground">
-                        {selected.split('/').pop()}
-                    </span>
-                </bdi>
-            </span>
+        <>
             <span className="flex shrink-0 items-center gap-1">
                 {showPreviewSwitch && (
                     <Tabs
@@ -61,14 +49,14 @@ export function EditorToolbar({
                                 className="gap-1 px-2.5 text-xs"
                             >
                                 <Eye aria-hidden="true" />
-                                Xem
+                                {t('common.view')}
                             </TabsTrigger>
                             <TabsTrigger
                                 value="code"
                                 className="gap-1 px-2.5 text-xs"
                             >
                                 <Code2 aria-hidden="true" />
-                                Mã
+                                {t('editor_toolbar.code')}
                             </TabsTrigger>
                         </TabsList>
                     </Tabs>
@@ -79,27 +67,27 @@ export function EditorToolbar({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label="Áp dụng thay đổi của AI"
-                            title="Áp dụng thay đổi của AI vào tệp (Cmd/Ctrl+S)"
+                            aria-label={t('editor_toolbar.apply_ai_changes')}
+                            title={t('editor_toolbar.apply_ai_changes_to')}
                             disabled={deciding}
                             onClick={() => onDecide('apply')}
                             className="h-7 gap-1 px-2 text-xs text-green-600 dark:text-green-400"
                         >
                             <Check aria-hidden="true" />
-                            Áp dụng
+                            {t('common.apply')}
                         </Button>
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label="Bỏ thay đổi của AI"
-                            title="Bỏ thay đổi của AI"
+                            aria-label={t('editor_toolbar.discard_ai_changes')}
+                            title={t('editor_toolbar.discard_ai_changes')}
                             disabled={deciding}
                             onClick={() => onDecide('reject')}
                             className="h-7 gap-1 px-2 text-xs text-muted-foreground"
                         >
                             <Undo2 aria-hidden="true" />
-                            Bỏ
+                            {t('editor_toolbar.discard')}
                         </Button>
                     </>
                 )}
@@ -108,8 +96,8 @@ export function EditorToolbar({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Hoàn tác thay đổi của AI"
-                        title="Hoàn tác thay đổi của AI"
+                        aria-label={t('editor_toolbar.undo_ai_changes')}
+                        title={t('editor_toolbar.undo_ai_changes')}
                         disabled={deciding}
                         onClick={() => onDecide('revert')}
                         className="size-7 text-muted-foreground"
@@ -122,8 +110,8 @@ export function EditorToolbar({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Hỏi AI về đoạn đang chọn hoặc cả tệp"
-                        title="Hỏi AI về đoạn đang chọn (không chọn: cả tệp) · ⌘L"
+                        aria-label={t('editor_toolbar.ask_ai_about_the2')}
+                        title={t('editor_toolbar.ask_ai_about_the')}
                         onClick={() => onAskTrigger()}
                         className="size-7"
                     >
@@ -133,18 +121,7 @@ export function EditorToolbar({
                         />
                     </Button>
                 )}
-
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Đóng tệp"
-                    onClick={() => onClose(selected)}
-                    className="size-7"
-                >
-                    <X aria-hidden="true" />
-                </Button>
             </span>
-        </div>
+        </>
     );
 }

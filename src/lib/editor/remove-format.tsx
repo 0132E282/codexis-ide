@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import { RemoveFormatting } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { t } from '@/lib/i18n';
 
 export function RemoveFormatToolbar({ editor }: { editor: Editor }) {
     return (
@@ -12,7 +13,7 @@ export function RemoveFormatToolbar({ editor }: { editor: Editor }) {
             onClick={() =>
                 editor.chain().focus().unsetAllMarks().clearNodes().run()
             }
-            title="Xóa định dạng"
+            title={t('remove_format.clear_formatting')}
         >
             <RemoveFormatting className="size-3.5" />
         </Button>

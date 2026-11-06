@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { t } from '@/lib/i18n';
 
-export const NOT_AVAILABLE = 'Chưa có trong IDE: chưa có trợ lý AI.';
+export const NOT_AVAILABLE = 'inert_button.not_available_in_the';
 
 /** An icon button that is shown but cannot be used yet. */
 export function Inert({
@@ -20,7 +21,7 @@ export function Inert({
             size="icon-sm"
             disabled
             aria-label={label}
-            title={NOT_AVAILABLE}
+            title={t(NOT_AVAILABLE)}
             className={className}
         >
             {children}

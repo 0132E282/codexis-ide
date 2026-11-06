@@ -3,6 +3,7 @@ import type { Control } from 'react-hook-form';
 import { useController, useWatch } from 'react-hook-form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { t } from '@/lib/i18n';
 
 export interface AutoSyncFieldProps {
     name: string;
@@ -20,7 +21,7 @@ export default function AutoSyncField({
     control,
     source = 'name',
     transform = (value) => value,
-    syncLabel = 'Tự động đồng bộ',
+    syncLabel = t('auto_sync_field.auto_sync'),
 }: AutoSyncFieldProps) {
     const { field } = useController({ name, control, defaultValue: '' });
     const sourceValue = useWatch({ control, name: source }) as unknown;

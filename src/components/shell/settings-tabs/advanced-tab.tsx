@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LANGUAGES, setLanguage, useLanguage, t } from '@/lib/i18n';
 import { ideAuth } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
 import { ideUsage } from '@/lib/ide-usage';
@@ -9,7 +10,7 @@ import { MAX_MODEL_LENGTH } from '@/lib/ide-settings';
 import type { ChatSettings } from '@/lib/ide-settings';
 
 const CLI_OPTIONS: { value: ChatSettings['defaultCli']; label: string }[] = [
-    { value: '', label: 'Hỏi mỗi lần' },
+    { value: '', label: 'advanced_tab.ask_every_time' },
     { value: 'claude', label: 'Claude' },
     { value: 'codex', label: 'Codex' },
 ];
@@ -66,7 +67,9 @@ function FallbackOrder({
                     </span>
                     <button
                         type="button"
-                        aria-label={`Đưa ${CLI_LABELS[cli]} lên`}
+                        aria-label={t('advanced_tab.move_name_up', {
+                            name: CLI_LABELS[cli],
+                        })}
                         disabled={index === 0}
                         onClick={() => move(index, index - 1)}
                         className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -75,7 +78,9 @@ function FallbackOrder({
                     </button>
                     <button
                         type="button"
-                        aria-label={`Đưa ${CLI_LABELS[cli]} xuống`}
+                        aria-label={t('advanced_tab.move_name_down', {
+                            name: CLI_LABELS[cli],
+                        })}
                         disabled={index === order.length - 1}
                         onClick={() => move(index, index + 1)}
                         className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -138,13 +143,13 @@ function AccountBalance() {
 
     return (
         <p className="text-sm">
-            Hết token:{' '}
-            <strong className="text-red-500">{counts.exhausted}</strong> tài
-            khoản · Còn:{' '}
+            {t('advanced_tab.out_of_tokens')}{' '}
+            <strong className="text-red-500">{counts.exhausted}</strong>{' '}
+            {t('advanced_tab.accounts_remaining')}{' '}
             <strong className="text-green-500">
                 {counts.connected - counts.exhausted}
             </strong>{' '}
-            tài khoản
+            {t('advanced_tab.accounts')}
         </p>
     );
 }
@@ -157,13 +162,43 @@ export function AdvancedTab({
     settings: ChatSettings;
     onChange: (settings: ChatSettings) => void;
 }) {
+    const language = useLanguage();
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-                <Label>CLI mặc định</Label>
+                <Label>{t('advanced_tab.language')}</Label>
                 <div
                     role="radiogroup"
-                    aria-label="CLI mặc định"
+                    aria-label={t('advanced_tab.language')}
+                    className="flex flex-wrap gap-1.5"
+                >
+                    {LANGUAGES.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={language === option.value}
+                            onClick={() => setLanguage(option.value)}
+                            className={`h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                                language === option.value
+                                    ? 'border-primary bg-accent'
+                                    : 'hover:bg-muted'
+                            }`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    {t('advanced_tab.display_language_of_the')}
+                </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+                <Label>{t('advanced_tab.default_cli')}</Label>
+                <div
+                    role="radiogroup"
+                    aria-label={t('advanced_tab.default_cli')}
                     className="flex flex-wrap gap-1.5"
                 >
                     {CLI_OPTIONS.map((option) => (
@@ -184,7 +219,7 @@ export function AdvancedTab({
                                     : 'hover:bg-muted'
                             }`}
                         >
-                            {option.label}
+                            {t(option.label)}
                         </button>
                     ))}
                 </div>
@@ -192,13 +227,13 @@ export function AdvancedTab({
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                     <Label htmlFor="settings-claude-model">
-                        Mô hình Claude
+                        {t('advanced_tab.claude_model')}
                     </Label>
                     <Input
                         id="settings-claude-model"
                         value={settings.claudeModel}
                         maxLength={MAX_MODEL_LENGTH}
-                        placeholder="Mặc định của CLI"
+                        placeholder={t('advanced_tab.cli_default')}
                         onChange={(event) =>
                             onChange({
                                 ...settings,
@@ -208,12 +243,14 @@ export function AdvancedTab({
                     />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="settings-codex-model">Mô hình Codex</Label>
+                    <Label htmlFor="settings-codex-model">
+                        {t('advanced_tab.codex_model')}
+                    </Label>
                     <Input
                         id="settings-codex-model"
                         value={settings.codexModel}
                         maxLength={MAX_MODEL_LENGTH}
-                        placeholder="Mặc định của CLI"
+                        placeholder={t('advanced_tab.cli_default')}
                         onChange={(event) =>
                             onChange({
                                 ...settings,
@@ -235,13 +272,10 @@ export function AdvancedTab({
                             })
                         }
                     />
-                    Tự chuyển AI khi hết hạn mức
+                    {t('advanced_tab.switch_ai_automatically_when')}
                 </label>
                 <p className="text-xs text-muted-foreground">
-                    Khi một AI báo hết hạn mức, tin nhắn được gửi lại cho AI kế
-                    tiếp trong danh sách. Hết cả danh sách thì báo lỗi. AI mới
-                    bắt đầu cuộc trò chuyện riêng của nó nên không thấy các lượt
-                    trước.
+                    {t('advanced_tab.when_an_ai_reports')}
                 </p>
                 <AccountBalance />
                 {settings.fallbackEnabled && (
@@ -254,7 +288,7 @@ export function AdvancedTab({
                 )}
             </div>
             <p className="text-xs text-muted-foreground">
-                Để trống mô hình thì CLI tự chọn mô hình mặc định của nó.
+                {t('advanced_tab.leave_the_model_empty')}
             </p>
         </div>
     );

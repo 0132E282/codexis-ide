@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { memo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
@@ -20,6 +21,7 @@ function FileTabsBar({
     dirtyPaths,
     actions,
     tabsEnd,
+    tools,
     onOpen,
     onClose,
     onCloseMany,
@@ -35,6 +37,8 @@ function FileTabsBar({
     actions: FileActions;
     /** Buttons pinned to the right end of the tab bar. */
     tabsEnd?: ReactNode;
+    /** Buttons of the open file (view switch, AI edit, ask the AI), just before `tabsEnd`. */
+    tools?: ReactNode;
     onOpen: (path: string) => void;
     onClose: (path: string) => void;
     onCloseMany: (paths: string[]) => void;
@@ -49,7 +53,7 @@ function FileTabsBar({
     return (
         <div
             role="tablist"
-            aria-label="Tệp đang mở"
+            aria-label={t('file_tabs.open_files')}
             className="flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b px-2"
         >
             {tabs.map((path) => {
@@ -128,14 +132,16 @@ function FileTabsBar({
                                     {dirtyPaths.has(path) && (
                                         <span
                                             role="img"
-                                            aria-label="Chưa lưu"
+                                            aria-label={t('file_tabs.unsaved')}
                                             className="size-1.5 shrink-0 rounded-full bg-foreground/60"
                                         />
                                     )}
                                 </button>
                                 <button
                                     type="button"
-                                    aria-label={`Đóng ${name}`}
+                                    aria-label={t('file_tabs.close_name', {
+                                        name,
+                                    })}
                                     onClick={() => onClose(path)}
                                     className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                 >
@@ -148,7 +154,7 @@ function FileTabsBar({
                         </ContextMenuTrigger>
                         <ContextMenuContent className="w-60">
                             <ContextMenuItem onSelect={() => onClose(path)}>
-                                Đóng
+                                {t('common.close')}
                             </ContextMenuItem>
                             <ContextMenuItem
                                 disabled={tabs.length < 2}
@@ -158,7 +164,7 @@ function FileTabsBar({
                                     )
                                 }
                             >
-                                Đóng các tab khác
+                                {t('file_tabs.close_other_tabs')}
                             </ContextMenuItem>
                             <ContextMenuItem
                                 disabled={
@@ -170,29 +176,42 @@ function FileTabsBar({
                                     )
                                 }
                             >
-                                Đóng các tab bên phải
+                                {t('file_tabs.close_tabs_to_the')}
                             </ContextMenuItem>
                             <ContextMenuItem onSelect={() => onCloseMany(tabs)}>
-                                Đóng tất cả
+                                {t('file_tabs.close_all')}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
                             <ContextMenuItem
                                 onSelect={() => actions.copy(path)}
                             >
-                                Sao chép đường dẫn
+                                {t('common.copy_path')}
                             </ContextMenuItem>
+                            <ContextMenuItem
+                                onSelect={() => actions.copyName(path)}
+                            >
+                                {t('common.copy_file_name')}
+                            </ContextMenuItem>
+                            {actions.rename !== undefined && (
+                                <ContextMenuItem
+                                    onSelect={() => actions.rename?.(path)}
+                                >
+                                    {t('common.rename')}
+                                </ContextMenuItem>
+                            )}
                             <ContextMenuItem
                                 disabled={actions.ask === undefined}
                                 onSelect={() => actions.ask?.(path)}
                             >
-                                Thêm tệp vào chat
+                                {t('common.add_file_to_chat')}
                             </ContextMenuItem>
                         </ContextMenuContent>
                     </ContextMenu>
                 );
             })}
-            {tabsEnd !== undefined && (
+            {(tools !== undefined || tabsEnd !== undefined) && (
                 <div className="sticky right-0 ml-auto flex shrink-0 items-center gap-1 bg-background pl-1">
+                    {tools}
                     {tabsEnd}
                 </div>
             )}

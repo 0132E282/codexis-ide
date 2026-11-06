@@ -12,6 +12,7 @@ import { isPdfSource, mediaMime, readMedia } from '@/lib/media-file';
 import { requestErrorMessage } from '@/lib/ai-error';
 import { useConfirm } from '@/hooks/use-confirm';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type Change = {
     path: string;
@@ -75,7 +76,7 @@ export function useLocalChanges(root: string | null): LocalChangeList {
                         setError(
                             requestErrorMessage(
                                 caught,
-                                'Không tải được danh sách thay đổi.',
+                                t('local_changes.could_not_load_the'),
                             ),
                         );
                     }
@@ -130,9 +131,11 @@ export function LocalChanges({
     const discard = async (file: Change) => {
         if (
             !(await confirm({
-                title: 'Hoàn tác thay đổi',
-                description: `Hoàn tác mọi thay đổi của ${file.path}? Không thể khôi phục lại.`,
-                action: 'Hoàn tác',
+                title: t('local_changes.discard_changes'),
+                description: t('local_changes.discard_all_changes_to', {
+                    path: file.path,
+                }),
+                action: t('local_changes.discard'),
             }))
         ) {
             return;
@@ -144,11 +147,16 @@ export function LocalChanges({
                 path: file.path,
             });
             invalidateAiChatCache(`file.local:${root}.`);
-            toast.success(`Đã hoàn tác ${file.path}.`);
+            toast.success(
+                t('local_changes.discarded_path', { path: file.path }),
+            );
             refresh();
         } catch (caught) {
             toast.error(
-                requestErrorMessage(caught, 'Không hoàn tác được tệp này.'),
+                requestErrorMessage(
+                    caught,
+                    t('local_changes.could_not_discard_changes'),
+                ),
             );
         }
     };
@@ -168,7 +176,7 @@ export function LocalChanges({
     if (!git) {
         return (
             <p className="m-4 text-sm text-muted-foreground">
-                Thư mục này không phải kho git nên không có danh sách thay đổi.
+                {t('local_changes.this_folder_is_not')}
             </p>
         );
     }
@@ -176,7 +184,7 @@ export function LocalChanges({
     if (files.length === 0) {
         return (
             <p className="m-4 text-sm text-muted-foreground">
-                Không có thay đổi nào so với bản commit gần nhất.
+                {t('local_changes.no_changes_since_the')}
             </p>
         );
     }
@@ -201,17 +209,19 @@ export function LocalChanges({
                                 items={[
                                     {
                                         label: expanded
-                                            ? 'Ẩn thay đổi'
-                                            : 'Mở thay đổi',
+                                            ? t('local_changes.hide_changes')
+                                            : t('local_changes.show_changes'),
                                         onSelect: () => toggle(file.path),
                                     },
                                     {
-                                        label: 'Mở tệp',
+                                        label: t('common.open_file'),
                                         disabled: file.status === 'D',
                                         onSelect: () => onOpenFile(file.path),
                                     },
                                     {
-                                        label: 'Hoàn tác thay đổi',
+                                        label: t(
+                                            'local_changes.discard_changes',
+                                        ),
                                         onSelect: () => void discard(file),
                                     },
                                 ]}
@@ -271,8 +281,15 @@ export function LocalChanges({
                                     </button>
                                     <button
                                         type="button"
-                                        aria-label={`Hoàn tác ${file.path}`}
-                                        title="Hoàn tác thay đổi"
+                                        aria-label={t(
+                                            'local_changes.discard_path',
+                                            {
+                                                path: file.path,
+                                            },
+                                        )}
+                                        title={t(
+                                            'local_changes.discard_changes',
+                                        )}
                                         onClick={() => void discard(file)}
                                         className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     >
@@ -284,8 +301,13 @@ export function LocalChanges({
                                     {file.status !== 'D' && (
                                         <button
                                             type="button"
-                                            aria-label={`Mở ${file.path}`}
-                                            title="Mở tệp"
+                                            aria-label={t(
+                                                'local_changes.open_path',
+                                                {
+                                                    path: file.path,
+                                                },
+                                            )}
+                                            title={t('common.open_file')}
                                             onClick={() =>
                                                 onOpenFile(file.path)
                                             }
@@ -350,7 +372,10 @@ function ChangeDiff({ root, change }: { root: string; change: Change }) {
             .catch((caught) => {
                 if (!cancelled) {
                     setError(
-                        requestErrorMessage(caught, 'Không xem được thay đổi.'),
+                        requestErrorMessage(
+                            caught,
+                            t('local_changes.could_not_view_the'),
+                        ),
                     );
                 }
             });
@@ -416,7 +441,7 @@ function MediaPreview({
                     setError(
                         typeof caught === 'string'
                             ? caught
-                            : 'Không xem được tệp này.',
+                            : t('local_changes.could_not_view_this'),
                     );
                 }
             });
@@ -429,7 +454,7 @@ function MediaPreview({
     if (deleted) {
         return (
             <p className="border-t px-4 py-3 text-xs text-muted-foreground">
-                Tệp đã bị xoá.
+                {t('local_changes.the_file_was_deleted')}
             </p>
         );
     }

@@ -1,4 +1,12 @@
-import type { AgentCli, ChatHistory, Step } from '@/lib/ide';
+import type { AgentCli, ChangedFile, ChatHistory, Step } from '@/lib/ide';
+
+/** A tool the AI asks to use, waiting for the person's answer. */
+export type PermissionRequest = {
+    id: string;
+    tool: string;
+    description: string | null;
+    input: Record<string, unknown>;
+};
 
 export type Turn = {
     id: string;
@@ -11,6 +19,10 @@ export type Turn = {
     steps?: Step[];
     /** What each sub-agent of this turn did inside itself, by the id of the call that started it. */
     sub?: Record<string, Step[]>;
+    /** Files this turn changed in the workspace (by git, so edits made through a shell count); only for a turn run in this session. */
+    changed?: ChangedFile[];
+    /** Questions of the AI ("Hỏi từng việc" mode) not answered yet; the first one is shown. */
+    permissions?: PermissionRequest[];
     /** Loaded from the saved history: shown at once, not typed out. */
     restored?: boolean;
 };
@@ -42,10 +54,28 @@ export function splitPrompt(prompt: string) {
     return { text: lines.join('\n').trim(), files };
 }
 
+/** The saved steps of a turn; undefined when there are none or they cannot be read. */
+function parseSteps(saved: string | null | undefined): Step[] | undefined {
+    if (saved === null || saved === undefined || saved === '') {
+        return undefined;
+    }
+
+    try {
+        const steps: unknown = JSON.parse(saved);
+
+        return Array.isArray(steps) && steps.length > 0
+            ? (steps as Step[])
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** The turns of a saved conversation, ready to show (nothing is running, nothing is typed out again). */
 export function restoreTurns(history: ChatHistory): Turn[] {
-    return history.turns.map((turn) => ({
+    return history.turns.map(({ steps, ...turn }) => ({
         ...turn,
+        steps: parseSteps(steps),
         // * Turns saved by an older version hold the tool calls as `> ⚙ {json}` lines; they are not part of the answer.
         answer: turn.answer
             .replace(OLD_TOOL_LINES, '')

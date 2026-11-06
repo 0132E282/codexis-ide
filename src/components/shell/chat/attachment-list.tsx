@@ -1,5 +1,6 @@
 import { FileText, X } from 'lucide-react';
 import type { Attachment } from '@/components/shell/chat/attachment';
+import { t } from '@/lib/i18n';
 
 /** The files waiting to be sent, as thumbnails with a button to drop each, and the reason the last paste was refused. */
 export function AttachmentList({
@@ -40,7 +41,9 @@ export function AttachmentList({
                             )}
                             <button
                                 type="button"
-                                aria-label={`Bỏ ${attachment.name}`}
+                                aria-label={t('common.remove_name', {
+                                    name: attachment.name,
+                                })}
                                 onClick={() => onRemove(attachment.id)}
                                 className="absolute top-1 right-1 rounded-sm bg-background/80 p-0.5 text-foreground hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             >

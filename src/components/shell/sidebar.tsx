@@ -22,6 +22,7 @@ import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Input } from '@/components/ui/input';
 import type { ChatConversation, Project, Subagent } from '@/lib/ide';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 // * Opened rarely: fetched when the browser is idle after first paint (the button shows meanwhile).
 const loadNewProjectDialog = () =>
@@ -112,13 +113,13 @@ export function Sidebar({
     const newProjectButton = (
         <Button type="button" variant="ghost" size="sm" className="gap-1.5">
             <Plus aria-hidden="true" />
-            Thêm mới dự án
+            {t('sidebar.add_new_project')}
         </Button>
     );
 
     return (
         <aside
-            aria-label="Thanh bên"
+            aria-label={t('sidebar.sidebar')}
             className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
             {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the logo sits at the left edge. */}
@@ -127,7 +128,9 @@ export function Sidebar({
                 <span className="text-lg font-semibold">Codexis</span>
             </div>
             <div className="flex items-center justify-between px-3 pb-2 text-sm">
-                <span className="text-muted-foreground">Dự án</span>
+                <span className="text-muted-foreground">
+                    {t('common.projects')}
+                </span>
                 <Suspense fallback={newProjectButton}>
                     <NewProjectDialog onCreated={onCreated}>
                         {newProjectButton}
@@ -143,12 +146,12 @@ export function Sidebar({
                             setQuery('');
                         }
                     }}
-                    aria-label="Tìm dự án"
-                    placeholder="Tìm dự án..."
+                    aria-label={t('common.search_projects')}
+                    placeholder={t('common.search_projects2')}
                 />
             </div>
             <nav
-                aria-label="Dự án"
+                aria-label={t('common.projects')}
                 className="min-h-0 flex-1 overflow-y-auto px-1"
             >
                 {error !== null && (
@@ -161,12 +164,12 @@ export function Sidebar({
                 )}
                 {needle === '' && rows.length === 0 && error === null && (
                     <p className="px-3 py-2 text-sm text-muted-foreground">
-                        Chưa có dự án nào. Chọn "Thêm mới dự án" để bắt đầu.
+                        {t('sidebar.no_projects_yet_choose')}
                     </p>
                 )}
                 {needle !== '' && visible.length === 0 && (
                     <p className="px-3 py-2 text-sm text-muted-foreground">
-                        Không tìm thấy dự án.
+                        {t('sidebar.no_project_found')}
                     </p>
                 )}
                 {visible.map((row) => {
@@ -204,7 +207,9 @@ export function Sidebar({
                                         {row.name}
                                     </span>
                                     <span
-                                        title="Số cuộc trò chuyện"
+                                        title={t(
+                                            'sidebar.number_of_conversations',
+                                        )}
                                         className="mr-6 shrink-0 text-xs text-muted-foreground tabular-nums"
                                     >
                                         {active ? conversations.length : ''}
@@ -214,8 +219,13 @@ export function Sidebar({
                                     type="button"
                                     variant="ghost"
                                     size="icon-xs"
-                                    aria-label={`Xóa dự án ${row.name} khỏi danh sách`}
-                                    title="Xóa khỏi danh sách (không xóa thư mục)"
+                                    aria-label={t(
+                                        'sidebar.remove_project_name_from',
+                                        {
+                                            name: row.name,
+                                        },
+                                    )}
+                                    title={t('sidebar.remove_from_list_the')}
                                     onClick={() => onRemove(row.id)}
                                     className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
                                 >
@@ -232,7 +242,7 @@ export function Sidebar({
                                         aria-hidden="true"
                                         className="size-4"
                                     />
-                                    Cuộc trò chuyện mới
+                                    {t('sidebar.new_conversation')}
                                 </button>
                             )}
                             {active && (
@@ -263,15 +273,21 @@ export function Sidebar({
                                             >
                                                 <span className="truncate">
                                                     {conversation.title ||
-                                                        'Cuộc trò chuyện'}
+                                                        t(
+                                                            'sidebar.conversation',
+                                                        )}
                                                 </span>
                                             </button>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon-xs"
-                                                aria-label="Xóa cuộc trò chuyện"
-                                                title="Xóa cuộc trò chuyện"
+                                                aria-label={t(
+                                                    'sidebar.delete_conversation',
+                                                )}
+                                                title={t(
+                                                    'sidebar.delete_conversation',
+                                                )}
                                                 onClick={() =>
                                                     onDeleteConversation(
                                                         conversation.id,
@@ -285,7 +301,9 @@ export function Sidebar({
                                                 currentConversation &&
                                                 subagents.length > 0 && (
                                                     <ul
-                                                        aria-label="Agent đang làm việc"
+                                                        aria-label={t(
+                                                            'sidebar.agent_is_working',
+                                                        )}
                                                         className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
                                                     >
                                                         {subagents.map(
@@ -340,12 +358,12 @@ export function Sidebar({
                 <div className="min-w-0 flex-1 leading-tight">
                     <p className="truncate text-sm">Rynox</p>
                     <p className="truncate text-xs text-muted-foreground">
-                        Chưa kết nối trợ lý AI
+                        {t('sidebar.ai_assistant_not_connected')}
                     </p>
                 </div>
                 <span
                     role="img"
-                    aria-label="Trợ lý AI chưa kết nối"
+                    aria-label={t('sidebar.ai_assistant_not_connected2')}
                     className="size-2 shrink-0 rounded-full bg-muted-foreground/60"
                 />
                 <DropdownMenu>
@@ -354,7 +372,7 @@ export function Sidebar({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label="Thêm"
+                            aria-label={t('common.add')}
                             className="text-muted-foreground"
                         >
                             <EllipsisVertical aria-hidden="true" />
@@ -365,15 +383,15 @@ export function Sidebar({
                             onSelect={() => onOpenSettings('character')}
                         >
                             <Settings aria-hidden="true" />
-                            Cài đặt chat
+                            {t('common.chat_settings')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={onOpenUsage}>
                             <ChartColumn aria-hidden="true" />
-                            Thống kê
+                            {t('sidebar.statistics')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={onConnectPhone}>
                             <Smartphone aria-hidden="true" />
-                            Kết nối điện thoại
+                            {t('common.connect_phone')}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

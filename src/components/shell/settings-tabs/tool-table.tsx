@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ide, errorText } from '@/lib/ide';
 import type { ToolListing, ToolScope } from '@/lib/ide-tools';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 export type ToolColumn<T> = {
@@ -18,8 +19,8 @@ export type ToolColumn<T> = {
 };
 
 const SCOPE_LABEL: Record<ToolScope, string> = {
-    project: 'Dự án',
-    machine: 'Máy này',
+    project: 'common.projects',
+    machine: 'tool_table.this_machine',
 };
 
 /** Source cell: scope badge, file path and, for project files, an "open in VS Code" button. */
@@ -43,7 +44,7 @@ export function SourceCell({
             )}
         >
             <Badge variant={scope === 'project' ? 'default' : 'secondary'}>
-                {SCOPE_LABEL[scope]}
+                {t(SCOPE_LABEL[scope])}
             </Badge>
             {compact ? null : (
                 <>
@@ -66,7 +67,7 @@ export function SourceCell({
                                 void ide.openInVscode(relativePath);
                             }}
                         >
-                            Mở trong VS Code
+                            {t('common.open_in_vs_code')}
                         </Button>
                     ) : null}
                 </>
@@ -118,7 +119,11 @@ export function ToolTable<T>({
     }
 
     if (!listing) {
-        return <p className="text-sm text-muted-foreground">Đang tải...</p>;
+        return (
+            <p className="text-sm text-muted-foreground">
+                {t('common.loading')}
+            </p>
+        );
     }
 
     if (selected !== null) {
@@ -132,7 +137,7 @@ export function ToolTable<T>({
                     onClick={() => setSelected(null)}
                 >
                     <ArrowLeft aria-hidden="true" />
-                    Quay lại
+                    {t('common.back')}
                 </Button>
                 <h4 className="text-lg font-semibold">{name(selected)}</h4>
                 <dl className="flex flex-col gap-4">
@@ -142,7 +147,7 @@ export function ToolTable<T>({
                             className="flex flex-col gap-1"
                         >
                             <dt className="text-xs font-medium text-muted-foreground">
-                                {column.header}
+                                {t(column.header)}
                             </dt>
                             <dd className="text-sm whitespace-pre-wrap">
                                 {column.cell(selected, true)}
@@ -159,7 +164,7 @@ export function ToolTable<T>({
             <Input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
-                placeholder="Lọc theo tên..."
+                placeholder={t('tool_table.filter_by_name')}
             />
             {listing.warnings.map((warning) => (
                 <p key={warning} className="text-xs text-destructive">
@@ -181,7 +186,7 @@ export function ToolTable<T>({
                                         column.grow && 'w-full',
                                     )}
                                 >
-                                    {column.header}
+                                    {t(column.header)}
                                 </th>
                             ))}
                         </tr>
@@ -194,8 +199,8 @@ export function ToolTable<T>({
                                     className="px-3 py-6 text-center text-muted-foreground"
                                 >
                                     {listing.items.length === 0
-                                        ? emptyText
-                                        : 'Không có mục nào khớp bộ lọc.'}
+                                        ? t(emptyText)
+                                        : t('tool_table.no_items_match_the')}
                                 </td>
                             </tr>
                         ) : (

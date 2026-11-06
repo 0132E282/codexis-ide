@@ -11,13 +11,14 @@ import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { AiChatActivityStep } from '@/types';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 const STEP: Record<string, { label: string; icon: LucideIcon }> = {
-    tree: { label: 'Đọc cấu trúc', icon: FolderTree },
-    file: { label: 'Đọc tệp', icon: FileText },
-    attachment: { label: 'Đọc tệp đính kèm', icon: Paperclip },
-    image: { label: 'Xem ảnh', icon: ImageIcon },
-    ask: { label: 'Hỏi AI', icon: Sparkles },
+    tree: { label: 'work_steps.read_structure', icon: FolderTree },
+    file: { label: 'work_steps.read_file', icon: FileText },
+    attachment: { label: 'work_steps.read_attachment', icon: Paperclip },
+    image: { label: 'work_steps.view_image', icon: ImageIcon },
+    ask: { label: 'work_steps.ask_ai', icon: Sparkles },
 };
 
 // * Steps whose detail is a path or file name read best in monospace; the rest are plain sentences.
@@ -54,7 +55,11 @@ export function WorkSteps({
                         live && 'motion-safe:animate-pulse',
                     )}
                 />
-                {live ? 'Đang làm' : 'Đã làm'} {steps.length} bước
+                {live
+                    ? t('work_steps.working_count_steps', {
+                          count: steps.length,
+                      })
+                    : t('work_steps.done_count_steps', { count: steps.length })}
                 <ChevronRight
                     aria-hidden="true"
                     className={cn(
@@ -81,7 +86,9 @@ export function WorkSteps({
                                     aria-hidden="true"
                                     className="size-4 shrink-0"
                                 />
-                                <span className="shrink-0">{meta.label}</span>
+                                <span className="shrink-0">
+                                    {t(meta.label)}
+                                </span>
                                 <span
                                     title={`${step.source}: ${step.detail}`}
                                     className={cn(

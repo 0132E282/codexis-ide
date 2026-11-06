@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 const GRID_SIZE = 8;
 
@@ -70,7 +71,7 @@ export function TableSizePicker({
                     className="text-primary hover:bg-accent ml-1 rounded-md px-1.5 py-0.5 text-xs"
                     onClick={() => onPick(customRows, customCols)}
                 >
-                    Chèn
+                    {t('common.insert')}
                 </button>
             </div>
         </div>

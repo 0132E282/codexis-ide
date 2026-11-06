@@ -5,8 +5,18 @@ use crate::git;
 use crate::profiles::ProfileStore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+/// The running turns that wait for answers to the CLI's permission questions, by run id.
+#[derive(Default)]
+pub struct Approvals(Mutex<HashMap<String, agent::Responder>>);
+
+/// Process ids of the running turns' CLIs, by run id, so a turn can be stopped.
+#[derive(Default)]
+pub struct Running(Mutex<HashMap<String, u32>>);
 
 /// One event of a chat turn, tagged with the turn it belongs to.
 #[derive(Serialize, Clone)]
@@ -107,6 +117,16 @@ pub async fn agent_send(
     // * The chat runs under the account chosen for this CLI.
     environment.extend(app.state::<ProfileStore>().active_environment(cli.name()));
 
+    // * Only "Hỏi từng việc" of the Claude CLI asks the person: its input stays open for the answers.
+    let responder = (cli == Cli::Claude && mode.as_deref() == Some(agent::ASK_MODE))
+        .then(|| Arc::new(Mutex::new(None)));
+
+    if let Some(responder) = &responder {
+        if let Ok(mut running) = app.state::<Approvals>().0.lock() {
+            running.insert(run_id.clone(), Arc::clone(responder));
+        }
+    }
+
     std::thread::spawn(move || {
         agent::run_turn(
             cli,
@@ -117,6 +137,12 @@ pub async fn agent_send(
             mode.as_deref(),
             &add_dirs,
             &environment,
+            responder.as_ref(),
+            |pid| {
+                if let Ok(mut running) = app.state::<Running>().0.lock() {
+                    running.insert(run_id.clone(), pid);
+                }
+            },
             |event| {
                 let _ = app.emit(
                     "agent-event",
@@ -127,7 +153,60 @@ pub async fn agent_send(
                 );
             },
         );
+
+        if let Ok(mut running) = app.state::<Approvals>().0.lock() {
+            running.remove(&run_id);
+        }
+
+        if let Ok(mut running) = app.state::<Running>().0.lock() {
+            running.remove(&run_id);
+        }
     });
 
     Ok(())
+}
+
+/// Answers a permission question of a running turn: `allow` lets the tool run with `input`, otherwise it is denied.
+#[tauri::command]
+pub fn agent_permission(
+    approvals: State<'_, Approvals>,
+    run_id: String,
+    request_id: String,
+    allow: bool,
+    input: serde_json::Value,
+) -> Result<(), String> {
+    let responder = approvals
+        .0
+        .lock()
+        .map_err(|_| "Không gửi được câu trả lời.".to_string())?
+        .get(&run_id)
+        .cloned()
+        .ok_or("Lượt này đã kết thúc.")?;
+
+    agent::respond(&responder, &request_id, allow, &input)
+}
+
+/// Stops a running turn (Ctrl+C in the chat): its CLI process is ended, which finishes the turn with what it had so far.
+#[tauri::command]
+pub fn agent_stop(running: State<'_, Running>, run_id: String) -> Result<(), String> {
+    let pid = running
+        .0
+        .lock()
+        .map_err(|_| "Không dừng được lượt này.".to_string())?
+        .get(&run_id)
+        .copied()
+        .ok_or("Lượt này đã kết thúc.")?;
+    let pid = pid.to_string();
+    let status = if cfg!(windows) {
+        std::process::Command::new("taskkill")
+            .args(["/PID", &pid, "/T", "/F"])
+            .status()
+    } else {
+        std::process::Command::new("kill").arg(&pid).status()
+    };
+
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        _ => Err("Không dừng được lượt này.".to_string()),
+    }
 }

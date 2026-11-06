@@ -27,12 +27,20 @@ export const MODELS: Record<
 
 // * Permission modes of the Claude CLI (`--permission-mode`); "auto" is the one the chat starts with.
 export const MODES: { value: string; label: string; hint: string }[] = [
-    { value: 'plan', label: 'Plan', hint: 'Chỉ lập kế hoạch, không sửa file' },
-    { value: 'auto', label: 'Auto', hint: 'Tự duyệt các thao tác an toàn' },
+    { value: 'plan', label: 'Plan', hint: 'cli_options.plan_only_do_not' },
+    {
+        value: 'auto',
+        label: 'Auto',
+        hint: 'cli_options.auto_approve_safe_actions',
+    },
     {
         value: 'acceptEdits',
-        label: 'Tự sửa file',
-        hint: 'Tự chấp nhận mọi lần sửa file',
+        label: 'cli_options.auto_edit_files',
+        hint: 'cli_options.automatically_accept_every_file',
     },
-    { value: 'manual', label: 'Hỏi từng việc', hint: 'Hỏi trước mỗi thao tác' },
+    {
+        value: 'manual',
+        label: 'cli_options.ask_each_time',
+        hint: 'cli_options.ask_before_every_action',
+    },
 ];

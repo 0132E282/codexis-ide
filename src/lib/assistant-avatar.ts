@@ -6,12 +6,12 @@ export const ASSISTANT_ICONS: Record<
     string,
     { label: string; icon: LucideIcon }
 > = {
-    sparkles: { label: 'Tia sáng', icon: Sparkles },
-    bot: { label: 'Robot', icon: Bot },
-    brain: { label: 'Bộ não', icon: Brain },
-    zap: { label: 'Tia chớp', icon: Zap },
-    rocket: { label: 'Tên lửa', icon: Rocket },
-    leaf: { label: 'Lá cây', icon: Leaf },
+    sparkles: { label: 'assistant_avatar.sparkles', icon: Sparkles },
+    bot: { label: 'assistant_avatar.robot', icon: Bot },
+    brain: { label: 'assistant_avatar.brain', icon: Brain },
+    zap: { label: 'assistant_avatar.lightning', icon: Zap },
+    rocket: { label: 'assistant_avatar.rocket', icon: Rocket },
+    leaf: { label: 'assistant_avatar.leaf', icon: Leaf },
 };
 
 export const ASSISTANT_COLORS: Record<
@@ -19,12 +19,27 @@ export const ASSISTANT_COLORS: Record<
     { label: string; className: string }
 > = {
     primary: {
-        label: 'Mặc định',
+        label: 'common.default',
         className: 'bg-primary text-primary-foreground',
     },
-    blue: { label: 'Xanh dương', className: 'bg-blue-500 text-white' },
-    green: { label: 'Xanh lá', className: 'bg-green-600 text-white' },
-    amber: { label: 'Hổ phách', className: 'bg-amber-500 text-white' },
-    rose: { label: 'Hồng', className: 'bg-rose-500 text-white' },
-    violet: { label: 'Tím', className: 'bg-violet-500 text-white' },
+    blue: {
+        label: 'assistant_avatar.blue',
+        className: 'bg-blue-500 text-white',
+    },
+    green: {
+        label: 'assistant_avatar.green',
+        className: 'bg-green-600 text-white',
+    },
+    amber: {
+        label: 'assistant_avatar.amber',
+        className: 'bg-amber-500 text-white',
+    },
+    rose: {
+        label: 'assistant_avatar.pink',
+        className: 'bg-rose-500 text-white',
+    },
+    violet: {
+        label: 'assistant_avatar.purple',
+        className: 'bg-violet-500 text-white',
+    },
 };

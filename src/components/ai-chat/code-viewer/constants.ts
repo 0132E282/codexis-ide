@@ -1,12 +1,12 @@
 export const CHANGE_BADGES = {
     update: {
         letter: 'M',
-        label: 'đã sửa',
+        label: 'constants.modified',
         className: 'text-yellow-600 dark:text-yellow-400',
     },
     create: {
         letter: 'A',
-        label: 'thêm mới',
+        label: 'constants.new',
         className: 'text-green-600 dark:text-green-400',
     },
 } as const;

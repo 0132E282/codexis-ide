@@ -22,6 +22,7 @@ import { LIMIT_LABELS, formatReset, limitColor } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { ideProfiles, type Profile, type ProfileCli } from '@/lib/ide-profiles';
 import type { ReactNode } from 'react';
+import { t } from '@/lib/i18n';
 
 // * Account 0 is the CLI's own login on this machine; the others were added through a browser login.
 const DEFAULT_PROFILE = 0;
@@ -41,11 +42,19 @@ const formatTokens = (value: number): string =>
 // * Turns and tokens (about four characters each) of the last 24 hours and 7 days; the limit note comes last.
 const describeUsage = (usage: CliUsage): string[] =>
     usage.turns7d === 0
-        ? ['Chưa dùng']
+        ? [t('common.not_used')]
         : [
-              `24h: ${usage.turns24h} lượt · ${formatTokens(usage.tokens24h)}`,
-              `7d: ${usage.turns7d} lượt · ${formatTokens(usage.tokens7d)}`,
-              ...(usage.limitReached ? ['Đạt limit'] : []),
+              t('manage_accounts_page.24h_turns_turns_tokens', {
+                  turns: usage.turns24h,
+                  tokens: formatTokens(usage.tokens24h),
+              }),
+              t('manage_accounts_page.7d_turns_turns_tokens', {
+                  turns: usage.turns7d,
+                  tokens: formatTokens(usage.tokens7d),
+              }),
+              ...(usage.limitReached
+                  ? [t('manage_accounts_page.limit_reached')]
+                  : []),
           ];
 
 /** "Quản lý tài khoản": the accounts of one AI CLI, which one chats, and and a "Thêm mới" popup to log in, use the CLI's own login or enter an API key (`apiKey`, when the tool has one). */
@@ -198,8 +207,8 @@ export function ManageAccountsPage({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Quay lại"
-                    title="Quay lại"
+                    aria-label={t('common.back')}
+                    title={t('common.back')}
                     onClick={onBack}
                     className="text-muted-foreground"
                 >
@@ -207,7 +216,7 @@ export function ManageAccountsPage({
                 </Button>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <h2 className="text-base font-semibold">
-                        Quản lý tài khoản {title}
+                        {t('common.manage_name_accounts', { name: title })}
                     </h2>
                 </div>
                 <Button
@@ -216,7 +225,7 @@ export function ManageAccountsPage({
                     onClick={() => setAddOpen(true)}
                 >
                     <Plus aria-hidden="true" />
-                    Thêm mới
+                    {t('manage_accounts_page.add_new')}
                 </Button>
             </div>
             <div className="flex flex-col gap-4">
@@ -225,13 +234,13 @@ export function ManageAccountsPage({
                         <thead className="bg-muted/50 text-xs text-muted-foreground">
                             <tr>
                                 <th className="px-2 py-2 font-medium whitespace-nowrap">
-                                    Tài khoản
+                                    {t('manage_accounts_page.account')}
                                 </th>
                                 <th className="px-2 py-2 font-medium whitespace-nowrap">
-                                    Loại kết nối
+                                    {t('manage_accounts_page.connection_type')}
                                 </th>
                                 <th className="px-2 py-2 font-medium whitespace-nowrap">
-                                    Trạng thái
+                                    {t('manage_accounts_page.status')}
                                 </th>
                                 {cli !== 'github' && (
                                     <th className="px-2 py-2 font-medium whitespace-nowrap">
@@ -239,7 +248,7 @@ export function ManageAccountsPage({
                                     </th>
                                 )}
                                 <th className="w-px px-2 py-2 text-right font-medium whitespace-nowrap">
-                                    Thao tác
+                                    {t('manage_accounts_page.actions')}
                                 </th>
                             </tr>
                         </thead>
@@ -252,7 +261,7 @@ export function ManageAccountsPage({
                                         key={profile.id}
                                         className="border-t align-middle"
                                     >
-                                        <td className="w-[400px] max-w-[400px] px-2 py-2">
+                                        <td className="max-w-[240px] min-w-[160px] px-2 py-2">
                                             <div className="flex min-w-0 items-center gap-2">
                                                 {status?.account ===
                                                     undefined &&
@@ -264,7 +273,9 @@ export function ManageAccountsPage({
                                                             profile.name
                                                         }
                                                         maxLength={40}
-                                                        aria-label="Tên tài khoản"
+                                                        aria-label={t(
+                                                            'manage_accounts_page.account_name',
+                                                        )}
                                                         disabled={busy}
                                                         onBlur={(event) =>
                                                             rename(
@@ -288,7 +299,9 @@ export function ManageAccountsPage({
                                                     <button
                                                         type="button"
                                                         className="truncate rounded-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                        title="Xem chi tiết"
+                                                        title={t(
+                                                            'common.view_details',
+                                                        )}
                                                         onClick={() =>
                                                             setDetailId(
                                                                 profile.id,
@@ -304,7 +317,9 @@ export function ManageAccountsPage({
                                                         variant="secondary"
                                                         className="shrink-0"
                                                     >
-                                                        Đang dùng
+                                                        {t(
+                                                            'manage_accounts_page.in_use',
+                                                        )}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -318,17 +333,21 @@ export function ManageAccountsPage({
                                             {status === undefined ? (
                                                 '...'
                                             ) : !status.installed ? (
-                                                'Chưa cài CLI'
+                                                t(
+                                                    'manage_accounts_page.cli_not_installed',
+                                                )
                                             ) : status.loggedIn ? (
                                                 <span className="inline-flex items-center gap-1.5">
                                                     <span
                                                         aria-hidden="true"
                                                         className="size-1.5 rounded-full bg-green-500"
                                                     />
-                                                    Đang kết nối
+                                                    {t(
+                                                        'manage_accounts_page.connected',
+                                                    )}
                                                 </span>
                                             ) : (
-                                                'Chưa kết nối'
+                                                t('common.not_connected')
                                             )}
                                         </td>
                                         {cli !== 'github' && (
@@ -346,10 +365,22 @@ export function ManageAccountsPage({
                                                                       limit.resets ===
                                                                       null
                                                                           ? undefined
-                                                                          : `Đặt lại ${formatReset(limit.resets)}`
+                                                                          : t(
+                                                                                'common.resets_time',
+                                                                                {
+                                                                                    time: formatReset(
+                                                                                        limit.resets,
+                                                                                    ),
+                                                                                },
+                                                                            )
                                                                   }
                                                               >
-                                                                  <span className="w-9 shrink-0">
+                                                                  <span
+                                                                      className="w-20 shrink-0 truncate"
+                                                                      title={
+                                                                          limit.label
+                                                                      }
+                                                                  >
                                                                       {LIMIT_LABELS[
                                                                           limit
                                                                               .label
@@ -367,7 +398,7 @@ export function ManageAccountsPage({
                                                                       aria-valuemax={
                                                                           100
                                                                       }
-                                                                      className="relative h-1 w-24 shrink-0 rounded-full bg-muted"
+                                                                      className="relative h-1 w-16 shrink-0 rounded-full bg-muted"
                                                                   >
                                                                       <span
                                                                           className={`absolute inset-y-0 left-0 rounded-full ${limitColor(limit.percent)}`}
@@ -384,17 +415,23 @@ export function ManageAccountsPage({
                                                                   </span>
                                                                   {limit.resets !==
                                                                       null && (
-                                                                      <span className="text-[11px] opacity-70">
-                                                                          Đặt
-                                                                          lại{' '}
-                                                                          {formatReset(
-                                                                              limit.resets,
+                                                                      <span className="text-[11px] whitespace-nowrap opacity-70">
+                                                                          {t(
+                                                                              'common.resets_time',
+                                                                              {
+                                                                                  time: formatReset(
+                                                                                      limit.resets,
+                                                                                  ),
+                                                                              },
                                                                           )}
                                                                       </span>
                                                                   )}
                                                               </div>
                                                           ),
-                                                      ) ?? 'Chưa đọc được')
+                                                      ) ??
+                                                      t(
+                                                          'manage_accounts_page.unreadable',
+                                                      ))
                                                     : usages[profile.id] ===
                                                             undefined ||
                                                         (cli === 'claude' &&
@@ -426,7 +463,9 @@ export function ManageAccountsPage({
                                                                 )
                                                             }
                                                         >
-                                                            Kết nối lại
+                                                            {t(
+                                                                'manage_accounts_page.reconnect',
+                                                            )}
                                                         </Button>
                                                     )}
                                                 {(profile.id !==
@@ -441,8 +480,12 @@ export function ManageAccountsPage({
                                                                 type="button"
                                                                 size="icon-sm"
                                                                 variant="ghost"
-                                                                aria-label="Thao tác"
-                                                                title="Thao tác"
+                                                                aria-label={t(
+                                                                    'manage_accounts_page.actions',
+                                                                )}
+                                                                title={t(
+                                                                    'manage_accounts_page.actions',
+                                                                )}
                                                                 disabled={busy}
                                                             >
                                                                 <MoreHorizontal aria-hidden="true" />
@@ -461,7 +504,9 @@ export function ManageAccountsPage({
                                                                             )
                                                                         }
                                                                     >
-                                                                        Dùng
+                                                                        {t(
+                                                                            'manage_accounts_page.use',
+                                                                        )}
                                                                     </DropdownMenuItem>
                                                                 )}
                                                             {profile.id !==
@@ -477,8 +522,9 @@ export function ManageAccountsPage({
                                                                             )
                                                                         }
                                                                     >
-                                                                        Ngắt kết
-                                                                        nối
+                                                                        {t(
+                                                                            'common.disconnect',
+                                                                        )}
                                                                     </DropdownMenuItem>
                                                                 )}
                                                             {profile.id !==
@@ -494,7 +540,9 @@ export function ManageAccountsPage({
                                                                         )
                                                                     }
                                                                 >
-                                                                    Xóa
+                                                                    {t(
+                                                                        'common.delete',
+                                                                    )}
                                                                 </DropdownMenuItem>
                                                             )}
                                                         </DropdownMenuContent>
@@ -510,8 +558,9 @@ export function ManageAccountsPage({
                 </div>
                 {code !== null && (
                     <p className="text-xs">
-                        Nhập mã <strong className="font-mono">{code}</strong>{' '}
-                        tại github.com/login/device (trình duyệt sẽ tự mở).
+                        {t('common.enter_the_code')}{' '}
+                        <strong className="font-mono">{code}</strong>{' '}
+                        {t('common.at_github_com_login')}
                     </p>
                 )}
                 {error !== null && (
@@ -527,11 +576,13 @@ export function ManageAccountsPage({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>
-                            {detail?.account ?? 'Chi tiết tài khoản'}
+                            {detail?.account ??
+                                t('manage_accounts_page.account_details')}
                         </DialogTitle>
                         <DialogDescription>
-                            Thông tin do chính công cụ báo cáo; không hiển thị
-                            token hay khóa.
+                            {t(
+                                'manage_accounts_page.information_reported_by_the',
+                            )}
                         </DialogDescription>
                     </DialogHeader>
                     {detail !== undefined && (
@@ -540,22 +591,26 @@ export function ManageAccountsPage({
                                 <thead className="bg-muted/50 text-xs text-muted-foreground">
                                     <tr>
                                         <th className="px-3 py-2 font-medium">
-                                            Mục
+                                            {t('manage_accounts_page.item')}
                                         </th>
                                         <th className="px-3 py-2 font-medium">
-                                            Giá trị
+                                            {t('common.value')}
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {[
                                         {
-                                            label: 'Trạng thái',
+                                            label: t(
+                                                'manage_accounts_page.status',
+                                            ),
                                             value: !detail.installed
-                                                ? 'Chưa cài'
+                                                ? t('common.not_installed')
                                                 : detail.loggedIn
-                                                  ? 'Đã kết nối'
-                                                  : 'Chưa kết nối',
+                                                  ? t(
+                                                        'manage_accounts_page.connected2',
+                                                    )
+                                                  : t('common.not_connected'),
                                         },
                                         ...detail.details,
                                     ].map((row) => (
@@ -580,16 +635,24 @@ export function ManageAccountsPage({
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Thêm mới tài khoản {title}</DialogTitle>
+                        <DialogTitle>
+                            {t('manage_accounts_page.add_new_name_account', {
+                                name: title,
+                            })}
+                        </DialogTitle>
                         <DialogDescription>
-                            Chọn cách kết nối.
+                            {t('manage_accounts_page.choose_how_to_connect')}
                         </DialogDescription>
                     </DialogHeader>
                     <Tabs defaultValue="login">
                         <TabsList>
-                            <TabsTrigger value="login">Đăng nhập</TabsTrigger>
+                            <TabsTrigger value="login">
+                                {t('common.sign_in')}
+                            </TabsTrigger>
                             {apiKey !== undefined && (
-                                <TabsTrigger value="api">Nhập API</TabsTrigger>
+                                <TabsTrigger value="api">
+                                    {t('manage_accounts_page.enter_api_key')}
+                                </TabsTrigger>
                             )}
                         </TabsList>
                         <TabsContent
@@ -597,9 +660,9 @@ export function ManageAccountsPage({
                             className="flex flex-col gap-3 pt-3"
                         >
                             <p className="text-muted-foreground">
-                                Mở trang đăng nhập của {PROVIDER[cli]} trong
-                                trình duyệt. Đăng nhập xong, Rynox tự lấy thông
-                                tin tài khoản.
+                                {t('manage_accounts_page.open_the_name_sign', {
+                                    name: PROVIDER[cli],
+                                })}
                             </p>
                             <Button
                                 type="button"
@@ -607,7 +670,9 @@ export function ManageAccountsPage({
                                 disabled={busy}
                                 onClick={add}
                             >
-                                Đăng nhập bằng {PROVIDER[cli]}
+                                {t('manage_accounts_page.sign_in_with_name', {
+                                    name: PROVIDER[cli],
+                                })}
                             </Button>
                         </TabsContent>
                         {apiKey !== undefined && (

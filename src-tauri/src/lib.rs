@@ -30,6 +30,8 @@ pub fn run() {
 
             app.manage(commands::AppState::new(store, chats));
             app.manage(terminal::Terminals::default());
+            app.manage(commands::agent::Approvals::default());
+            app.manage(commands::agent::Running::default());
             app.manage(remote::Remote::default());
             credentials::setup(app, &database)?;
             profiles::setup(app, &database)?;
@@ -58,6 +60,7 @@ pub fn run() {
             commands::remote::remote_start,
             commands::remote::remote_stop,
             commands::files::local_put_file,
+            commands::files::workspace_rename,
             commands::git::local_changes,
             commands::git::local_branches,
             commands::git::local_head,
@@ -66,6 +69,8 @@ pub fn run() {
             commands::git::local_commit_message,
             commands::inline_ask::inline_ask,
             commands::agent::agent_send,
+            commands::agent::agent_permission,
+            commands::agent::agent_stop,
             commands::attachments::attachment_save,
             commands::attachments::attachment_read,
             commands::auth::auth_status,

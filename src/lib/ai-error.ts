@@ -1,4 +1,5 @@
 import { isAxiosError } from 'axios';
+import { t } from '@/lib/i18n';
 
 /**
  * Text for a failed request: a 429 (Laravel's "Too Many Attempts.") becomes a friendly line, using Retry-After when the server sent it;
@@ -13,8 +14,10 @@ export function requestErrorMessage(caught: unknown, fallback: string): string {
         const seconds = Number(caught.response.headers?.['retry-after']);
 
         return Number.isFinite(seconds) && seconds > 0
-            ? `Bạn thao tác quá nhanh, thử lại sau ${Math.ceil(seconds)} giây.`
-            : 'Bạn thao tác quá nhanh, thử lại sau vài giây.';
+            ? t('ai_error.you_are_going_too2', {
+                  seconds: Math.ceil(seconds),
+              })
+            : t('ai_error.you_are_going_too');
     }
 
     return (
@@ -25,5 +28,5 @@ export function requestErrorMessage(caught: unknown, fallback: string): string {
 
 /** * The server's fixed AI error text (`message`); anything else gets a generic line, never the raw error. */
 export function aiErrorMessage(caught: unknown): string {
-    return requestErrorMessage(caught, 'Không gọi được trợ lý AI.');
+    return requestErrorMessage(caught, t('ai_error.could_not_reach_the'));
 }

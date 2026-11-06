@@ -14,6 +14,7 @@ import {
     PLUGINS,
 } from '@/lib/editor';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 type SourceFormat = 'html' | 'markdown';
 
@@ -124,7 +125,7 @@ export function RichTextEditor({
 
                         setShowSource(pressed);
                     }}
-                    title="Xem mã nguồn"
+                    title={t('rich_text_editor.view_source')}
                 >
                     <Code className="size-3.5" />
                 </Toggle>

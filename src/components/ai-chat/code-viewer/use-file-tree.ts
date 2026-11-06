@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { t } from '@/lib/i18n';
+import {
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
 import { useLocalChanges } from '@/components/ai-chat/local-changes';
 import { api } from '@/lib/api';
-import { cachedRequest } from '@/lib/ai-chat-cache';
+import { cachedRequest, forgetRequest } from '@/lib/ai-chat-cache';
 import { requestErrorMessage } from '@/lib/ai-error';
 import type { AiChatProposal } from '@/types';
 import { buildTree, parentDirectories } from './tree';
@@ -21,6 +28,8 @@ export function useFileTree({
     const [paths, setPaths] = useState<string[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState('');
+    // * Bumped to read the tree again (after a file was renamed).
+    const [reloads, setReloads] = useState(0);
     const [openDirs, setOpenDirs] = useState<Set<string>>(new Set());
 
     useEffect(() => {
@@ -50,7 +59,7 @@ export function useFileTree({
                     setError(
                         requestErrorMessage(
                             caught,
-                            'Không tải được cây thư mục.',
+                            t('use_file_tree.could_not_load_the'),
                         ),
                     );
                 }
@@ -59,7 +68,7 @@ export function useFileTree({
         return () => {
             cancelled = true;
         };
-    }, [repo, localRoot, branch]);
+    }, [repo, localRoot, branch, reloads]);
 
     const changed = useMemo(
         () =>
@@ -94,28 +103,29 @@ export function useFileTree({
         [changedActions],
     );
     // * New files the AI proposes are not in the repo's tree yet: add them so they show up too.
-    const allPaths = useMemo(
-        () => [
-            ...(paths ?? []),
-            ...[...changed.keys()].filter(
-                (path) => !(paths ?? []).includes(path),
-            ),
-        ],
-        [paths, changed],
-    );
+    const allPaths = useMemo(() => {
+        const known = new Set(paths ?? []);
 
-    const query = filter.trim().toLowerCase();
-    const tree = useMemo(
+        return [
+            ...(paths ?? []),
+            ...[...changed.keys()].filter((path) => !known.has(path)),
+        ];
+    }, [paths, changed]);
+
+    // * Deferred: typing stays instant while the tree catches up (it can hold thousands of paths).
+    const query = useDeferredValue(filter.trim().toLowerCase());
+    const matching = useMemo(
         () =>
-            buildTree(
-                allPaths.filter((path) => path.toLowerCase().includes(query)),
-            ),
+            query === ''
+                ? allPaths
+                : allPaths.filter((path) => path.toLowerCase().includes(query)),
         [allPaths, query],
     );
+    const tree = useMemo(() => buildTree(matching), [matching]);
     // * While filtering, every folder with a match is shown open.
     const effectiveOpen = useMemo(
-        () => (query === '' ? openDirs : parentDirectories(allPaths)),
-        [openDirs, allPaths, query],
+        () => (query === '' ? openDirs : parentDirectories(matching)),
+        [openDirs, matching, query],
     );
 
     const toggleDir = useCallback(
@@ -132,7 +142,28 @@ export function useFileTree({
         [],
     );
 
+    /** Reads the project's files again. */
+    const reload = useCallback(() => {
+        forgetRequest(`tree.${repo}.${branch ?? ''}`);
+        setReloads((count) => count + 1);
+    }, [repo, branch]);
+
+    /** Opens every folder above `path`, so the file shows in the tree. */
+    const revealPath = useCallback(
+        (path: string) =>
+            setOpenDirs((current) => {
+                const folders = [...parentDirectories([path])];
+
+                return folders.every((folder) => current.has(folder))
+                    ? current
+                    : new Set([...current, ...folders]);
+            }),
+        [],
+    );
+
     return {
+        reload,
+        revealPath,
         paths,
         error,
         filter,

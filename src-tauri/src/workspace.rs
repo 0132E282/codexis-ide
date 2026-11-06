@@ -137,6 +137,19 @@ pub fn normalise(path: &str) -> Option<String> {
     Some(segments.join("/"))
 }
 
+/// The viewer's rule: the person opens and saves any file of the project (secrets, `.git`, dependencies), only the project root bounds it.
+fn nothing_refused(_relative: &str) -> bool {
+    false
+}
+
+/// Whether the path is, or lies inside, a folder nobody may open (repo internals, dependencies).
+fn in_denied_directory(relative: &str) -> bool {
+    relative
+        .to_lowercase()
+        .split('/')
+        .any(|segment| DENIED_DIRECTORIES.contains(&segment))
+}
+
 /// Paths the AI and the person may never read or write: secrets, keys, repo internals, dependencies.
 pub fn denied(relative: &str) -> bool {
     let lower = relative.to_lowercase();
@@ -237,7 +250,8 @@ impl Workspace {
                 format!("{prefix}/{name}")
             };
 
-            if denied(&relative) || HIDDEN_FROM_TREE.contains(&name.as_str()) {
+            // * Secret files (`.env`, keys) are listed by name so the tree shows the whole project; they stay unreadable (`read` and `write` still refuse them).
+            if in_denied_directory(&relative) || HIDDEN_FROM_TREE.contains(&name.as_str()) {
                 continue;
             }
 
@@ -265,9 +279,18 @@ impl Workspace {
         }
     }
 
+    /// Text of a file for the viewer only: like `read`, but secret files (`.env`, keys) can be opened to look at; folders such as `.git` stay closed. The AI's tools keep using `read`.
+    pub fn read_for_viewer(&self, path: &str) -> Result<String> {
+        self.read_with(path, nothing_refused)
+    }
+
     /// Text of one allowed file. Refuses denied names, links leaving the root, binary data and files over the size limit.
     pub fn read(&self, path: &str) -> Result<String> {
-        let full = self.existing_file(path)?;
+        self.read_with(path, denied)
+    }
+
+    fn read_with(&self, path: &str, refuses: fn(&str) -> bool) -> Result<String> {
+        let full = self.existing_file_with(path, refuses)?;
         let size = fs::metadata(&full)
             .map_err(|_| WorkspaceError::NotFound)?
             .len();
@@ -301,26 +324,66 @@ impl Workspace {
 
     /// Hash of the file's current content, or None when it does not exist (a new file).
     pub fn current_hash(&self, path: &str) -> Result<Option<String>> {
-        let relative = self.allowed_relative(path)?;
-        let parent = self.parent_directory(&relative)?;
+        self.current_hash_with(path, denied)
+    }
+
+    fn current_hash_with(&self, path: &str, refuses: fn(&str) -> bool) -> Result<Option<String>> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+
+        if refuses(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        let parent = self.parent_directory(&relative, denied)?;
         let full = parent.join(file_name(&relative));
 
         if fs::symlink_metadata(&full).is_err() {
             return Ok(None);
         }
 
-        self.read(path).map(|content| Some(hash(&content)))
+        self.read_with(path, refuses)
+            .map(|content| Some(hash(&content)))
     }
 
     /// Atomic write: temp file in the same folder, then rename, keeping the file's permissions.
     /// `expected` is the hash seen when the edit was proposed (None = the file did not exist); any other current state is a conflict.
     pub fn write(&self, path: &str, content: &str, expected: Option<&str>) -> Result<Written> {
+        self.write_with(path, content, expected, denied)
+    }
+
+    /// Save made by the person in the viewer: like `write`, but secret files (`.env`, keys) can be edited; folders such as `.git` stay closed. The AI's tools keep using `write`.
+    pub fn write_for_viewer(
+        &self,
+        path: &str,
+        content: &str,
+        expected: Option<&str>,
+    ) -> Result<Written> {
+        self.write_with(path, content, expected, nothing_refused)
+    }
+
+    /// Hash of the file's current content for the viewer's save (secret files included), or None when it does not exist.
+    pub fn current_hash_for_viewer(&self, path: &str) -> Result<Option<String>> {
+        self.current_hash_with(path, nothing_refused)
+    }
+
+    fn write_with(
+        &self,
+        path: &str,
+        content: &str,
+        expected: Option<&str>,
+        refuses: fn(&str) -> bool,
+    ) -> Result<Written> {
         if content.len() > MAX_WRITE_BYTES {
             return Err(WorkspaceError::TooLarge);
         }
 
-        let relative = self.allowed_relative(path)?;
-        let parent = self.parent_directory(&relative)?;
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+
+        if refuses(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        let parent = self.parent_directory(&relative, refuses)?;
         let full = parent.join(file_name(&relative));
 
         // * A link as the target could point anywhere, even when its folder is inside the root.
@@ -328,7 +391,7 @@ impl Workspace {
             return Err(WorkspaceError::BadPath);
         }
 
-        let current = self.current_hash(path)?;
+        let current = self.current_hash_with(path, refuses)?;
 
         if current.as_deref() != expected {
             return Err(WorkspaceError::Conflict);
@@ -363,10 +426,48 @@ impl Workspace {
         })
     }
 
+    /// Renames a file or folder in place (same folder, new name) and returns its new relative path. The person's action from the viewer: nothing is refused but leaving the project, the name must be a single plain name, and an existing file is never overwritten.
+    pub fn rename_for_viewer(&self, path: &str, new_name: &str) -> Result<String> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+        let name = new_name.trim();
+
+        if name.is_empty()
+            || name.len() > MAX_PATH_BYTES
+            || matches!(name, "." | "..")
+            || name
+                .chars()
+                .any(|c| c.is_control() || c == '/' || c == '\\')
+        {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let parent = self.parent_directory(&relative, nothing_refused)?;
+        let from = parent.join(file_name(&relative));
+        let to = parent.join(name);
+        let meta = fs::symlink_metadata(&from).map_err(|_| WorkspaceError::NotFound)?;
+
+        if meta.file_type().is_symlink() {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        if fs::symlink_metadata(&to).is_ok() {
+            return Err(WorkspaceError::Conflict);
+        }
+
+        fs::rename(&from, &to).map_err(|_| WorkspaceError::WriteFailed)?;
+
+        Ok(match relative.rsplit_once('/') {
+            Some((folder, _)) => format!("{folder}/{name}"),
+            None => name.to_string(),
+        })
+    }
+
     /// Removes a regular file (a new file being discarded); never a link, never a folder.
     pub fn delete(&self, path: &str) -> Result<()> {
         let relative = self.allowed_relative(path)?;
-        let full = self.parent_directory(&relative)?.join(file_name(&relative));
+        let full = self
+            .parent_directory(&relative, denied)?
+            .join(file_name(&relative));
         let meta = fs::symlink_metadata(&full).map_err(|_| WorkspaceError::WriteFailed)?;
 
         if meta.file_type().is_symlink() || !meta.is_file() || fs::remove_file(&full).is_err() {
@@ -393,7 +494,16 @@ impl Workspace {
 
     /// Real path of an existing regular file inside the root (re-checked against the deny list after links are resolved).
     fn existing_file(&self, path: &str) -> Result<PathBuf> {
-        let relative = self.allowed_relative(path)?;
+        self.existing_file_with(path, denied)
+    }
+
+    fn existing_file_with(&self, path: &str, refuses: fn(&str) -> bool) -> Result<PathBuf> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+
+        if refuses(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
         let full =
             fs::canonicalize(self.root.join(&relative)).map_err(|_| WorkspaceError::NotFound)?;
 
@@ -403,7 +513,7 @@ impl Workspace {
 
         self.assert_inside(&full)?;
 
-        if denied(&self.relative_of(&full)) {
+        if refuses(&self.relative_of(&full)) {
             return Err(WorkspaceError::Denied);
         }
 
@@ -411,7 +521,7 @@ impl Workspace {
     }
 
     /// Real path of the folder that holds (or will hold) the file; it must exist and sit inside the root.
-    fn parent_directory(&self, relative: &str) -> Result<PathBuf> {
+    fn parent_directory(&self, relative: &str, refuses: fn(&str) -> bool) -> Result<PathBuf> {
         let dir = Path::new(relative)
             .parent()
             .unwrap_or_else(|| Path::new(""));
@@ -424,7 +534,7 @@ impl Workspace {
         self.assert_inside(&parent)?;
 
         // * A folder reached through a link may resolve into a denied one (e.g. `docs` -> `.git`).
-        if denied(&format!("{}/x", self.relative_of(&parent))) {
+        if refuses(&format!("{}/x", self.relative_of(&parent))) {
             return Err(WorkspaceError::Denied);
         }
 
@@ -632,7 +742,73 @@ mod tests {
     }
 
     #[test]
-    fn tree_skips_denied_links_and_deep_files() {
+    fn viewer_renames_in_place_without_overwriting() {
+        let (dir, workspace) = project();
+
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        fs::write(dir.path().join("src/a.txt"), "a").unwrap();
+        fs::write(dir.path().join("src/b.txt"), "b").unwrap();
+
+        assert_eq!(
+            workspace.rename_for_viewer("src/a.txt", "c.txt"),
+            Ok("src/c.txt".to_string())
+        );
+        assert!(dir.path().join("src/c.txt").is_file());
+        assert!(!dir.path().join("src/a.txt").exists());
+        assert_eq!(
+            workspace.rename_for_viewer("src/c.txt", "b.txt"),
+            Err(WorkspaceError::Conflict)
+        );
+        assert_eq!(
+            workspace.rename_for_viewer("src/c.txt", "../x.txt"),
+            Err(WorkspaceError::BadPath)
+        );
+        assert_eq!(
+            workspace.rename_for_viewer("src/c.txt", " "),
+            Err(WorkspaceError::BadPath)
+        );
+    }
+
+    #[test]
+    fn viewer_edits_any_file_but_the_tools_do_not() {
+        let (dir, workspace) = project();
+
+        fs::write(dir.path().join(".env"), "A=1").unwrap();
+
+        let hash_before = workspace.current_hash_for_viewer(".env").unwrap();
+
+        assert!(workspace
+            .write_for_viewer(".env", "A=2", hash_before.as_deref())
+            .is_ok());
+        assert_eq!(fs::read_to_string(dir.path().join(".env")).unwrap(), "A=2");
+        assert_eq!(
+            workspace.write(".env", "A=3", None),
+            Err(WorkspaceError::Denied)
+        );
+        assert_eq!(
+            workspace.write_for_viewer("../outside.txt", "x", None),
+            Err(WorkspaceError::BadPath)
+        );
+    }
+
+    #[test]
+    fn viewer_reads_any_file_but_the_tools_do_not() {
+        let (dir, workspace) = project();
+
+        fs::write(dir.path().join(".env"), "A=1").unwrap();
+        fs::create_dir_all(dir.path().join(".git")).unwrap();
+        fs::write(dir.path().join(".git/config"), "x").unwrap();
+
+        assert_eq!(workspace.read_for_viewer(".env"), Ok("A=1".to_string()));
+        assert_eq!(workspace.read(".env"), Err(WorkspaceError::Denied));
+        assert_eq!(
+            workspace.read_for_viewer(".git/config"),
+            Ok("x".to_string())
+        );
+    }
+
+    #[test]
+    fn tree_lists_secret_names_but_skips_denied_folders_links_and_deep_files() {
         let (dir, workspace) = project();
         let deep = (0..=MAX_DEPTH + 1)
             .map(|i| format!("d{i}"))
@@ -653,7 +829,11 @@ mod tests {
 
         assert_eq!(
             tree.paths,
-            vec!["README.md".to_string(), "src/main.rs".to_string()]
+            vec![
+                ".env".to_string(),
+                "README.md".to_string(),
+                "src/main.rs".to_string()
+            ]
         );
         assert!(!tree.truncated);
     }

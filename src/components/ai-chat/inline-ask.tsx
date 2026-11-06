@@ -10,6 +10,7 @@ import { aiErrorMessage } from '@/lib/ai-error';
 import { WorkSteps } from '@/components/ai-chat/work-steps';
 import type { AiChatActivityStep } from '@/types';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type InlineAnswer = {
     answer: string;
@@ -33,12 +34,14 @@ function doing(steps: AiChatActivityStep[]) {
     const last = steps.at(-1);
 
     if (last === undefined) {
-        return 'Đang gửi…';
+        return t('inline_ask.sending');
     }
 
     return last.kind === 'ask'
-        ? 'Đang chờ AI trả lời…'
-        : `Đang đọc ${last.detail || last.source}…`;
+        ? t('inline_ask.waiting_for_ai_to')
+        : t('inline_ask.reading_source', {
+              source: last.detail || last.source,
+          });
 }
 
 /**
@@ -128,7 +131,11 @@ export function InlineAsk({
             setTurns((current) =>
                 current.map((turn, index) =>
                     index === current.length - 1 && turn.answer === null
-                        ? { ...turn, answer: 'Đã dừng.', error: true }
+                        ? {
+                              ...turn,
+                              answer: t('inline_ask.stopped'),
+                              error: true,
+                          }
                         : turn,
                 ),
             );
@@ -224,10 +231,10 @@ export function InlineAsk({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="Đóng"
+                    aria-label={t('common.close')}
                     disabled={busy}
                     title={
-                        busy ? 'Đóng được sau khi AI trả lời xong' : undefined
+                        busy ? t('inline_ask.can_be_closed_once') : undefined
                     }
                     onClick={onClose}
                     className="size-6 shrink-0"
@@ -244,7 +251,7 @@ export function InlineAsk({
                         <AssistantAvatar {...assistant} />
                         <div className="min-w-0 flex-1">
                             <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                                {assistant.name ?? 'Trợ lý AI'}
+                                {assistant.name ?? t('common.ai_assistant')}
                             </span>
                             {turn.answer === null ? (
                                 <div className="text-muted-foreground">
@@ -298,7 +305,7 @@ export function InlineAsk({
                                                 aria-hidden="true"
                                                 className="size-3"
                                             />
-                                            Thử lại
+                                            {t('inline_ask.retry')}
                                         </Button>
                                     )}
                                 </div>
@@ -332,8 +339,7 @@ export function InlineAsk({
             {awaiting && (
                 <div className="flex items-center gap-2 rounded-md border border-ring/40 bg-muted/50 px-2.5 py-1.5">
                     <span className="min-w-0 flex-1 text-xs">
-                        AI đã sửa tệp. Chấp nhận để giữ thay đổi và đóng khung;
-                        hoàn tác bằng nút ↩ trên đầu khung code.
+                        {t('inline_ask.ai_edited_the_file')}
                     </span>
                     <Button
                         type="button"
@@ -342,7 +348,7 @@ export function InlineAsk({
                         onClick={onClose}
                     >
                         <Check aria-hidden="true" />
-                        Chấp nhận
+                        {t('inline_ask.accept')}
                     </Button>
                 </div>
             )}
@@ -358,7 +364,9 @@ export function InlineAsk({
                             </span>
                             <button
                                 type="button"
-                                aria-label={`Bỏ ${file.name}`}
+                                aria-label={t('common.remove_name', {
+                                    name: file.name,
+                                })}
                                 onClick={() =>
                                     setPasted((current) =>
                                         current.filter((_, i) => i !== index),
@@ -386,7 +394,7 @@ export function InlineAsk({
                         name="question"
                         ui="textarea"
                         autoComplete="off"
-                        placeholder="Hỏi AI về đoạn này…"
+                        placeholder={t('inline_ask.ask_ai_about_this')}
                         onPaste={(
                             event: React.ClipboardEvent<
                                 | HTMLInputElement
@@ -444,7 +452,7 @@ export function InlineAsk({
                 <Button
                     type="submit"
                     size="icon"
-                    aria-label="Gửi"
+                    aria-label={t('common.send')}
                     disabled={busy}
                     className="size-9 shrink-0 rounded-full"
                 >

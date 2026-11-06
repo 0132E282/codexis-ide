@@ -8,6 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { t } from '@/lib/i18n';
 
 const LIST_STYLES = [
     { value: 'decimal', label: '1, 2, 3...' },
@@ -59,7 +60,7 @@ export function OrderedListToolbar({ editor }: { editor: Editor }) {
                     }
                     size="sm"
                     className="h-8 min-w-8 px-1.5"
-                    title="Danh sách có thứ tự"
+                    title={t('ordered_list.numbered_list')}
                 >
                     <ListOrdered className="size-3.5" />
                 </Button>
@@ -79,7 +80,7 @@ export function OrderedListToolbar({ editor }: { editor: Editor }) {
                             editor.chain().focus().toggleOrderedList().run()
                         }
                     >
-                        Bỏ danh sách
+                        {t('ordered_list.remove_list')}
                     </DropdownMenuItem>
                 )}
             </DropdownMenuContent>

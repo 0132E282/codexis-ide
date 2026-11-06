@@ -28,6 +28,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { t } from '@/lib/i18n';
 import { defaultChatSettings, ideSettings } from '@/lib/ide-settings';
 import type { ChatSettings } from '@/lib/ide-settings';
 
@@ -49,14 +50,14 @@ const SECTIONS: {
 }[] = [
     {
         key: 'character',
-        label: 'Nhân vật',
-        title: 'Cài đặt nhân vật',
+        label: 'settings_dialog.character',
+        title: 'settings_dialog.character_settings',
         icon: UserRound,
     },
     {
         key: 'advanced',
-        label: 'Nâng cao',
-        title: 'Cài đặt nâng cao',
+        label: 'settings_dialog.advanced',
+        title: 'settings_dialog.advanced_settings',
         icon: SlidersHorizontal,
     },
     { key: 'skill', label: 'Skill', title: 'Skill', icon: Sparkles },
@@ -66,8 +67,8 @@ const SECTIONS: {
     { key: 'hook', label: 'Hook', title: 'Hook', icon: Webhook },
     {
         key: 'connect',
-        label: 'Kết nối',
-        title: 'Kết nối',
+        label: 'common.connect',
+        title: 'common.connect',
         icon: Link2,
     },
 ];
@@ -143,10 +144,9 @@ export function SettingsDialog({
         >
             <DialogContent className="flex h-[min(66vh,48rem)] w-[min(74vw,80rem)] max-w-[calc(100vw-2rem)] flex-col sm:max-w-[calc(100vw-2rem)]">
                 <DialogHeader>
-                    <DialogTitle>Cài đặt chat</DialogTitle>
+                    <DialogTitle>{t('common.chat_settings')}</DialogTitle>
                     <DialogDescription className="sr-only">
-                        Nhân vật, tuỳ chọn nâng cao, skill, agent, MCP, rules và
-                        hook.
+                        {t('settings_dialog.character_advanced_options_skills')}
                     </DialogDescription>
                 </DialogHeader>
                 {tab !== null && (
@@ -159,7 +159,7 @@ export function SettingsDialog({
                         className="min-h-0 flex-1 gap-6"
                     >
                         <TabsList
-                            aria-label="Mục cài đặt"
+                            aria-label={t('settings_dialog.settings_sections')}
                             className="h-fit w-44 shrink-0 gap-1 bg-transparent p-0"
                         >
                             {SECTIONS.map((section) => (
@@ -169,14 +169,14 @@ export function SettingsDialog({
                                     className="h-9 flex-none justify-start data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none dark:data-[state=active]:bg-accent"
                                 >
                                     <section.icon aria-hidden="true" />
-                                    {section.label}
+                                    {t(section.label)}
                                 </TabsTrigger>
                             ))}
                         </TabsList>
                         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
                             {!(tab === 'connect' && connectSubpage) && (
                                 <h3 className="text-base font-semibold">
-                                    {active?.title}
+                                    {active && t(active.title)}
                                 </h3>
                             )}
                             <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
@@ -227,14 +227,16 @@ export function SettingsDialog({
                                         disabled={busy}
                                         onClick={onClose}
                                     >
-                                        Hủy
+                                        {t('common.cancel')}
                                     </Button>
                                     <Button
                                         type="button"
                                         disabled={busy}
                                         onClick={() => void save()}
                                     >
-                                        {busy ? 'Đang lưu...' : 'Lưu'}
+                                        {busy
+                                            ? t('settings_dialog.saving')
+                                            : t('common.save')}
                                     </Button>
                                 </DialogFooter>
                             )}

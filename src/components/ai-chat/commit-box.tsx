@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAppForm } from '@/hooks/use-app-form';
 import { api } from '@/lib/api';
 import { requestErrorMessage } from '@/lib/ai-error';
+import { t } from '@/lib/i18n';
 
 type MessageForm = { title: string; description: string; base: string };
 
@@ -123,7 +124,7 @@ function MessagePopup({
             form.setValue('description', data.description);
         } catch (caught) {
             toast.error(
-                requestErrorMessage(caught, 'AI chưa viết được nội dung.'),
+                requestErrorMessage(caught, t('commit_box.ai_could_not_write')),
             );
         } finally {
             setBusy(null);
@@ -146,13 +147,18 @@ function MessagePopup({
                     base: base.trim() === '' ? null : base.trim(),
                 });
 
-                toast.success(`Đã tạo Pull request từ nhánh ${data.branch}.`, {
-                    action: {
-                        label: 'Mở',
-                        onClick: () =>
-                            window.open(data.url, '_blank', 'noopener'),
+                toast.success(
+                    t('commit_box.created_apull_request', {
+                        branch: data.branch,
+                    }),
+                    {
+                        action: {
+                            label: t('commit_box.open'),
+                            onClick: () =>
+                                window.open(data.url, '_blank', 'noopener'),
+                        },
                     },
-                });
+                );
                 onDone();
 
                 return;
@@ -168,15 +174,20 @@ function MessagePopup({
                 },
             );
 
-            toast.success(`Đã commit ${data.hash} (${data.files} tệp).`);
+            toast.success(
+                t('commit_box.committed_hash_files_files', {
+                    hash: data.hash,
+                    files: data.files,
+                }),
+            );
             onDone();
         } catch (caught) {
             toast.error(
                 requestErrorMessage(
                     caught,
                     mode === 'pr'
-                        ? 'Không tạo được Pull request.'
-                        : 'Không commit được.',
+                        ? t('commit_box.could_not_create_the')
+                        : t('commit_box.could_not_commit'),
                 ),
             );
         } finally {
@@ -187,11 +198,11 @@ function MessagePopup({
     return (
         <>
             <DialogHeader>
-                <DialogTitle>Commit / Pull request</DialogTitle>
+                <DialogTitle>{t('commit_box.commit_pull_request')}</DialogTitle>
                 <DialogDescription>
                     {mode === 'commit'
-                        ? 'Commit các tệp đã thay đổi vào nhánh hiện tại. Không push.'
-                        : 'Tạo nhánh mới, commit các tệp đã thay đổi, push lên origin rồi mở Pull request trên GitHub.'}
+                        ? t('commit_box.commit_the_changed_files')
+                        : t('commit_box.create_anew_branch')}
                 </DialogDescription>
             </DialogHeader>
             <Tabs
@@ -217,7 +228,7 @@ function MessagePopup({
             >
                 <Field
                     name="title"
-                    placeholder="Tiêu đề"
+                    placeholder={t('commit_box.title')}
                     maxLength={100}
                     autoComplete="off"
                     required
@@ -225,11 +236,15 @@ function MessagePopup({
                 <Field
                     name="description"
                     ui="textarea"
-                    placeholder="Mô tả (không bắt buộc)"
+                    placeholder={t('commit_box.description_optional')}
                     autoComplete="off"
                 />
                 {mode === 'pr' && (
-                    <Field name="base" ui="select" label="Nhánh đích">
+                    <Field
+                        name="base"
+                        ui="select"
+                        label={t('commit_box.target_branch')}
+                    >
                         {branches.map((name) => (
                             <option key={name} value={name}>
                                 {name}
@@ -254,7 +269,7 @@ function MessagePopup({
                         ) : (
                             <Sparkles aria-hidden="true" />
                         )}
-                        Tạo bằng AI
+                        {t('commit_box.generate_with_ai')}
                     </Button>
                     <Button
                         type="submit"
@@ -272,7 +287,9 @@ function MessagePopup({
                         ) : (
                             <Check aria-hidden="true" />
                         )}
-                        {mode === 'pr' ? 'Push và tạo PR' : 'Commit'}
+                        {mode === 'pr'
+                            ? t('commit_box.push_and_create_pr')
+                            : t('commit_box.commit')}
                     </Button>
                 </div>
             </Form>

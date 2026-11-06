@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TableSizePicker } from '@/components/ui/table-size-picker';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 /** * `resizable: true` lets columns be dragged. */
 export const TableExtension = TableKit.configure({
@@ -38,7 +39,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                         isActive &&
                             'bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary',
                     )}
-                    title="Bảng"
+                    title={t('table.table')}
                 >
                     <TableIcon className="size-3.5" />
                 </Button>
@@ -67,7 +68,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Rows3 className="size-3.5" />
-                            Thêm hàng
+                            {t('table.add_row')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={() =>
@@ -75,7 +76,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Columns3 className="size-3.5" />
-                            Thêm cột
+                            {t('table.add_column')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={() =>
@@ -83,7 +84,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Rows3 className="size-3.5" />
-                            Xóa hàng
+                            {t('table.delete_row')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={() =>
@@ -91,7 +92,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Columns3 className="size-3.5" />
-                            Xóa cột
+                            {t('table.delete_column')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             disabled={!editor.can().mergeCells()}
@@ -100,7 +101,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Merge className="size-3.5" />
-                            Gộp ô
+                            {t('table.merge_cells')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             disabled={!editor.can().splitCell()}
@@ -109,7 +110,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Split className="size-3.5" />
-                            Tách ô
+                            {t('table.split_cell')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={() =>
@@ -117,7 +118,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Rows3 className="size-3.5" />
-                            Bật/tắt hàng tiêu đề
+                            {t('table.toggle_header_row')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             variant="destructive"
@@ -126,7 +127,7 @@ export function TableToolbar({ editor }: { editor: Editor }) {
                             }
                         >
                             <Trash2 className="size-3.5" />
-                            Xóa bảng
+                            {t('table.delete_table')}
                         </DropdownMenuItem>
                     </>
                 )}

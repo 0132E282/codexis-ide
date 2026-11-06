@@ -1,12 +1,15 @@
+import { t } from '@/lib/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { QuickOpen } from '@/components/ai-chat/quick-open';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
+import { api } from '@/lib/api';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import type { AiChatProposal } from '@/types';
 import { ChangesPanel } from './code-viewer/changes-panel';
 import { EditorBody } from './code-viewer/editor-body';
+import { RenameDialog } from './code-viewer/rename-dialog';
 import { EditorToolbar } from './code-viewer/editor-toolbar';
 import { FileTabs } from './code-viewer/file-tabs';
 import { TreePanel } from './code-viewer/tree-panel';
@@ -83,7 +86,9 @@ export function CodeViewer({
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
     // * The local repo is addressed by its full path; only the folder name is shown.
     const sourceName = localRoot
-        ? `Máy local · ${localRoot.split('/').pop() || localRoot}`
+        ? t('common.local_machine_name', {
+              name: localRoot.split('/').pop() || localRoot,
+          })
         : repo;
     const {
         paths,
@@ -97,6 +102,8 @@ export function CodeViewer({
         tree,
         effectiveOpen,
         toggleDir,
+        revealPath,
+        reload,
     } = useFileTree({ repo, branch, localRoot, changes });
     const {
         selected,
@@ -138,6 +145,25 @@ export function CodeViewer({
     }, [selected, onActiveFile]);
 
     const [marked, setMarked] = useState<Set<string>>(new Set());
+
+    // * The open file is shown in the tree: its folders open and its row scrolls into view.
+    useEffect(() => {
+        if (selected === null) {
+            return;
+        }
+
+        revealPath(selected);
+
+        const frame = requestAnimationFrame(() =>
+            document
+                .querySelector(
+                    `[role="treeitem"][data-path="${CSS.escape(selected)}"]`,
+                )
+                ?.scrollIntoView({ block: 'nearest' }),
+        );
+
+        return () => cancelAnimationFrame(frame);
+    }, [selected, revealPath]);
 
     useEffect(() => {
         onMarkedFiles?.([...marked]);
@@ -190,20 +216,46 @@ export function CodeViewer({
     // * Set by the editor: asks about its selection (the whole file when nothing is selected).
     const askTrigger = useRef<(() => void) | null>(null);
     // * The right-click menu of every file row (tree and change list) and of the open-file tabs shares these.
+    // * The file whose new name is being asked (null: none).
+    const [renaming, setRenaming] = useState<string | null>(null);
     const fileActions: FileActions = useMemo(
         () => ({
             copy: (path) => {
                 void copyPath(path);
             },
+            copyName: (path) => {
+                void copyPath(path.split('/').pop() ?? path);
+            },
+            rename: localRoot === null ? undefined : setRenaming,
             ask: onAsk
                 ? (path) =>
                       onAsk({ path, startLine: 0, endLine: 0, text: path })
                 : undefined,
         }),
-        [copyPath, onAsk],
+        [copyPath, onAsk, localRoot],
     );
 
     // * Stable handlers: the tab bar and the tree rows are memoized, so typing in the editor does not re-render them.
+    // * The tab is closed first (that saves what was typed), the file renamed, the tree read again and the file opened under its new name.
+    const renameFile = useStableCallback(
+        async (path: string, newName: string) => {
+            const wasOpen = tabs.includes(path);
+
+            await closeTab(path);
+
+            const { data } = await api.post<string>('/ai-chat/local/rename', {
+                root: localRoot,
+                path,
+                newName,
+            });
+
+            reload();
+
+            if (wasOpen) {
+                void openFile(data);
+            }
+        },
+    );
     const openPath = useStableCallback((path: string) => void openFile(path));
     const selectInTree = useStableCallback((path: string) => {
         setMarked(new Set());
@@ -252,6 +304,11 @@ export function CodeViewer({
     return (
         <>
             {confirmDialog}
+            <RenameDialog
+                path={renaming}
+                onClose={() => setRenaming(null)}
+                onRename={renameFile}
+            />
             <QuickOpen
                 open={quickOpen}
                 onOpenChange={setQuickOpen}
@@ -270,7 +327,7 @@ export function CodeViewer({
             )}
             {selected !== null && !showChanges && (
                 <section
-                    aria-label="Nội dung tệp"
+                    aria-label={t('code_viewer.file_content')}
                     className="@container relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden"
                 >
                     <FileTabs
@@ -280,34 +337,37 @@ export function CodeViewer({
                         dirtyPaths={dirtyPaths}
                         actions={fileActions}
                         tabsEnd={tabsEnd}
+                        tools={
+                            <EditorToolbar
+                                preview={preview}
+                                onPreviewChange={setPreview}
+                                showPreviewSwitch={
+                                    isMarkdown &&
+                                    content !== null &&
+                                    proposed === null
+                                }
+                                pendingEdit={pendingEdit}
+                                appliedEdit={appliedEdit}
+                                deciding={deciding}
+                                onDecide={(kind) => void decideEdit(kind)}
+                                showAsk={
+                                    Boolean(onInlineAsk) &&
+                                    content !== null &&
+                                    proposed === null &&
+                                    image === null &&
+                                    !(preview && isMarkdown)
+                                }
+                                assistant={assistant}
+                                onAskTrigger={() => askTrigger.current?.()}
+                            />
+                        }
                         onOpen={openPath}
                         onClose={closeOnePath}
                         onCloseMany={closeManyPaths}
                         onMove={moveOnePath}
                         onKeepPreview={keepPreviewTab}
                     />
-                    <EditorToolbar
-                        selected={selected}
-                        preview={preview}
-                        onPreviewChange={setPreview}
-                        showPreviewSwitch={
-                            isMarkdown && content !== null && proposed === null
-                        }
-                        pendingEdit={pendingEdit}
-                        appliedEdit={appliedEdit}
-                        deciding={deciding}
-                        onDecide={(kind) => void decideEdit(kind)}
-                        showAsk={
-                            Boolean(onInlineAsk) &&
-                            content !== null &&
-                            proposed === null &&
-                            image === null &&
-                            !(preview && isMarkdown)
-                        }
-                        assistant={assistant}
-                        onAskTrigger={() => askTrigger.current?.()}
-                        onClose={closeOnePath}
-                    />
+
                     {saveError !== null && (
                         <p
                             role="alert"

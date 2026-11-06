@@ -40,6 +40,11 @@ export function cachedRequest<T>(
     return promise;
 }
 
+/** Drops a cached request, so the next call fetches again (after the data was changed on purpose). */
+export function forgetRequest(key: string) {
+    requests.delete(scoped(key));
+}
+
 // * Stale-while-revalidate for data shown in dialogs and menus: the last value is shown at once, a background request refreshes it when older than its TTL.
 // * Memory only on purpose (account names, local folder labels): nothing of it reaches sessionStorage.
 const revalidated = new Map<

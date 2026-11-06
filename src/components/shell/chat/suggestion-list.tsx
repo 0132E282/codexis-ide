@@ -1,4 +1,5 @@
 import type { ToolEntry } from '@/lib/ide-tools';
+import { t } from '@/lib/i18n';
 
 /** The skills or sub-agents that match what is typed; the active one is picked with Enter or Tab. */
 export function SuggestionList({
@@ -15,7 +16,7 @@ export function SuggestionList({
     return (
         <ul
             role="listbox"
-            aria-label="Lệnh"
+            aria-label={t('common.command')}
             className="absolute inset-x-0 bottom-full z-20 mb-2 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
         >
             {suggestions.map((skill, index) => (

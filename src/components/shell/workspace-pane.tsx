@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { Pane, PaneState } from '@/hooks/use-pane-state';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 // * The viewer's "Hỏi AI về đoạn này" box: the Claude CLI answers about the picked lines, run in the project's folder.
 const askAssistant =
@@ -72,8 +73,8 @@ export function WorkspacePane({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label="Mở trong VS Code"
-                            title="Mở trong VS Code"
+                            aria-label={t('common.open_in_vs_code')}
+                            title={t('common.open_in_vs_code')}
                             onClick={onOpenInVscode}
                             className="text-muted-foreground"
                         >
@@ -124,8 +125,8 @@ export function WorkspacePane({
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                aria-label="Mở khung chat"
-                                title="Mở khung chat"
+                                aria-label={t('workspace_pane.open_chat_panel')}
+                                title={t('workspace_pane.open_chat_panel')}
                                 onClick={() =>
                                     onPatch(pane.key, { chatCollapsed: false })
                                 }

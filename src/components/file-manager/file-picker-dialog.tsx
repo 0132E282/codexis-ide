@@ -6,6 +6,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { t } from '@/lib/i18n';
 
 type SelectionMessage = {
     type: 'file-manager:selection';
@@ -74,10 +75,14 @@ export function FilePickerDialog({
 
     const label =
         picked.length === 0
-            ? 'Chưa chọn ảnh nào'
+            ? t('file_picker_dialog.no_image_selected')
             : picked.length === 1
-              ? `Đã chọn: ${selected[0].name}`
-              : `Đã chọn ${picked.length} ảnh`;
+              ? t('file_picker_dialog.selected_name', {
+                    name: selected[0].name,
+                })
+              : t('file_picker_dialog.count_images_selected', {
+                    count: picked.length,
+                });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -86,13 +91,15 @@ export function FilePickerDialog({
                 className="flex h-screen max-h-screen w-screen max-w-screen flex-col gap-0 rounded-none p-0 sm:max-w-screen"
             >
                 <DialogHeader className="border-b px-6 py-4">
-                    <DialogTitle>Chọn ảnh từ thư viện file</DialogTitle>
+                    <DialogTitle>
+                        {t('file_picker_dialog.choose_images_from_the')}
+                    </DialogTitle>
                 </DialogHeader>
 
                 {open && (
                     <iframe
                         src={`/file-manager?picker=1${multiple ? '&multiple=1' : ''}`}
-                        title="Thư viện file"
+                        title={t('common.file_library')}
                         className="min-h-0 flex-1 border-0"
                     />
                 )}
@@ -107,14 +114,14 @@ export function FilePickerDialog({
                             variant="outline"
                             onClick={() => onOpenChange(false)}
                         >
-                            Hủy
+                            {t('common.cancel')}
                         </Button>
                         <Button
                             type="button"
                             disabled={picked.length === 0}
                             onClick={confirm}
                         >
-                            Xác nhận
+                            {t('file_picker_dialog.confirm')}
                         </Button>
                     </div>
                 </div>

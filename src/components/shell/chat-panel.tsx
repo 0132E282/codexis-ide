@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { pickFiles } from '@/lib/ide';
 import type { AgentCli, Subagent } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 // * The chat can be dragged this wide at most, so the file beside it keeps the larger share.
 const CHAT_MAX_WIDTH = 560;
@@ -109,7 +110,13 @@ export function ChatPanel({
 
     useTooNarrow(section, !fill && !collapsed, onTooNarrow);
 
-    const { choose, sendFromComposer } = useAgentTurns({
+    const {
+        choose,
+        sendFromComposer,
+        switchAccount,
+        answerPermission,
+        stopTurns,
+    } = useAgentTurns({
         root,
         projects,
         cli,
@@ -180,7 +187,7 @@ export function ChatPanel({
     return (
         <section
             ref={section}
-            aria-label="Trò chuyện với AI"
+            aria-label={t('chat_panel.chat_with_ai')}
             style={fill ? undefined : { width: width.width }}
             className={cn(
                 'relative flex min-h-0 flex-col',
@@ -193,7 +200,7 @@ export function ChatPanel({
         >
             {!fill && (
                 <ResizeHandle
-                    label="Đổi độ rộng khung chat"
+                    label={t('chat_panel.resize_chat_panel')}
                     className="right-0 left-auto translate-x-1/2"
                     {...width.handleProps}
                 />
@@ -210,6 +217,8 @@ export function ChatPanel({
                 viewSubagent={viewSubagent}
                 onLeaveSubagent={onLeaveSubagent}
                 onChoose={choose}
+                onSwitchAccount={switchAccount}
+                onPermission={answerPermission}
             />
             <Composer
                 project={null}
@@ -218,6 +227,7 @@ export function ChatPanel({
                 onChange={setText}
                 onSubmit={send}
                 busy={busy}
+                onStop={stopTurns}
                 cli={cli}
                 model={models[cli] ?? null}
                 mode={mode}

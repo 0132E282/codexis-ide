@@ -8,6 +8,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SWATCH_COLORS } from './constants';
+import { t } from '@/lib/i18n';
 
 export const Highlight = HighlightExtension.configure({ multicolor: true });
 
@@ -20,7 +21,7 @@ export function HighlightToolbar({ editor }: { editor: Editor }) {
                     variant="ghost"
                     size="sm"
                     className="h-8 min-w-8 px-1.5"
-                    title="Màu nền"
+                    title={t('highlight.highlight_color')}
                 >
                     <Highlighter
                         className="size-3.5"
@@ -69,7 +70,7 @@ export function HighlightToolbar({ editor }: { editor: Editor }) {
                             editor.chain().focus().unsetHighlight().run()
                         }
                     >
-                        Bỏ màu nền
+                        {t('highlight.remove_highlight')}
                     </button>
                 </div>
             </DropdownMenuContent>

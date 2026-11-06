@@ -4,8 +4,9 @@ import type { ReactNode } from 'react';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
 import { UnifiedDiff } from '@/components/ai-chat/unified-diff';
-import type { Step } from '@/lib/ide';
+import type { ChangedFile, Step } from '@/lib/ide';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 type ToolStep = Extract<Step, { kind: 'tool' }>;
 
@@ -136,55 +137,129 @@ function ToolView({ step }: { step: ToolStep }) {
     );
 }
 
+// * A turn in worktree mode edits a copy kept in the app's data folder: the part up to the copy's own root is noise.
+const WORKTREE_PREFIX = /^.*\/worktrees\/[^/]+\/[^/]+\//;
+
+/** A file path as its name and the (shortened) folder it is in. */
+function splitPath(path: string): { name: string; folder: string } {
+    const short = path.replace(WORKTREE_PREFIX, '');
+    const slash = short.lastIndexOf('/');
+
+    return slash === -1
+        ? { name: short, folder: '' }
+        : { name: short.slice(slash + 1), folder: short.slice(0, slash) };
+}
+
+/** The files the AI edited or wrote in the turn (calls that carry a change), each once, in order. */
+function editedFiles(steps: Step[]): string[] {
+    const paths = steps.flatMap((step) =>
+        step.kind === 'tool' &&
+        step.change !== undefined &&
+        step.status !== 'error' &&
+        step.input !== ''
+            ? [step.input]
+            : [],
+    );
+
+    return [...new Set(paths)];
+}
+
 /** The turn as a timeline: the AI's words and every tool call as one line that opens into the details, a dot per step coloured by how it went. */
 export const TurnSteps = memo(function TurnSteps({
     steps,
     running,
+    changed,
     choices,
 }: {
     steps: Step[];
     running: boolean;
+    /** What git says the turn changed; without it the files of the edit calls are listed. */
+    changed?: ChangedFile[];
     choices: ChoiceHandlers;
 }) {
-    return (
-        <ol className="relative min-w-0 space-y-3 pl-6 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
-            {steps.map((step, index) => {
-                const dot = step.kind === 'text' ? 'text' : step.status;
+    // * Once the turn ends, its last words are the result: shown below the timeline, not as a step of it.
+    const last = steps[steps.length - 1];
+    const result = !running && last?.kind === 'text' ? last.text : null;
+    const edited = running
+        ? []
+        : (changed?.map((file) => file.path) ?? editedFiles(steps));
+    const timeline = result === null ? steps : steps.slice(0, -1);
 
-                return (
-                    <li key={index} className="relative min-w-0">
-                        <span
-                            aria-hidden="true"
-                            className={cn(
-                                'absolute top-2 -left-6 size-[11px] rounded-full ring-4 ring-background',
-                                DOT_CLASS[dot],
-                            )}
-                        />
-                        {step.kind === 'text' ? (
-                            <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                                <MarkdownContent
-                                    content={step.text}
-                                    choices={choices}
+    return (
+        <div className="min-w-0 space-y-3">
+            {timeline.length > 0 && (
+                <ol className="relative min-w-0 space-y-3 pl-6 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
+                    {timeline.map((step, index) => {
+                        const dot = step.kind === 'text' ? 'text' : step.status;
+
+                        return (
+                            <li key={index} className="relative min-w-0">
+                                <span
+                                    aria-hidden="true"
+                                    className={cn(
+                                        'absolute top-2 -left-6 size-[11px] rounded-full ring-4 ring-background',
+                                        DOT_CLASS[dot],
+                                    )}
                                 />
-                            </div>
-                        ) : (
-                            <ToolView step={step} />
-                        )}
-                    </li>
-                );
-            })}
-            {running && (
-                <li
-                    role="status"
-                    className="flex items-center gap-2 text-[#d97757]"
-                >
-                    <Asterisk
-                        aria-hidden="true"
-                        className="size-4 animate-spin motion-reduce:animate-none"
-                    />
-                    Đang làm việc…
-                </li>
+                                {step.kind === 'text' ? (
+                                    <div className="min-w-0 break-words [overflow-wrap:anywhere]">
+                                        <MarkdownContent
+                                            content={step.text}
+                                            choices={choices}
+                                        />
+                                    </div>
+                                ) : (
+                                    <ToolView step={step} />
+                                )}
+                            </li>
+                        );
+                    })}
+                    {running && (
+                        <li
+                            role="status"
+                            className="flex items-center gap-2 text-[#d97757]"
+                        >
+                            <Asterisk
+                                aria-hidden="true"
+                                className="size-4 animate-spin motion-reduce:animate-none"
+                            />
+                            {t('turn_steps.working')}
+                        </li>
+                    )}
+                </ol>
             )}
-        </ol>
+            {edited.length > 0 && (
+                <div className="min-w-0 rounded-lg border bg-card">
+                    <p className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+                        {t('turn_steps.edited_count_files', {
+                            count: edited.length,
+                        })}
+                    </p>
+                    <ul className="space-y-0.5 px-3 py-2 text-xs">
+                        {edited.map((path) => {
+                            const { name, folder } = splitPath(path);
+
+                            return (
+                                <li key={path} className="min-w-0 break-all">
+                                    <span className="font-mono font-semibold">
+                                        {name}
+                                    </span>
+                                    {folder !== '' && (
+                                        <span className="ml-2 font-mono text-muted-foreground">
+                                            {folder}
+                                        </span>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
+            {result !== null && (
+                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
+                    <MarkdownContent content={result} choices={choices} />
+                </div>
+            )}
+        </div>
     );
 });

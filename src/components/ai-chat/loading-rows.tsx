@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 // * Widths vary a little so the placeholder reads as a list of names, not a block.
 const WIDTHS = ['w-3/5', 'w-4/5', 'w-2/5', 'w-3/4', 'w-1/2', 'w-2/3'];
@@ -14,7 +15,7 @@ export function LoadingRows({
     return (
         <div
             role="status"
-            aria-label="Đang tải"
+            aria-label={t('loading_rows.loading')}
             className={cn('flex flex-col gap-2.5 px-3 py-2', className)}
         >
             {Array.from({ length: rows }, (_, index) => (

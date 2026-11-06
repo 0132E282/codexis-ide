@@ -13,7 +13,7 @@ export const FONT_SIZES = [
 ];
 
 export const FONT_FAMILIES = [
-    { label: 'Mặc định', value: '' },
+    { label: 'common.default', value: '' },
     { label: 'Sans-serif', value: 'ui-sans-serif, system-ui, sans-serif' },
     { label: 'Serif', value: 'ui-serif, Georgia, serif' },
     { label: 'Monospace', value: 'ui-monospace, monospace' },
@@ -34,8 +34,8 @@ export const SWATCH_COLORS = [
 ];
 
 export const ALIGN_OPTIONS = [
-    { value: 'left', label: 'Căn trái', icon: AlignLeft },
-    { value: 'center', label: 'Căn giữa', icon: AlignCenter },
-    { value: 'right', label: 'Căn phải', icon: AlignRight },
-    { value: 'justify', label: 'Căn đều', icon: AlignJustify },
+    { value: 'left', label: 'constants.align_left', icon: AlignLeft },
+    { value: 'center', label: 'constants.align_center', icon: AlignCenter },
+    { value: 'right', label: 'constants.align_right', icon: AlignRight },
+    { value: 'justify', label: 'constants.justify', icon: AlignJustify },
 ] as const;

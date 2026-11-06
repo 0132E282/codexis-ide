@@ -1,4 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 /** A plain icon, like an editor's panel toggle: it ends the right side of the chat header (or of the file tab bar while the chat is folded). */
 export function SidebarToggle({
@@ -8,7 +9,9 @@ export function SidebarToggle({
     collapsed: boolean;
     onToggle: () => void;
 }) {
-    const label = collapsed ? 'Mở thanh bên' : 'Thu gọn thanh bên';
+    const label = collapsed
+        ? t('sidebar_toggle.open_sidebar')
+        : t('sidebar_toggle.collapse_sidebar');
 
     return (
         <button

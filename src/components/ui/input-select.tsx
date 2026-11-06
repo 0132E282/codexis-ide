@@ -11,6 +11,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type InputSelectOption = {
     value: string;
@@ -58,7 +59,7 @@ export type InputSelectProps =
 export function InputSelect(props: InputSelectProps) {
     const {
         options,
-        placeholder = 'Chọn...',
+        placeholder = t('input_select.select'),
         className,
         multiple,
         onSearchChange,
@@ -233,7 +234,7 @@ export function InputSelect(props: InputSelectProps) {
                             setSearch(event.target.value);
                             onSearchChange?.(event.target.value);
                         }}
-                        placeholder="Tìm kiếm..."
+                        placeholder={t('input_select.search')}
                         className="mb-1 h-8"
                     />
                 )}
@@ -260,14 +261,14 @@ export function InputSelect(props: InputSelectProps) {
                                 }
                                 className="pointer-events-none"
                             />
-                            Chọn tất cả
+                            {t('input_select.select_all')}
                         </div>
                         <button
                             type="button"
                             onClick={() => props.onChange([])}
                             className="text-muted-foreground hover:bg-accent hover:text-accent-foreground shrink-0 rounded-sm px-2 py-1.5 text-sm font-medium"
                         >
-                            Xóa tất cả
+                            {t('input_select.clear_all')}
                         </button>
                     </div>
                 )}
@@ -278,7 +279,7 @@ export function InputSelect(props: InputSelectProps) {
                 >
                     {filteredOptions.length === 0 && !loading && (
                         <div className="text-muted-foreground px-2 py-1.5 text-sm">
-                            Không có lựa chọn
+                            {t('input_select.no_options')}
                         </div>
                     )}
                     {filteredOptions.map((option) => {
@@ -341,7 +342,7 @@ export function InputSelect(props: InputSelectProps) {
                     })}
                     {loading && (
                         <div className="text-muted-foreground px-2 py-1.5 text-center text-sm">
-                            Đang tải...
+                            {t('common.loading')}
                         </div>
                     )}
                 </div>

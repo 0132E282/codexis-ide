@@ -1,8 +1,9 @@
 import { forwardRef } from 'react';
 import logo from '@/assets/logo.png';
 import { SubagentView } from '@/components/shell/chat/subagent-view';
-import type { Turn } from '@/components/shell/chat/turn';
+import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import { TurnView } from '@/components/shell/chat/turn-view';
+import { t } from '@/lib/i18n';
 
 /** The conversation, or what one sub-agent did when `viewSubagent` is set. The ref points at the end of the list, to scroll to. */
 export const MessageList = forwardRef<
@@ -13,9 +14,24 @@ export const MessageList = forwardRef<
         onLeaveSubagent: () => void;
         /** Stable between renders: the memoised turns depend on it. */
         onChoose: (text: string) => void;
+        /** Stable between renders: sends a turn that hit a limit again under another account. */
+        onSwitchAccount: (turn: Turn) => void;
+        /** Stable between renders: answers a question of the AI (allow or deny). */
+        onPermission: (
+            turn: Turn,
+            request: PermissionRequest,
+            allow: boolean,
+        ) => void;
     }
 >(function MessageList(
-    { turns, viewSubagent, onLeaveSubagent, onChoose },
+    {
+        turns,
+        viewSubagent,
+        onLeaveSubagent,
+        onChoose,
+        onSwitchAccount,
+        onPermission,
+    },
     bottom,
 ) {
     return (
@@ -26,7 +42,7 @@ export const MessageList = forwardRef<
                     <div className="flex flex-col items-center gap-3 pt-[20vh] text-center">
                         <img src={logo} alt="" className="size-12" />
                         <p className="text-sm text-muted-foreground">
-                            Nhắn tin để làm việc với AI trong dự án này.
+                            {t('message_list.send_amessage_to')}
                         </p>
                     </div>
                 )}
@@ -47,6 +63,8 @@ export const MessageList = forwardRef<
                                 }
                                 followUp={turns[index + 1]?.prompt ?? null}
                                 onChoose={onChoose}
+                                onSwitchAccount={onSwitchAccount}
+                                onPermission={onPermission}
                             />
                         ))}
                     </>

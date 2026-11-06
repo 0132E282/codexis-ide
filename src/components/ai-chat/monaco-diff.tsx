@@ -5,6 +5,7 @@ import {
     languageOf,
     monacoTheme,
 } from '@/components/ai-chat/monaco-setup';
+import { t } from '@/lib/i18n';
 
 /** * Read-only side-by-side diff (red = removed, green = added) of a file and the AI's proposed version. */
 export default function MonacoDiff({
@@ -70,7 +71,9 @@ export default function MonacoDiff({
                 editor.onDidUpdateDiff(top);
             }}
             loading={
-                <p className="m-4 text-sm text-muted-foreground">Đang tải...</p>
+                <p className="m-4 text-sm text-muted-foreground">
+                    {t('common.loading')}
+                </p>
             }
             options={{
                 ...READ_ONLY_OPTIONS,

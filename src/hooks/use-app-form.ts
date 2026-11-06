@@ -17,7 +17,9 @@ export function useAppForm<T extends FieldValues>({
     // ! zod v4's internal types don't line up with @hookform/resolvers' generic constraints yet; the resolver is sound at runtime.
     const form = useForm<T>({
         ...(schema && {
-            resolver: zodResolver(schema) as unknown as Resolver<T>,
+            resolver: zodResolver(
+                schema as unknown as Parameters<typeof zodResolver>[0],
+            ) as unknown as Resolver<T>,
         }),
         ...props,
     });

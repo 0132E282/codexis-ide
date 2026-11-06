@@ -15,6 +15,7 @@ pub const MAX_TURNS: i64 = 500;
 const MAX_ID_BYTES: usize = 64;
 const MAX_PROMPT_BYTES: usize = 200_000;
 const MAX_ANSWER_BYTES: usize = 2_000_000;
+const MAX_STEPS_BYTES: usize = 4_000_000;
 const MAX_SESSION_BYTES: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +54,9 @@ pub struct ChatTurn {
     pub prompt: String,
     pub answer: String,
     pub error: Option<String>,
+    /// What the AI did during the turn, as the JSON the UI made; stored as is.
+    #[serde(default)]
+    pub steps: Option<String>,
 }
 
 const MAX_TITLE_CHARS: usize = 60;
@@ -172,7 +176,7 @@ impl ChatStore {
         };
         let read = || -> rusqlite::Result<ChatHistory> {
             let mut turns = self.connection.prepare(
-                "SELECT id, cli, prompt, answer, error FROM chat_turns WHERE conversation = ?1 ORDER BY position",
+                "SELECT id, cli, prompt, answer, error, steps FROM chat_turns WHERE conversation = ?1 ORDER BY position",
             )?;
             let turns = turns
                 .query_map([id], |row| {
@@ -182,6 +186,7 @@ impl ChatStore {
                         prompt: row.get(2)?,
                         answer: row.get(3)?,
                         error: row.get(4)?,
+                        steps: row.get(5)?,
                     })
                 })?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -212,6 +217,10 @@ impl ChatStore {
             || turn.id.len() > MAX_ID_BYTES
             || turn.prompt.len() > MAX_PROMPT_BYTES
             || turn.answer.len() > MAX_ANSWER_BYTES
+            || turn
+                .steps
+                .as_ref()
+                .is_some_and(|steps| steps.len() > MAX_STEPS_BYTES)
             || workspace.is_empty()
             || !self.owns(workspace, conversation)
         {
@@ -238,13 +247,14 @@ impl ChatStore {
 
             // An update keeps the row's place and its conversation.
             transaction.execute(
-                "INSERT INTO chat_turns (workspace, id, position, cli, prompt, answer, error, conversation)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "INSERT INTO chat_turns (workspace, id, position, cli, prompt, answer, error, conversation, steps)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                  ON CONFLICT (workspace, id) DO UPDATE SET
                      cli = excluded.cli,
                      prompt = excluded.prompt,
                      answer = excluded.answer,
-                     error = excluded.error",
+                     error = excluded.error,
+                     steps = excluded.steps",
                 params![
                     workspace,
                     turn.id,
@@ -253,7 +263,8 @@ impl ChatStore {
                     turn.prompt,
                     turn.answer,
                     turn.error,
-                    conversation
+                    conversation,
+                    turn.steps
                 ],
             )?;
             transaction.execute(
@@ -385,6 +396,7 @@ mod tests {
             prompt: format!("hỏi {id}"),
             answer: answer.into(),
             error: None,
+            steps: None,
         }
     }
 

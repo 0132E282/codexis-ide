@@ -1,6 +1,6 @@
 import { mergeAttributes } from '@tiptap/core';
+import type { NodeConfig } from '@tiptap/core';
 import TiptapImage from '@tiptap/extension-image';
-import type { DOMOutputSpec } from '@tiptap/pm/model';
 import type { Editor } from '@tiptap/react';
 import { FolderOpen, Image as ImagePlus, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -12,6 +12,10 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { t } from '@/lib/i18n';
+
+// * What `renderHTML` returns (the type itself lives in `@tiptap/pm`, which this project does not list as a dependency).
+type DOMOutputSpec = ReturnType<NonNullable<NodeConfig['renderHTML']>>;
 
 export { ImageBubbleMenu } from '@/components/ui/image-bubble-menu';
 
@@ -99,7 +103,7 @@ export function ImageToolbar({ editor }: { editor: Editor }) {
                         variant="ghost"
                         size="sm"
                         className="h-8 min-w-8 px-1.5"
-                        title="Chèn ảnh"
+                        title={t('image.insert_image')}
                     >
                         <ImagePlus className="size-3.5" />
                     </Button>
@@ -109,11 +113,11 @@ export function ImageToolbar({ editor }: { editor: Editor }) {
                         onClick={() => imageInputRef.current?.click()}
                     >
                         <Upload className="size-3.5" />
-                        Tải lên từ hệ thống
+                        {t('common.upload_from_device')}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setFilePickerOpen(true)}>
                         <FolderOpen className="size-3.5" />
-                        Thư viện file
+                        {t('common.file_library')}
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { t } from '@/lib/i18n';
 import { errorText } from '@/lib/ide';
 import {
     ideCredentials,
@@ -51,15 +52,15 @@ export function ApiKeySection() {
                 <div className="min-w-0 flex-1 leading-tight">
                     <p className="font-medium">Claude API</p>
                     <p className="text-xs text-muted-foreground">
-                        Khóa API lưu trong cơ sở dữ liệu của Rynox (chỉ chủ máy
-                        đọc được) và được truyền cho `claude` khi chat. Khi có
-                        khóa, CLI tính phí theo API thay vì gói đăng nhập.
+                        {t('api_key_section.the_api_key_is')}
                     </p>
                 </div>
                 <Badge variant="outline">
                     {status?.set
-                        ? `Đã lưu ····${status.hint ?? ''}`
-                        : 'Chưa có khóa'}
+                        ? t('api_key_section.saved_hint', {
+                              hint: status.hint ?? '',
+                          })
+                        : t('api_key_section.no_key_yet')}
                 </Badge>
             </div>
             <form onSubmit={submit} className="flex gap-2">
@@ -70,12 +71,14 @@ export function ApiKeySection() {
                     value={value}
                     onChange={(event) => setValue(event.target.value)}
                     placeholder={
-                        status?.set ? 'Nhập khóa mới để thay thế' : 'sk-ant-...'
+                        status?.set
+                            ? t('api_key_section.enter_anew_key')
+                            : 'sk-ant-...'
                     }
-                    aria-label="Khóa Claude API"
+                    aria-label={t('api_key_section.claude_api_key')}
                 />
                 <Button type="submit" disabled={busy || value.trim() === ''}>
-                    Lưu
+                    {t('common.save')}
                 </Button>
                 {status?.set && (
                     <Button
@@ -84,7 +87,7 @@ export function ApiKeySection() {
                         disabled={busy}
                         onClick={() => run(ideCredentials.remove(NAME))}
                     >
-                        Xóa
+                        {t('common.delete')}
                     </Button>
                 )}
             </form>

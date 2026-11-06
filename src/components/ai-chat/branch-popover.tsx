@@ -9,6 +9,7 @@ import {
 import { useCachedRequest } from '@/hooks/use-cached-request';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 type LocalBranches = {
     git: boolean;
@@ -43,8 +44,19 @@ export function LocalBranchPopover({ root }: { root: string }) {
                 <Button
                     type="button"
                     variant="ghost"
-                    aria-label="Nhánh và worktree"
-                    title={`Nhánh và worktree của dự án${data?.current ? ` · đang ở ${data.current}` : ''}`}
+                    aria-label={t('branch_popover.branches_and_worktrees')}
+                    title={
+                        data?.current
+                            ? t(
+                                  'branch_popover.project_branches_and_worktrees',
+                                  {
+                                      branch: data.current,
+                                  },
+                              )
+                            : t(
+                                  'branch_popover.project_branches_and_worktrees2',
+                              )
+                    }
                     className={triggerClass}
                 >
                     <GitBranch aria-hidden="true" className="size-5" />
@@ -82,7 +94,9 @@ function LocalBranchList({
     if (data === null) {
         return (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-                {failed ? 'Không tải được danh sách nhánh.' : 'Đang tải...'}
+                {failed
+                    ? t('branch_popover.could_not_load_the')
+                    : t('common.loading')}
             </p>
         );
     }
@@ -90,14 +104,14 @@ function LocalBranchList({
     if (!data.git) {
         return (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-                Thư mục này không phải repo git.
+                {t('branch_popover.this_folder_is_not')}
             </p>
         );
     }
 
     return (
         <div className="flex max-h-80 flex-col overflow-y-auto">
-            <Heading>Nhánh</Heading>
+            <Heading>{t('branch_popover.branches')}</Heading>
             {data.branches.map((branch) => (
                 <div
                     key={branch}
@@ -113,7 +127,7 @@ function LocalBranchList({
                     <span className="min-w-0 flex-1 truncate">{branch}</span>
                     {branch === data.current && (
                         <span className="shrink-0 text-xs text-muted-foreground">
-                            đang dùng
+                            {t('branch_popover.in_use')}
                         </span>
                     )}
                 </div>

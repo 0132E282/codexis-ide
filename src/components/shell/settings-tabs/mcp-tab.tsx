@@ -3,12 +3,12 @@ import { SourceCell, ToolTable, type ToolColumn } from './tool-table';
 
 const columns: ToolColumn<McpServer>[] = [
     {
-        header: 'Tên',
+        header: 'common.name',
         cell: (row) => <span className="font-medium">{row.name}</span>,
     },
-    { header: 'Loại', cell: (row) => row.kind },
+    { header: 'common.type', cell: (row) => row.kind },
     {
-        header: 'Lệnh / URL',
+        header: 'mcp_tab.command_url',
         grow: true,
         cell: (row) => (
             <span className="break-all font-mono text-xs">
@@ -17,7 +17,7 @@ const columns: ToolColumn<McpServer>[] = [
         ),
     },
     {
-        header: 'Nguồn',
+        header: 'common.source',
         clamp: false,
         cell: (row, detail) => (
             <SourceCell compact={!detail} scope={row.scope} path={row.path} />
@@ -33,7 +33,7 @@ export function McpTab() {
             load={ideTools.mcp}
             columns={columns}
             name={name}
-            emptyText="Chưa có MCP server nào được cấu hình."
+            emptyText={'mcp_tab.no_mcp_servers_configured'}
         />
     );
 }

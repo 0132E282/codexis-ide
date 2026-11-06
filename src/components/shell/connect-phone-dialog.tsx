@@ -10,6 +10,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { errorText, ide, onRemoteConnected, type RemoteInfo } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 /** Pairs the phone app: shows a QR code that holds the address and one-time token of the local server. */
 export function ConnectPhoneDialog({
@@ -57,10 +58,9 @@ export function ConnectPhoneDialog({
         <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
             <DialogContent className="sm:max-w-sm">
                 <DialogHeader>
-                    <DialogTitle>Kết nối điện thoại</DialogTitle>
+                    <DialogTitle>{t('common.connect_phone')}</DialogTitle>
                     <DialogDescription>
-                        Mở app trên điện thoại (cùng mạng Wi-Fi) và quét mã QR
-                        để điều khiển chat AI.
+                        {t('connect_phone_dialog.open_the_app_on')}
                     </DialogDescription>
                 </DialogHeader>
                 {failure !== null ? (
@@ -69,7 +69,7 @@ export function ConnectPhoneDialog({
                     </p>
                 ) : info === null ? (
                     <p className="text-sm text-muted-foreground">
-                        Đang mở kết nối...
+                        {t('connect_phone_dialog.opening_connection')}
                     </p>
                 ) : (
                     <div className="flex flex-col items-center gap-3">
@@ -77,7 +77,9 @@ export function ConnectPhoneDialog({
                             <QRCodeSVG
                                 value={JSON.stringify({ v: 1, ...info })}
                                 size={208}
-                                title="Mã QR kết nối điện thoại"
+                                title={t(
+                                    'connect_phone_dialog.qr_code_to_connect',
+                                )}
                             />
                         </div>
                         <p className="text-sm text-muted-foreground tabular-nums">
@@ -85,18 +87,24 @@ export function ConnectPhoneDialog({
                         </p>
                         <p role="status" className="text-sm">
                             {phones > 0
-                                ? `Đã kết nối ${phones} điện thoại`
-                                : 'Chưa có điện thoại nào kết nối'}
+                                ? t(
+                                      'connect_phone_dialog.count_phone_sconnected',
+                                      {
+                                          count: phones,
+                                      },
+                                  )
+                                : t(
+                                      'connect_phone_dialog.no_phone_connected_yet',
+                                  )}
                         </p>
                     </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                    Ai quét được mã này sẽ gửi được tin nhắn cho AI trên máy
-                    này; chỉ dùng trên mạng Wi-Fi tin cậy.
+                    {t('connect_phone_dialog.anyone_who_scans_this')}
                 </p>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={onClose}>
-                        Ngắt kết nối
+                        {t('common.disconnect')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

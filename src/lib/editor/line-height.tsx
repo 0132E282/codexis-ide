@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 import { LINE_HEIGHTS } from './constants';
+import { t } from '@/lib/i18n';
 
 declare module '@tiptap/core' {
     interface Commands<ReturnType> {
@@ -74,9 +75,9 @@ export function LineHeightToolbar({ editor }: { editor: Editor }) {
                 }
             }}
             className="h-8 rounded-md border border-input bg-transparent px-1.5 text-sm"
-            title="Giãn dòng"
+            title={t('line_height.line_spacing')}
         >
-            <option value="">Giãn dòng</option>
+            <option value="">{t('line_height.line_spacing')}</option>
             {LINE_HEIGHTS.map((lineHeight) => (
                 <option key={lineHeight} value={lineHeight}>
                     {lineHeight}

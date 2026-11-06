@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { Turn } from '@/components/shell/chat/turn';
+import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import {
     parsePayload,
     withDelta,
@@ -17,9 +17,12 @@ import type {
 } from '@/components/shell/chat/turn-events';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent, onRemoteSend } from '@/lib/ide';
+import { ideAuth } from '@/lib/ide-auth';
+import { ideProfiles } from '@/lib/ide-profiles';
 import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
-import type { AgentCli, Subagent } from '@/lib/ide';
+import type { AgentCli, ChangedFile, Subagent } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 // * Only sizes and the error text go to the statistics; the model is not known to the chat.
 const recordUsage = (turn: Turn): Promise<boolean> =>
@@ -33,7 +36,43 @@ const recordUsage = (turn: Turn): Promise<boolean> =>
         })
         .catch(() => false);
 
+// * The other signed-in accounts of the same AI that have not hit a limit come first; the AI itself changes only when none is left.
+const nextAccount = async (
+    finished: Turn,
+    triedAccounts: number[],
+): Promise<number | null> => {
+    const all = await ideProfiles.list();
+    const mine = all.filter((profile) => profile.cli === finished.cli);
+    const current = mine.find((profile) => profile.active)?.id;
+    const skipped = [
+        ...triedAccounts,
+        ...(current === undefined ? [] : [current]),
+    ];
+
+    for (const profile of mine) {
+        if (skipped.includes(profile.id)) {
+            continue;
+        }
+
+        const [status, usage] = await Promise.all([
+            ideAuth.statusProfile(finished.cli, profile.id),
+            ideUsage.statsProfile(finished.cli, profile.id),
+        ]);
+
+        if (status.loggedIn && !usage.limitReached) {
+            return profile.id;
+        }
+    }
+
+    return null;
+};
+
 /** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn, and moves a turn that hit a limit to the next AI. */
+/** What identifies the state of a changed file: it differs when the file changed again. */
+function changeSignature(file: ChangedFile): string {
+    return `${file.status}:${file.added}:${file.removed}`;
+}
+
 export function useAgentTurns({
     root,
     projects,
@@ -84,9 +123,14 @@ export function useAgentTurns({
     const drafts = useRef(new Map<string, Turn>());
     // * The CLIs already tried for a message that is being moved from one AI to the next, by turn id.
     const chains = useRef(new Map<string, AgentCli[]>());
+    // * The accounts of the same AI already tried for that message, by turn id.
+    const accountChains = useRef(new Map<string, number[]>());
     // * Set after each render: the agent events are listened to once, and the move to the next AI needs the latest state.
     const failover = useRef<((finished: Turn) => void) | null>(null);
     const counter = useRef(0);
+    // * What git said was changed when each turn started, by turn id: the turn's own changes are the difference.
+    const readChanges = useStableCallback(() => ide.localChanges(root));
+    const before = useRef(new Map<string, Map<string, string>>());
 
     const persist = useStableCallback((turn: Turn) => {
         if (workspace.current !== null && conversation.current !== null) {
@@ -97,13 +141,15 @@ export function useAgentTurns({
                     prompt: turn.prompt,
                     answer: turn.answer,
                     error: turn.error,
+                    steps:
+                        turn.steps !== undefined && turn.steps.length > 0
+                            ? JSON.stringify(turn.steps)
+                            : null,
                 })
                 .then(() => notifyChanged())
                 .catch((caught) => console.error(errorText(caught)));
         } else {
-            console.error(
-                'Chưa lưu được lượt chat: chưa tải xong cuộc trò chuyện.',
-            );
+            console.error(t('use_agent_turns.could_not_save_the'));
         }
     });
 
@@ -200,6 +246,18 @@ export function useAgentTurns({
                         ),
                     );
                     break;
+                case 'permission': {
+                    const asked = parsePayload<PermissionRequest>(payload);
+
+                    if (asked !== null) {
+                        update(runId, (turn) => ({
+                            ...turn,
+                            permissions: [...(turn.permissions ?? []), asked],
+                        }));
+                    }
+
+                    break;
+                }
                 case 'error':
                     update(runId, (turn) => ({ ...turn, error: payload }));
                     break;
@@ -209,9 +267,38 @@ export function useAgentTurns({
                     setSubagents((current) =>
                         current.map((agent) => ({ ...agent, done: true })),
                     );
-                    update(runId, (turn) => ({ ...turn, running: false }));
+                    update(runId, (turn) => ({
+                        ...turn,
+                        running: false,
+                        permissions: undefined,
+                    }));
 
                     const finished = drafts.current.get(runId);
+                    const baseline = before.current.get(runId);
+
+                    before.current.delete(runId);
+
+                    if (baseline !== undefined) {
+                        void readChanges()
+                            .then((files) => {
+                                const changed = files.filter(
+                                    (file) =>
+                                        baseline.get(file.path) !==
+                                        changeSignature(file),
+                                );
+
+                                if (changed.length > 0) {
+                                    setTurns((current) =>
+                                        current.map((turn) =>
+                                            turn.id === runId
+                                                ? { ...turn, changed }
+                                                : turn,
+                                        ),
+                                    );
+                                }
+                            })
+                            .catch(() => undefined);
+                    }
 
                     if (finished !== undefined) {
                         persist(finished);
@@ -226,13 +313,22 @@ export function useAgentTurns({
         });
 
         return () => void stop.then((unlisten) => unlisten());
-    }, [setTurns, setSubagents, sessions, workspace, conversation, persist]);
+    }, [
+        setTurns,
+        setSubagents,
+        sessions,
+        workspace,
+        conversation,
+        persist,
+        readChanges,
+    ]);
 
     const startTurn = (
         prompt: string,
         target: AgentCli,
         tried: AgentCli[],
         fromComposer: boolean,
+        triedAccounts: number[] = [],
     ) => {
         setSubagents([]);
         // * Unique across restarts: saved turns keep their ids.
@@ -248,6 +344,7 @@ export function useAgentTurns({
 
         runs.current.set(id, target);
         chains.current.set(id, tried);
+        accountChains.current.set(id, triedAccounts);
         drafts.current.set(id, turn);
 
         if (fromComposer) {
@@ -255,6 +352,16 @@ export function useAgentTurns({
         }
 
         setTurns((current) => [...current, turn]);
+        void readChanges()
+            .then((files) =>
+                before.current.set(
+                    id,
+                    new Map(
+                        files.map((file) => [file.path, changeSignature(file)]),
+                    ),
+                ),
+            )
+            .catch(() => undefined);
         // * Saved at once, then again when the turn ends: a message is not lost when the answer never finishes (the app is closed, the CLI stalls).
         persist(turn);
         ide.agentSend(
@@ -320,12 +427,112 @@ export function useAgentTurns({
     }, [remoteSend]);
 
     // * A turn that ended on a limit error is sent again to the next AI of the saved order; when none is left the turn says so.
+    /** Ctrl+C in the box: stops the running turns; each finishes with what it had. */
+    const stopTurns = useStableCallback(() => {
+        for (const runId of runs.current.keys()) {
+            ide.agentStop(runId).catch((caught) =>
+                console.error(errorText(caught)),
+            );
+        }
+    });
+
+    /** The "Cho phép" / "Từ chối" buttons: answers the AI's first waiting question of this turn. */
+    const answerPermission = useStableCallback(
+        (turn: Turn, request: PermissionRequest, allow: boolean) => {
+            void ide
+                .agentPermission(turn.id, request.id, allow, request.input)
+                .catch((caught) => console.error(errorText(caught)));
+
+            const answered = (current: Turn): Turn => ({
+                ...current,
+                permissions: current.permissions?.filter(
+                    (item) => item.id !== request.id,
+                ),
+            });
+            const draft = drafts.current.get(turn.id);
+
+            if (draft !== undefined) {
+                drafts.current.set(turn.id, answered(draft));
+            }
+
+            setTurns((current) =>
+                current.map((item) =>
+                    item.id === turn.id ? answered(item) : item,
+                ),
+            );
+        },
+    );
+
+    /** The "Chuyển tài khoản" button: the last message goes again under another signed-in account of the same AI that has not hit a limit. */
+    const switchAccount = useStableCallback((finished: Turn) => {
+        if (busy) {
+            return;
+        }
+
+        const triedAccounts = accountChains.current.get(finished.id) ?? [];
+
+        void nextAccount(finished, triedAccounts)
+            .then(async (account) => {
+                if (account === null) {
+                    const exhausted = {
+                        ...finished,
+                        error: `${finished.error ?? ''}\n${t('use_agent_turns.no_other_account_has')}`.trim(),
+                    };
+
+                    setTurns((current) =>
+                        current.map((turn) =>
+                            turn.id === finished.id ? exhausted : turn,
+                        ),
+                    );
+
+                    return;
+                }
+
+                await ideProfiles.select(finished.cli, account);
+                delete sessions.current[finished.cli];
+                startTurn(
+                    finished.prompt,
+                    finished.cli,
+                    chains.current.get(finished.id) ?? [],
+                    false,
+                    [...triedAccounts, account],
+                );
+            })
+            .catch((caught) => console.error(errorText(caught)));
+    });
+
     useEffect(() => {
         failover.current = (finished) => {
-            void ideSettings
-                .get()
+            const triedAccounts = accountChains.current.get(finished.id) ?? [];
+
+            void nextAccount(finished, triedAccounts)
+                .catch(() => null)
+                .then(async (account) => {
+                    if (account === null) {
+                        return false;
+                    }
+
+                    await ideProfiles.select(finished.cli, account);
+                    // * A saved conversation belongs to the account that started it, so the new account starts a fresh one.
+                    delete sessions.current[finished.cli];
+                    startTurn(
+                        finished.prompt,
+                        finished.cli,
+                        chains.current.get(finished.id) ?? [],
+                        false,
+                        [...triedAccounts, account],
+                    );
+
+                    return true;
+                })
+                .catch(() => false)
+                .then((switched) => (switched ? undefined : ideSettings.get()))
                 .then((settings) => {
-                    if (!settings.fallbackEnabled || busy) {
+                    if (
+                        settings === undefined ||
+                        !settings.fallbackEnabled ||
+                        busy
+                    ) {
                         return;
                     }
 
@@ -341,7 +548,7 @@ export function useAgentTurns({
                         const exhausted = {
                             ...finished,
                             running: false,
-                            error: `${finished.error ?? ''}\nTất cả AI trong danh sách đã hết hạn mức.`.trim(),
+                            error: `${finished.error ?? ''}\n${t('use_agent_turns.all_ais_in_the')}`.trim(),
                         };
 
                         setTurns((current) =>
@@ -361,5 +568,11 @@ export function useAgentTurns({
         };
     });
 
-    return { choose, sendFromComposer };
+    return {
+        choose,
+        sendFromComposer,
+        switchAccount,
+        answerPermission,
+        stopTurns,
+    };
 }

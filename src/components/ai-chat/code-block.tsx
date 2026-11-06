@@ -7,6 +7,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { CodeApplyContext, isFilePath } from '@/lib/code-apply';
 import type { DiffRow } from '@/lib/diff-parser';
 import { requestErrorMessage } from '@/lib/ai-error';
+import { t } from '@/lib/i18n';
 
 /** * Fenced block frame: title bar (file name, else language, else "code") with a copy button, then the diff view or the plain code. */
 export function CodeBlock({
@@ -49,7 +50,9 @@ export function CodeBlock({
                                 toast.error(
                                     requestErrorMessage(
                                         caught,
-                                        `Không ghi được ${title}.`,
+                                        t('code_block.could_not_write_title', {
+                                            title,
+                                        }),
                                     ),
                                 );
                             }
@@ -68,15 +71,19 @@ export function CodeBlock({
                         )}
                         <span>
                             {state === 'done'
-                                ? 'Đã áp dụng'
-                                : 'Áp dụng vào tệp'}
+                                ? t('code_block.applied')
+                                : t('code_block.apply_to_file')}
                         </span>
                     </button>
                 )}
                 <button
                     type="button"
                     onClick={() => copy(code)}
-                    aria-label={copied ? 'Đã sao chép' : 'Sao chép đoạn mã'}
+                    aria-label={
+                        copied
+                            ? t('code_block.copied')
+                            : t('code_block.copy_code')
+                    }
                     className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                     {copied ? (
@@ -84,7 +91,9 @@ export function CodeBlock({
                     ) : (
                         <Copy className="size-3.5" aria-hidden />
                     )}
-                    <span>{copied ? 'Đã sao chép' : 'Sao chép'}</span>
+                    <span>
+                        {copied ? t('code_block.copied') : t('code_block.copy')}
+                    </span>
                 </button>
             </div>
             {diffRows ? (

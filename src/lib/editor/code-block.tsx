@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import { Code2 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
+import { t } from '@/lib/i18n';
 
 /** * Node comes from StarterKit. */
 export function CodeBlockToolbar({ editor }: { editor: Editor }) {
@@ -11,7 +12,7 @@ export function CodeBlockToolbar({ editor }: { editor: Editor }) {
             onPressedChange={() =>
                 editor.chain().focus().toggleCodeBlock().run()
             }
-            title="Khối code"
+            title={t('code_block.code_block')}
         >
             <Code2 className="size-3.5" />
         </Toggle>

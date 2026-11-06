@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import type { Turn } from '@/components/shell/chat/turn';
 import { TurnSteps } from '@/components/shell/turn-steps';
+import { t } from '@/lib/i18n';
 
 const READ_ONLY_CHOICES: ChoiceHandlers = {
     interactive: false,
@@ -34,7 +35,7 @@ export function SubagentView({
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
                 <ArrowLeft aria-hidden="true" className="size-4" />
-                Quay lại cuộc trò chuyện
+                {t('subagent_view.back_to_the_conversation')}
             </button>
             {call?.kind === 'tool' && (
                 <div className="rounded-lg border bg-card px-3 py-2">
@@ -60,8 +61,8 @@ export function SubagentView({
             ) : (
                 <p className="text-sm text-muted-foreground">
                     {finished
-                        ? 'Sub-agent này không ghi lại bước nào.'
-                        : 'Sub-agent đang bắt đầu…'}
+                        ? t('subagent_view.this_sub_agent_recorded')
+                        : t('subagent_view.sub_agent_is_starting')}
                 </p>
             )}
         </div>

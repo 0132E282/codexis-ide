@@ -17,6 +17,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type RepeaterColumnWidth = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -130,11 +131,7 @@ function InputCell({ name, control }: CellProps) {
 
 function SelectCell({ name, control, column }: CellProps) {
     return (
-        <SelectField
-            name={name}
-            control={control}
-            multiple={column.multiple}
-        />
+        <SelectField name={name} control={control} multiple={column.multiple} />
     );
 }
 
@@ -246,7 +243,7 @@ function RepeaterRow({
                     variant="ghost"
                     size="icon"
                     className="size-8"
-                    title="Xem chi tiết"
+                    title={t('common.view_details')}
                     onClick={onOpenDetail}
                 >
                     <Eye className="size-4" />
@@ -348,7 +345,7 @@ function QuickFillToolbar({
                 onClick={apply}
                 disabled={!rowCount}
             >
-                Áp dụng
+                {t('common.apply')}
             </Button>
         </div>
     );
@@ -360,7 +357,7 @@ export default function RepeaterField({
     control,
     fields = [],
     views = [],
-    addLabel = 'Thêm dòng',
+    addLabel = t('repeater_field.add_row'),
 }: RepeaterFieldProps) {
     const [detailIndex, setDetailIndex] = useState<number | null>(null);
     const {
@@ -486,7 +483,7 @@ export default function RepeaterField({
                     className="w-2/3 max-w-none sm:max-w-none"
                 >
                     <SheetHeader className="shrink-0 flex-row items-center justify-between gap-2 border-b">
-                        <SheetTitle>Chi tiết</SheetTitle>
+                        <SheetTitle>{t('repeater_field.details')}</SheetTitle>
                         {detailIndex !== null && (
                             <div className="flex items-center gap-2">
                                 <Button
@@ -497,7 +494,7 @@ export default function RepeaterField({
                                     onClick={() => removeRow(detailIndex)}
                                 >
                                     <Trash2 className="size-4" />
-                                    Xóa
+                                    {t('common.delete')}
                                 </Button>
                                 <Button
                                     type="button"
@@ -507,7 +504,7 @@ export default function RepeaterField({
                                     onClick={() => duplicateRow(detailIndex)}
                                 >
                                     <Copy className="size-4" />
-                                    Nhân bản
+                                    {t('repeater_field.duplicate')}
                                 </Button>
                                 <SheetClose asChild>
                                     <Button
@@ -516,7 +513,7 @@ export default function RepeaterField({
                                         size="sm"
                                         className="h-8"
                                     >
-                                        Hủy
+                                        {t('common.cancel')}
                                     </Button>
                                 </SheetClose>
                                 <Button
@@ -525,7 +522,7 @@ export default function RepeaterField({
                                     className="h-8"
                                     onClick={() => setDetailIndex(null)}
                                 >
-                                    Lưu
+                                    {t('common.save')}
                                 </Button>
                             </div>
                         )}

@@ -7,6 +7,7 @@ import { ManageAccountsPage } from '@/components/shell/manage-accounts-page';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type AuthStatus } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
+import { t } from '@/lib/i18n';
 
 const LABEL: Record<AuthProvider, string> = {
     claude: 'Claude',
@@ -15,9 +16,9 @@ const LABEL: Record<AuthProvider, string> = {
 };
 
 const INSTALL_HINT: Record<AuthProvider, string> = {
-    claude: 'Chưa cài lệnh `claude`.',
-    codex: 'Chưa cài lệnh `codex`.',
-    github: 'Chưa cài GitHub CLI (`gh`).',
+    claude: 'accounts.the_claude_command_is',
+    codex: 'accounts.the_codex_command_is',
+    github: 'accounts.github_cli_gh_is',
 };
 
 type AccountCount = { connected: number; total: number };
@@ -111,24 +112,29 @@ function AccountRow({
                 <button
                     type="button"
                     onClick={onManage}
-                    aria-label={`Quản lý tài khoản ${LABEL[status.provider]}`}
+                    aria-label={t('common.manage_name_accounts', {
+                        name: LABEL[status.provider],
+                    })}
                     className="min-w-0 flex-1 rounded-sm text-left leading-tight hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                     <p className="font-medium">{LABEL[status.provider]}</p>
                     <p className="truncate text-xs text-muted-foreground">
                         {!status.installed
-                            ? INSTALL_HINT[status.provider]
+                            ? t(INSTALL_HINT[status.provider])
                             : status.loggedIn
-                              ? (status.account ?? 'Đã đăng nhập')
-                              : 'Đăng nhập trong trình duyệt, Rynox không thấy mật khẩu.'}
+                              ? (status.account ?? t('accounts.signed_in'))
+                              : t('accounts.sign_in_through_the')}
                     </p>
                 </button>
                 {count !== undefined && (
                     <span
-                        title="Số tài khoản đang kết nối"
+                        title={t('accounts.number_of_connected_accounts')}
                         className="shrink-0 text-xs text-muted-foreground tabular-nums"
                     >
-                        {count.connected}/{count.total} kết nối
+                        {t('accounts.connected_total_connected', {
+                            connected: count.connected,
+                            total: count.total,
+                        })}
                     </span>
                 )}
                 {!(status.installed && status.loggedIn) && (
@@ -137,7 +143,9 @@ function AccountRow({
                             aria-hidden="true"
                             className="size-1.5 rounded-full bg-muted-foreground/60"
                         />
-                        {!status.installed ? 'Chưa cài' : 'Chưa kết nối'}
+                        {!status.installed
+                            ? t('common.not_installed')
+                            : t('common.not_connected')}
                     </Badge>
                 )}
                 {status.installed && !status.loggedIn && (
@@ -147,14 +155,17 @@ function AccountRow({
                         disabled={busy}
                         onClick={connect}
                     >
-                        {status.provider === 'github' ? 'Kết nối' : 'Đăng nhập'}
+                        {status.provider === 'github'
+                            ? t('common.connect')
+                            : t('common.sign_in')}
                     </Button>
                 )}
             </div>
             {code !== null && (
                 <p className="text-xs">
-                    Nhập mã <strong className="font-mono">{code}</strong> tại
-                    github.com/login/device (trình duyệt sẽ tự mở).
+                    {t('common.enter_the_code')}{' '}
+                    <strong className="font-mono">{code}</strong>{' '}
+                    {t('common.at_github_com_login')}
                 </p>
             )}
             {error !== null && (
@@ -238,11 +249,10 @@ export function LoginScreen({
                     <img src={logo} alt="" className="size-10" />
                     <div className="leading-tight">
                         <h1 className="text-lg font-semibold">
-                            Đăng nhập Rynox
+                            {t('accounts.sign_in_to_rynox')}
                         </h1>
                         <p className="text-muted-foreground">
-                            Đăng nhập ít nhất một CLI AI (Claude hoặc Codex) để
-                            tiếp tục. GitHub là tùy chọn.
+                            {t('accounts.sign_in_to_at')}
                         </p>
                     </div>
                 </div>
@@ -253,13 +263,13 @@ export function LoginScreen({
                 )}
                 {statuses === null ? (
                     <p className="text-muted-foreground">
-                        Đang kiểm tra đăng nhập...
+                        {t('accounts.checking_sign_in')}
                     </p>
                 ) : (
                     <AccountList statuses={statuses} onChanged={onChanged} />
                 )}
                 <Button type="button" variant="outline" onClick={onChanged}>
-                    Kiểm tra lại
+                    {t('accounts.check_again')}
                 </Button>
             </div>
         </div>

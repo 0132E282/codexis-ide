@@ -15,6 +15,7 @@ import { ideProfiles } from '@/lib/ide-profiles';
 import { LIMIT_LABELS, formatReset, limitColor } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 const CLI_LABELS: Record<CliUsage['cli'], string> = {
     claude: 'Claude',
@@ -175,9 +176,9 @@ export function UsageDialog({
         >
             <DialogContent className="flex max-h-[min(85vh,48rem)] flex-col sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>Thống kê AI</DialogTitle>
+                    <DialogTitle>{t('usage_dialog.ai_statistics')}</DialogTitle>
                     <DialogDescription>
-                        CLI nào đang dùng và CLI nào đã dừng vì hạn mức.
+                        {t('usage_dialog.which_clis_are_in')}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto">
@@ -187,11 +188,11 @@ export function UsageDialog({
                         </p>
                     ) : rows === null ? (
                         <p className="text-sm text-muted-foreground">
-                            Đang tải…
+                            {t('usage_dialog.loading')}
                         </p>
                     ) : rows.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            Chưa có tài khoản AI nào được kết nối.
+                            {t('usage_dialog.no_ai_account_connected')}
                         </p>
                     ) : (
                         <ul className="flex flex-col gap-4">
@@ -213,15 +214,11 @@ export function UsageDialog({
                     )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Lượt gọi tính trên máy này trong 24 giờ và 7 ngày qua (không
-                    lưu nội dung, chỉ lưu độ dài). &quot;Đạt limit&quot; hiện
-                    khi lỗi hạn mức mới hơn lượt thành công gần nhất; CLI không
-                    cho biết hạn mức còn lại. Token chỉ là ước lượng (~4 ký tự
-                    một token).
+                    {t('usage_dialog.calls_are_counted_on')}
                 </p>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={onClose}>
-                        Đóng
+                        {t('common.close')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -246,17 +243,23 @@ function UsageRow({
 }) {
     const Icon = CLI_ICONS[usage.cli];
     const stats: { label: string; value: string }[] = [
-        { label: '24 giờ', value: `${usage.turns24h} lượt` },
-        { label: '7 ngày', value: `${usage.turns7d} lượt` },
+        {
+            label: t('usage_dialog.24_hours'),
+            value: t('usage_dialog.count_turns', { count: usage.turns24h }),
+        },
+        {
+            label: t('usage_dialog.7_days'),
+            value: t('usage_dialog.count_turns', { count: usage.turns7d }),
+        },
         {
             label: 'Token',
             value: `${formatNumber(usage.tokens24h)} / ${formatNumber(usage.tokens7d)}`,
         },
         {
-            label: 'Dùng cuối',
+            label: t('usage_dialog.last_used'),
             value:
                 usage.lastUsedAt === null
-                    ? 'Chưa dùng'
+                    ? t('common.not_used')
                     : formatShortTime(usage.lastUsedAt),
         },
     ];
@@ -302,7 +305,7 @@ function UsageRow({
                                         {limit.percent}%
                                     </span>
                                     {limit.resets !== null &&
-                                        ` · Đặt lại ${formatReset(limit.resets)}`}
+                                        ` · ${t('common.resets_time', { time: formatReset(limit.resets) })}`}
                                 </span>
                             </div>
                             <div
@@ -326,13 +329,15 @@ function UsageRow({
                 </div>
             ) : limitsPending ? (
                 <p className="text-xs text-muted-foreground">
-                    Đang đọc /usage…
+                    {t('usage_dialog.reading_usage')}
                 </p>
             ) : (
                 <div className="flex items-center gap-3 border-t pt-4 text-xs">
                     <div
                         role="progressbar"
-                        aria-label={`Mức sử dụng 7 ngày của ${label}`}
+                        aria-label={t('usage_dialog.7_day_usage_of', {
+                            name: label,
+                        })}
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={Math.round(share * 100)}
@@ -347,7 +352,9 @@ function UsageRow({
                         />
                     </div>
                     <span className="shrink-0 text-muted-foreground">
-                        {Math.round(share * 100)}% lượt 7 ngày
+                        {t('usage_dialog.percent_of7_day', {
+                            percent: Math.round(share * 100),
+                        })}
                         {usage.models.length > 0 &&
                             ` · ${usage.models.join(', ')}`}
                     </span>

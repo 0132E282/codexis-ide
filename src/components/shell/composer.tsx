@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { referenceForPaste } from '@/lib/editor-copy';
 import type { AgentCli } from '@/lib/ide';
 import type { ToolEntry } from '@/lib/ide-tools';
+import { t } from '@/lib/i18n';
 
 export { MODES, pastedPaths };
 export type { Attachment };
@@ -30,6 +31,7 @@ export const Composer = memo(function Composer({
     onChange,
     onSubmit,
     busy,
+    onStop,
     cli,
     model,
     onChoose,
@@ -58,6 +60,8 @@ export const Composer = memo(function Composer({
     onSubmit: () => void;
     /** A turn is running: sending and switching CLI wait for it. */
     busy: boolean;
+    /** Ctrl+C while a turn runs: stops it. */
+    onStop: () => void;
     cli: AgentCli;
     /** Model of the chosen CLI (null: its default). */
     model: string | null;
@@ -128,7 +132,7 @@ export const Composer = memo(function Composer({
                             <span className="truncate">{project}</span>
                             <button
                                 type="button"
-                                aria-label="Bỏ chọn dự án"
+                                aria-label={t('composer.deselect_project')}
                                 onClick={onClearProject}
                                 className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             >
@@ -136,7 +140,7 @@ export const Composer = memo(function Composer({
                             </button>
                         </span>
                         <Inert
-                            label="Thêm dự án"
+                            label={t('composer.add_project')}
                             className="text-muted-foreground"
                         >
                             <Plus aria-hidden="true" />
@@ -212,6 +216,20 @@ export const Composer = memo(function Composer({
                         }
                     }}
                     onKeyDown={(event) => {
+                        // * Ctrl+C with nothing selected (so copying still works) stops the running turn.
+                        if (
+                            busy &&
+                            event.ctrlKey &&
+                            event.key.toLowerCase() === 'c' &&
+                            event.currentTarget.selectionStart ===
+                                event.currentTarget.selectionEnd
+                        ) {
+                            event.preventDefault();
+                            onStop();
+
+                            return;
+                        }
+
                         if (menuOpen) {
                             if (event.key === 'ArrowDown') {
                                 event.preventDefault();
@@ -254,8 +272,8 @@ export const Composer = memo(function Composer({
                         }
                     }}
                     rows={2}
-                    aria-label="Tin nhắn"
-                    placeholder="Nhắn tin cho trợ lý AI"
+                    aria-label={t('composer.message')}
+                    placeholder={t('composer.message_the_ai_assistant')}
                     className="block w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
                 />
                 <div
@@ -263,17 +281,12 @@ export const Composer = memo(function Composer({
                     className="mt-2 flex flex-wrap items-center gap-1"
                 >
                     {project === null ? (
-                        <ComposerTools
-                            busy={busy}
-                            cli={cli}
-                            mode={mode}
-                            onModeChange={onModeChange}
-                            agentTeam={agentTeam}
-                            onAgentTeamChange={onAgentTeamChange}
-                            onAddFiles={onAddFiles}
-                        />
+                        <ComposerTools busy={busy} onAddFiles={onAddFiles} />
                     ) : (
-                        <Inert label="Thêm" className="text-muted-foreground">
+                        <Inert
+                            label={t('common.add')}
+                            className="text-muted-foreground"
+                        >
                             <Plus aria-hidden="true" />
                         </Inert>
                     )}
@@ -284,10 +297,16 @@ export const Composer = memo(function Composer({
                             model={model}
                             onChoose={onChoose}
                         />
-                        <Inert label="Đọc to" className="text-muted-foreground">
+                        <Inert
+                            label={t('composer.read_aloud')}
+                            className="text-muted-foreground"
+                        >
                             <Volume2 aria-hidden="true" />
                         </Inert>
-                        <Inert label="Ghi âm" className="text-muted-foreground">
+                        <Inert
+                            label={t('composer.record')}
+                            className="text-muted-foreground"
+                        >
                             <Mic aria-hidden="true" />
                         </Inert>
                         <Button
@@ -298,7 +317,7 @@ export const Composer = memo(function Composer({
                                 (value.trim() === '' &&
                                     attachments.length === 0)
                             }
-                            aria-label="Gửi"
+                            aria-label={t('common.send')}
                             className="rounded-full"
                         >
                             <ArrowUp aria-hidden="true" />
@@ -314,6 +333,11 @@ export const Composer = memo(function Composer({
                 onExtraRootsChange={onExtraRootsChange}
                 worktree={worktree}
                 onWorktreeChange={onWorktreeChange}
+                cli={cli}
+                mode={mode}
+                onModeChange={onModeChange}
+                agentTeam={agentTeam}
+                onAgentTeamChange={onAgentTeamChange}
             />
         </form>
     );

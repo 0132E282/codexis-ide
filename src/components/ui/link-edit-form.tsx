@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { t } from '@/lib/i18n';
 
 const REL_OPTIONS = [
     { key: 'nofollow', label: 'nofollow' },
@@ -110,7 +111,7 @@ export function LinkEditForm({
                         checked={newTab}
                         onCheckedChange={(checked) => setNewTab(!!checked)}
                     />
-                    Mở tab mới (target="_blank")
+                    {t('link_edit_form.open_in_new_tab')}
                 </label>
                 {REL_OPTIONS.map(({ key, label }) => (
                     <label
@@ -134,11 +135,11 @@ export function LinkEditForm({
                         size="sm"
                         onClick={remove}
                     >
-                        Xóa liên kết
+                        {t('common.remove_link')}
                     </Button>
                 )}
                 <Button type="button" size="sm" onClick={apply}>
-                    Áp dụng
+                    {t('common.apply')}
                 </Button>
             </div>
         </div>

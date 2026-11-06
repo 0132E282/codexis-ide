@@ -10,6 +10,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { t } from '@/lib/i18n';
 
 type Ask = { title: string; description: string; action: string };
 
@@ -50,7 +51,7 @@ export function useConfirm(): {
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel>Hủy</AlertDialogCancel>
+                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                     <AlertDialogAction onClick={() => settle(true)}>
                         {ask?.action}
                     </AlertDialogAction>

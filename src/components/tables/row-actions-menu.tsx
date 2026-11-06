@@ -10,6 +10,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { t } from '@/lib/i18n';
 
 export type RowActionItem = {
     label: string;
@@ -23,7 +24,7 @@ export type RowActionItem = {
 /** * Three-dots menu for a table row's actions, aligned to the end of the cell. */
 export function RowActionsMenu({
     items,
-    triggerLabel = 'Mở menu hành động',
+    triggerLabel = t('row_actions_menu.open_actions_menu'),
     triggerClassName = 'size-8',
     iconClassName = 'size-4',
     trigger,

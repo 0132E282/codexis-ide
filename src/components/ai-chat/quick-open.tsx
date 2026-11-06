@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileIcon } from '@/components/ai-chat/file-icon';
 import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -8,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 const MAX_RESULTS = 50;
 
@@ -103,14 +110,16 @@ export function QuickOpen({
                 showCloseButton={false}
                 className="top-[20%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
             >
-                <DialogTitle className="sr-only">Tìm tệp</DialogTitle>
+                <DialogTitle className="sr-only">
+                    {t('quick_open.find_file')}
+                </DialogTitle>
                 <DialogDescription className="sr-only">
-                    Gõ tên tệp, dùng mũi tên và Enter để mở.
+                    {t('quick_open.type_afile_name')}
                 </DialogDescription>
                 <Input
                     autoFocus
                     value={query}
-                    placeholder="Tìm tệp theo tên…"
+                    placeholder={t('quick_open.find_file_by_name')}
                     autoComplete="off"
                     onChange={(event) => {
                         setQuery(event.target.value);
@@ -138,12 +147,12 @@ export function QuickOpen({
                 <ul
                     ref={list}
                     role="listbox"
-                    aria-label="Tệp"
-                    className="max-h-80 overflow-y-auto py-1"
+                    aria-label={t('common.files')}
+                    className="max-h-[min(32rem,60vh)] overflow-y-auto py-1"
                 >
                     {results.length === 0 && (
                         <li className="px-4 py-3 text-sm text-muted-foreground">
-                            Không có tệp nào khớp.
+                            {t('quick_open.no_matching_files')}
                         </li>
                     )}
                     {results.map((path, position) => {
@@ -151,24 +160,41 @@ export function QuickOpen({
                         const dir = path.split('/').slice(0, -1).join('/');
 
                         return (
-                            <li
-                                key={path}
-                                role="option"
-                                aria-selected={position === index}
-                                onMouseEnter={() => setIndex(position)}
-                                onClick={() => pick(path)}
-                                className={cn(
-                                    'flex cursor-pointer items-center gap-2 px-4 py-1.5 text-sm',
-                                    position === index &&
-                                        'bg-accent text-accent-foreground',
-                                )}
-                            >
-                                <FileIcon name={name} className="size-4" />
-                                <span className="truncate">{name}</span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                    {dir}
-                                </span>
-                            </li>
+                            <ContextMenu key={path}>
+                                <ContextMenuTrigger asChild>
+                                    <li
+                                        role="option"
+                                        aria-selected={position === index}
+                                        onMouseEnter={() => setIndex(position)}
+                                        onClick={() => pick(path)}
+                                        className={cn(
+                                            'flex cursor-pointer items-center gap-2 px-4 py-1.5 text-sm',
+                                            position === index &&
+                                                'bg-accent text-accent-foreground',
+                                        )}
+                                    >
+                                        <FileIcon
+                                            name={name}
+                                            className="size-4"
+                                        />
+                                        <span className="truncate">{name}</span>
+                                        <span className="truncate text-xs text-muted-foreground">
+                                            {dir}
+                                        </span>
+                                    </li>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent>
+                                    <ContextMenuItem
+                                        onSelect={() =>
+                                            void navigator.clipboard.writeText(
+                                                name,
+                                            )
+                                        }
+                                    >
+                                        {t('common.copy_file_name')}
+                                    </ContextMenuItem>
+                                </ContextMenuContent>
+                            </ContextMenu>
                         );
                     })}
                 </ul>

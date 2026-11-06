@@ -20,8 +20,9 @@ import {
     type EnvVar,
     type Project,
 } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
-const UNSUPPORTED = 'Chưa hỗ trợ trong IDE này.';
+const UNSUPPORTED = 'new_project_dialog.not_supported_in_this';
 
 /** Dialog "Dự án mới": only the Local tab works, the others say so. Creates the project through the backend and reports it. */
 export function NewProjectDialog({
@@ -122,10 +123,10 @@ export function NewProjectDialog({
             <DialogContent className="gap-3 p-0 sm:max-w-2xl">
                 <DialogHeader className="px-4 pt-4">
                     <DialogTitle className="text-base">
-                        Môi trường mới
+                        {t('new_project_dialog.new_environment')}
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                        Tạo một dự án để mở trong IDE.
+                        {t('new_project_dialog.create_aproject_to')}
                     </DialogDescription>
                 </DialogHeader>
                 <Tabs value={tab} onValueChange={setTab} className="gap-3 px-4">
@@ -137,12 +138,14 @@ export function NewProjectDialog({
                     </TabsList>
                     <TabsContent value="local" className="grid gap-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="project-name">Tên</Label>
+                            <Label htmlFor="project-name">
+                                {t('common.name')}
+                            </Label>
                             <Input
                                 id="project-name"
                                 value={name}
                                 maxLength={100}
-                                placeholder="Ứng dụng của tôi"
+                                placeholder={t('new_project_dialog.my_app')}
                                 onChange={(event) =>
                                     setName(event.target.value)
                                 }
@@ -151,9 +154,9 @@ export function NewProjectDialog({
                         <div className="grid gap-2">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium">
-                                    Thư mục{' '}
+                                    {t('new_project_dialog.folders')}{' '}
                                     <span className="font-normal text-muted-foreground">
-                                        (tùy chọn)
+                                        {t('new_project_dialog.optional')}
                                     </span>
                                 </span>
                                 <Button
@@ -163,13 +166,14 @@ export function NewProjectDialog({
                                     onClick={() => void addFolders()}
                                 >
                                     <Plus aria-hidden="true" />
-                                    Thêm
+                                    {t('common.add')}
                                 </Button>
                             </div>
                             {folders.length === 0 ? (
                                 <p className="rounded-sm border border-dashed px-3 py-3 text-sm text-muted-foreground">
-                                    Chọn thư mục mà dự án sẽ mở. Thư mục đầu
-                                    tiên là thư mục gốc.
+                                    {t(
+                                        'new_project_dialog.choose_the_folders_the',
+                                    )}
                                 </p>
                             ) : (
                                 <ul className="grid gap-1">
@@ -188,7 +192,12 @@ export function NewProjectDialog({
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon-xs"
-                                                aria-label={`Bỏ thư mục ${folder}`}
+                                                aria-label={t(
+                                                    'new_project_dialog.remove_folder_name',
+                                                    {
+                                                        name: folder,
+                                                    },
+                                                )}
                                                 onClick={() =>
                                                     setFolders((current) =>
                                                         current.filter(
@@ -216,12 +225,19 @@ export function NewProjectDialog({
                             >
                                 <span className="min-w-0 flex-1">
                                     <span className="block text-sm font-medium">
-                                        Biến môi trường
+                                        {t(
+                                            'new_project_dialog.environment_variables',
+                                        )}
                                     </span>
                                     <span className="block text-xs text-muted-foreground">
                                         {env.length === 0
-                                            ? 'Không có'
-                                            : `${env.length} biến`}
+                                            ? t('new_project_dialog.none')
+                                            : t(
+                                                  'new_project_dialog.count_variables',
+                                                  {
+                                                      count: env.length,
+                                                  },
+                                              )}
                                     </span>
                                 </span>
                                 <ChevronRight
@@ -238,8 +254,12 @@ export function NewProjectDialog({
                                         >
                                             <Input
                                                 value={entry.key}
-                                                aria-label="Tên biến"
-                                                placeholder="TEN_BIEN"
+                                                aria-label={t(
+                                                    'new_project_dialog.variable_name',
+                                                )}
+                                                placeholder={t(
+                                                    'new_project_dialog.var_name',
+                                                )}
                                                 onChange={(event) =>
                                                     updateEnv(index, {
                                                         key: event.target.value,
@@ -248,8 +268,10 @@ export function NewProjectDialog({
                                             />
                                             <Input
                                                 value={entry.value}
-                                                aria-label="Giá trị"
-                                                placeholder="giá trị"
+                                                aria-label={t('common.value')}
+                                                placeholder={t(
+                                                    'new_project_dialog.value',
+                                                )}
                                                 autoComplete="off"
                                                 onChange={(event) =>
                                                     updateEnv(index, {
@@ -262,7 +284,9 @@ export function NewProjectDialog({
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon-sm"
-                                                aria-label="Xóa biến"
+                                                aria-label={t(
+                                                    'new_project_dialog.delete_variable',
+                                                )}
                                                 onClick={() =>
                                                     setEnv((current) =>
                                                         current.filter(
@@ -278,9 +302,9 @@ export function NewProjectDialog({
                                     ))}
                                     {envProblem && (
                                         <p className="text-xs text-destructive">
-                                            Tên biến chỉ gồm chữ, số, dấu gạch
-                                            dưới, không bắt đầu bằng số và không
-                                            trùng nhau.
+                                            {t(
+                                                'new_project_dialog.variable_names_may_only',
+                                            )}
                                         </p>
                                     )}
                                     <Button
@@ -296,7 +320,7 @@ export function NewProjectDialog({
                                         }
                                     >
                                         <Plus aria-hidden="true" />
-                                        Thêm biến
+                                        {t('new_project_dialog.add_variable')}
                                     </Button>
                                 </div>
                             )}
@@ -305,7 +329,7 @@ export function NewProjectDialog({
                     {['cloud', 'ssh', 'remote'].map((tab) => (
                         <TabsContent key={tab} value={tab}>
                             <p className="rounded-sm border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-                                {UNSUPPORTED}
+                                {t(UNSUPPORTED)}
                             </p>
                         </TabsContent>
                     ))}
@@ -321,14 +345,14 @@ export function NewProjectDialog({
                         variant="ghost"
                         onClick={() => changeOpen(false)}
                     >
-                        Hủy
+                        {t('common.cancel')}
                     </Button>
                     <Button
                         type="button"
                         disabled={tab !== 'local' || !valid || saving}
                         onClick={() => void create()}
                     >
-                        Tạo
+                        {t('new_project_dialog.create')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

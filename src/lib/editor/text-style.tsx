@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import { FONT_FAMILIES, FONT_SIZES } from './constants';
 import { TextStyleExtended } from './font-family';
+import { t } from '@/lib/i18n';
 
 export { TextStyleExtended };
 
@@ -32,7 +33,7 @@ export function TextStyleToolbar({ editor }: { editor: Editor }) {
             >
                 {FONT_FAMILIES.map(({ label, value }) => (
                     <option key={label} value={value}>
-                        {label}
+                        {t(label)}
                     </option>
                 ))}
             </select>
@@ -52,7 +53,7 @@ export function TextStyleToolbar({ editor }: { editor: Editor }) {
                 }}
                 className="h-8 rounded-md border border-input bg-transparent px-1.5 text-sm"
             >
-                <option value="">Cỡ chữ</option>
+                <option value="">{t('text_style.font_size')}</option>
                 {FONT_SIZES.map((size) => (
                     <option key={size} value={size}>
                         {size}

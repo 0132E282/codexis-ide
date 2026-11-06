@@ -25,6 +25,7 @@ pnpm build            # chỉ build frontend
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # eslint . (lint:fix để tự sửa)
 pnpm format           # prettier --write . (format:check để kiểm tra)
+pnpm test:e2e         # Playwright (thư mục e2e/, chạy trên vite, không có backend Tauri)
 cargo fmt --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -44,6 +45,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Giữ ổn định tên và shape (tham số, kiểu trả về) của Tauri command: nếu đổi phía Rust (`commands.rs`, `lib.rs`) thì phải đổi `src/lib/api.ts` tương ứng, và ngược lại.
 - `.agents/storage` bị git-ignore (cùng `node_modules`, `dist`, `src-tauri/target`, `src-tauri/gen`); không commit nội dung trong đó.
 - Dữ liệu thật (workspace/project của người dùng) mặc định chỉ đọc; không ghi/xoá khi chưa được yêu cầu.
+- Test giao diện/hành vi trên trình duyệt: luôn dùng Playwright (MCP `playwright` ở `.mcp.json`, hoặc `pnpm test:e2e` cho test lưu lại ở `e2e/`); không dùng Claude in Chrome (đã chặn ở `.claude/settings.json`). Trình duyệt chạy vite nên không có lệnh Tauri: phần cần backend thì kiểm bằng `cargo test`.
 - Không đưa secret vào repo.
 
 ## Vấn đề đã biết

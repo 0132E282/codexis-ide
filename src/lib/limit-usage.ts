@@ -39,6 +39,6 @@ export const limitColor = (percent: number): string =>
           : 'bg-green-500';
 
 export const LIMIT_LABELS: Record<string, string> = {
-    'Current session': 'Phiên',
-    'Current week (all models)': 'Tuần',
+    'Current session': 'limit_usage.session',
+    'Current week (all models)': 'limit_usage.week',
 };

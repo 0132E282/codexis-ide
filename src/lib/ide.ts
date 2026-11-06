@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { t } from '@/lib/i18n';
 
 export type FileContent = { content: string; hash: string };
 export type EnvVar = { key: string; value: string };
@@ -31,6 +32,13 @@ export type Step =
           output: string | null;
           status: 'running' | 'ok' | 'error';
       };
+/** A file with uncommitted changes in a git workspace. */
+export type ChangedFile = {
+    path: string;
+    status: string;
+    added: number | null;
+    removed: number | null;
+};
 /** A sub-agent the AI started in the current turn. */
 export type Subagent = { id: string; label: string; done: boolean };
 /** One saved chat turn. */
@@ -40,6 +48,8 @@ export type ChatTurnRecord = {
     prompt: string;
     answer: string;
     error: string | null;
+    /** What the AI did during the turn, as JSON of `Step[]`. */
+    steps?: string | null;
 };
 /** Saved chat of the open workspace; `workspace` is the key to hand back when saving. */
 export type ChatHistory = {
@@ -138,6 +148,23 @@ export const ide = {
             extraRoots,
             worktree,
         }),
+    /** Files with uncommitted changes in the workspace (empty when it is not a git repository). */
+    localChanges: async (root?: string) =>
+        (
+            await invoke<{ git: boolean; files: ChangedFile[] }>(
+                'local_changes',
+                { root },
+            )
+        ).files,
+    /** Stops a running turn: the CLI is ended and the turn finishes with what it had. */
+    agentStop: (runId: string) => invoke<void>('agent_stop', { runId }),
+    /** Answers a permission question of a running turn ("Hỏi từng việc"): `allow` lets the tool run with `input`, otherwise it is denied. */
+    agentPermission: (
+        runId: string,
+        requestId: string,
+        allow: boolean,
+        input: unknown,
+    ) => invoke<void>('agent_permission', { runId, requestId, allow, input }),
     /** Saves a pasted image or file in the app cache; resolves to the path to put in the message as `@path`. */
     saveAttachment: async (file: File) =>
         invoke<string>(
@@ -190,6 +217,7 @@ export type AgentEvent = {
         | 'subtext'
         | 'subagent'
         | 'subagentdone'
+        | 'permission'
         | 'error'
         | 'done';
     text: string;
@@ -245,5 +273,5 @@ export async function pickFiles(): Promise<string[]> {
 
 /** Tauri rejects with the Rust error string. */
 export function errorText(error: unknown): string {
-    return typeof error === 'string' ? error : 'Có lỗi xảy ra.';
+    return typeof error === 'string' ? error : t('common.something_went_wrong');
 }

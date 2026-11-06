@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { t } from '@/lib/i18n';
 
 /** Chat settings ("Cài đặt chat"): persona and advanced options. */
 export type ChatSettings = {
@@ -66,7 +67,7 @@ export const ideSettings = {
 /** Shrinks a picked image to a small square PNG data URL that fits the saved-size limit. */
 export async function avatarDataUrl(file: File): Promise<string> {
     if (!file.type.startsWith('image/')) {
-        throw new Error('Tệp không phải ảnh.');
+        throw new Error(t('ide_settings.the_file_is_not'));
     }
 
     const bitmap = await createImageBitmap(file);
@@ -79,7 +80,7 @@ export async function avatarDataUrl(file: File): Promise<string> {
     const context = canvas.getContext('2d');
 
     if (context === null) {
-        throw new Error('Không xử lý được ảnh.');
+        throw new Error(t('ide_settings.could_not_process_the'));
     }
 
     // Cover-crop to a square.

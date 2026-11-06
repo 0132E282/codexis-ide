@@ -20,6 +20,7 @@ import {
 import type { FileViewerValue } from '@/components/file-viewer';
 import { RowActionsMenu } from '@/components/tables/row-actions-menu';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type AttachmentSource = 'system' | 'manager';
 
@@ -113,7 +114,7 @@ function AttachmentBox({
 
     const handleRename = () => {
         const nextDisplayName = window.prompt(
-            'Đổi tên ảnh (dùng chung làm alt)',
+            t('attachment_field.rename_image_also_used'),
             getFileName(file),
         );
 
@@ -145,32 +146,32 @@ function AttachmentBox({
         [
             {
                 key: 'upload-system',
-                label: 'Tải lên từ hệ thống',
+                label: t('common.upload_from_device'),
                 icon: Upload,
                 show: showUploadOptions,
             },
             {
                 key: 'upload-manager',
-                label: 'Thư viện file',
+                label: t('common.file_library'),
                 icon: FolderOpen,
                 show: showUploadOptions,
             },
             {
                 key: 'rename',
-                label: 'Đổi tên ảnh',
+                label: t('attachment_field.rename_image'),
                 icon: PencilLine,
                 show: !!file,
             },
             {
                 key: 'copy-url',
-                label: 'Sao chép URL',
+                label: t('attachment_field.copy_url'),
                 icon: Copy,
                 show: !!file,
                 disabled: !url,
             },
             {
                 key: 'delete',
-                label: 'Xóa',
+                label: t('common.delete'),
                 icon: Trash2,
                 show: !!file,
                 destructive: true,
@@ -233,7 +234,7 @@ function AttachmentBox({
                     <div className="flex flex-col items-center gap-1 text-muted-foreground">
                         <Upload className="size-6" />
                         <span className="px-2 text-center text-xs">
-                            Kéo thả hoặc nhấn để chọn
+                            {t('attachment_field.drag_and_drop_or')}
                         </span>
                     </div>
                 )}

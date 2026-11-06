@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Choices } from '@/lib/choices-parser';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 /** * Wiring from the chat thread: only the last answer is interactive, a pick is sent as the next user message. */
 export type ChoiceHandlers = {
@@ -96,7 +97,7 @@ export function ChoiceCard({
                                 {option.label}
                                 {option.recommended && (
                                     <span className="ml-1.5 font-normal text-muted-foreground">
-                                        (Khuyến nghị)
+                                        {t('choice_card.recommended')}
                                     </span>
                                 )}
                             </span>
@@ -131,8 +132,8 @@ export function ChoiceCard({
                     <Input
                         value={other}
                         maxLength={2000}
-                        placeholder="Khác…"
-                        aria-label="Câu trả lời khác"
+                        placeholder={t('choice_card.other')}
+                        aria-label={t('choice_card.other_answer')}
                         onChange={(event) => setOther(event.target.value)}
                         onKeyDown={(event) => {
                             if (
@@ -152,7 +153,7 @@ export function ChoiceCard({
                         className="h-8 text-muted-foreground"
                         onClick={() => setDismissed(true)}
                     >
-                        Bỏ qua
+                        {t('choice_card.skip')}
                     </Button>
                 </div>
             ) : (

@@ -14,6 +14,7 @@ import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { useWindowButtonsHover } from '@/hooks/use-window-buttons-hover';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { errorText, ide } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 // * The sidebar is either this wide or folded away; only the edge button changes it.
 const SIDEBAR_OPEN_WIDTH = 256;
@@ -172,7 +173,7 @@ export default function App() {
                 <main className="flex min-w-0 flex-1 flex-col overflow-clip">
                     {!showPanel && (
                         <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                            Chọn một dự án để bắt đầu.
+                            {t('app.pick_aproject_to')}
                         </div>
                     )}
                     {panes.length > 0 && (
@@ -224,7 +225,7 @@ export default function App() {
                                 >
                                     <ResizeHandle
                                         horizontal
-                                        label="Đổi chiều cao terminal"
+                                        label={t('app.resize_terminal_height')}
                                         {...terminalHeight.handleProps}
                                     />
                                     <ActivityTerminal

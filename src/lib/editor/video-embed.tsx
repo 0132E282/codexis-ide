@@ -9,6 +9,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { t } from '@/lib/i18n';
 
 declare module '@tiptap/core' {
     interface Commands<ReturnType> {
@@ -130,7 +131,7 @@ export function VideoToolbar({ editor }: { editor: Editor }) {
                     variant="ghost"
                     size="sm"
                     className="h-8 min-w-8 px-1.5"
-                    title="Chèn video"
+                    title={t('video_embed.insert_video')}
                 >
                     <Video className="size-3.5" />
                 </Button>
@@ -151,7 +152,7 @@ export function VideoToolbar({ editor }: { editor: Editor }) {
                     />
                     <div className="flex justify-end">
                         <Button type="button" size="sm" onClick={insert}>
-                            Chèn
+                            {t('common.insert')}
                         </Button>
                     </div>
                 </div>

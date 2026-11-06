@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -158,7 +159,10 @@ export function useAiEdit({
             }
         } catch (caught) {
             toast.error(
-                requestErrorMessage(caught, 'Không xử lý được thay đổi này.'),
+                requestErrorMessage(
+                    caught,
+                    t('use_ai_edit.could_not_process_this'),
+                ),
             );
         } finally {
             setDeciding(false);

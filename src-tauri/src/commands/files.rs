@@ -69,7 +69,7 @@ pub fn workspace_read(
 ) -> Result<FileReply, String> {
     let content = state
         .workspace_for(root.as_deref())?
-        .read(&path)
+        .read_for_viewer(&path)
         .map_err(|error| error.to_string())?;
     let hash = crate::workspace::hash(&content);
 
@@ -116,11 +116,11 @@ pub fn local_put_file(
 ) -> Result<String, String> {
     let workspace = state.workspace_for(root.as_deref())?;
     let current = workspace
-        .current_hash(&path)
+        .current_hash_for_viewer(&path)
         .map_err(|error| error.to_string())?;
 
     workspace
-        .write(&path, &content, current.as_deref())
+        .write_for_viewer(&path, &content, current.as_deref())
         .map(|written| written.after)
         .map_err(|error| error.to_string())
 }
@@ -138,4 +138,18 @@ pub fn open_in_vscode(
         line.unwrap_or(1),
     )
     .map_err(|error| error.to_string())
+}
+
+/// Renames a file or folder in place (the person's action in the file tree) and returns its new path.
+#[tauri::command]
+pub fn workspace_rename(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+    new_name: String,
+) -> Result<String, String> {
+    state
+        .workspace_for(root.as_deref())?
+        .rename_for_viewer(&path, &new_name)
+        .map_err(|error| error.to_string())
 }

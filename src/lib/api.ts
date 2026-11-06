@@ -4,6 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { AxiosError } from 'axios';
 import { mediaMime, readMedia } from '@/lib/media-file';
+import { t } from '@/lib/i18n';
 
 type Reply<T> = Promise<{ data: T }>;
 type Params = { params?: Record<string, unknown> };
@@ -34,14 +35,16 @@ async function call<T>(
         return { data: await invoke<T>(command, args) };
     } catch (caught) {
         throw failure(
-            typeof caught === 'string' ? caught : 'Có lỗi xảy ra.',
+            typeof caught === 'string'
+                ? caught
+                : t('common.something_went_wrong'),
             422,
         );
     }
 }
 
 function unwired(method: string, url: string): never {
-    throw failure(`Chức năng này chưa có trong IDE (${method} ${url}).`, 501);
+    throw failure(t('api.this_feature_is_not', { method, url }), 501);
 }
 
 function path(url: string): string {
@@ -67,7 +70,7 @@ export const api = {
                             throw failure(
                                 typeof caught === 'string'
                                     ? caught
-                                    : 'Có lỗi xảy ra.',
+                                    : t('common.something_went_wrong'),
                                 422,
                             );
                         });
@@ -107,6 +110,12 @@ export const api = {
             case '/ai-chat/local/commit':
                 return call('local_commit', {
                     message: data?.message,
+                    root: rootOf(data),
+                });
+            case '/ai-chat/local/rename':
+                return call('workspace_rename', {
+                    path: data?.path,
+                    newName: data?.newName,
                     root: rootOf(data),
                 });
             case '/ai-chat/local/commit-message':

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@/components/shell/chat/attachment';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide } from '@/lib/ide';
+import { t } from '@/lib/i18n';
 
 function releasePreview(attachment: Attachment) {
     if (attachment.preview !== null) {
@@ -29,7 +30,7 @@ export function useAttachments(
                         ...current,
                         {
                             id: `attachment-${attachmentCounter.current++}`,
-                            name: file.name || 'tệp',
+                            name: file.name || t('use_attachments.file'),
                             path,
                             preview: file.type.startsWith('image/')
                                 ? URL.createObjectURL(file)

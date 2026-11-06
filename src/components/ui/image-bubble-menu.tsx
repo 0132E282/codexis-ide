@@ -18,20 +18,33 @@ import {
 } from '@/components/ui/popover';
 import { Toggle } from '@/components/ui/toggle';
 import type { ImageAlign } from '@/lib/editor';
+import { t } from '@/lib/i18n';
 
 const ALIGN_OPTIONS: {
     value: ImageAlign;
     icon: typeof AlignLeft;
     label: string;
 }[] = [
-    { value: 'left', icon: AlignLeft, label: 'Trái (bao chữ)' },
-    { value: 'center', icon: AlignCenter, label: 'Giữa' },
-    { value: 'right', icon: AlignRight, label: 'Phải (bao chữ)' },
-    { value: 'wide', icon: StretchHorizontal, label: 'Full chiều rộng' },
+    {
+        value: 'left',
+        icon: AlignLeft,
+        label: 'image_bubble_menu.left_wrap_text',
+    },
+    { value: 'center', icon: AlignCenter, label: 'image_bubble_menu.center' },
+    {
+        value: 'right',
+        icon: AlignRight,
+        label: 'image_bubble_menu.right_wrap_text',
+    },
+    {
+        value: 'wide',
+        icon: StretchHorizontal,
+        label: 'image_bubble_menu.full_width',
+    },
 ];
 
 const WIDTHS = [
-    { label: 'Gốc', value: '' },
+    { label: 'image_bubble_menu.original', value: '' },
     { label: '25%', value: '25%' },
     { label: '50%', value: '50%' },
     { label: '75%', value: '75%' },
@@ -76,7 +89,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                     size="sm"
                     pressed={attrs.align === value}
                     onPressedChange={() => updateAttrs({ align: value })}
-                    title={label}
+                    title={t(label)}
                 >
                     <Icon className="size-3.5" />
                 </Toggle>
@@ -96,7 +109,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                     <Toggle
                         size="sm"
                         pressed={altOpen}
-                        title="Văn bản thay thế (ALT)"
+                        title={t('image_bubble_menu.alt_text_alt')}
                     >
                         <Type className="size-3.5" />
                     </Toggle>
@@ -105,7 +118,9 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                     <Input
                         value={altText}
                         onChange={(event) => setAltText(event.target.value)}
-                        placeholder="Mô tả ảnh (dùng cho SEO/trợ năng)"
+                        placeholder={t(
+                            'image_bubble_menu.image_description_for_seo',
+                        )}
                         autoFocus
                     />
                     <Button
@@ -117,7 +132,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                             setAltOpen(false);
                         }}
                     >
-                        Lưu
+                        {t('common.save')}
                     </Button>
                 </PopoverContent>
             </Popover>
@@ -136,7 +151,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                     <Toggle
                         size="sm"
                         pressed={!!attrs.href}
-                        title="Liên kết ảnh tới URL"
+                        title={t('image_bubble_menu.link_image_to_url')}
                     >
                         <LinkIcon className="size-3.5" />
                     </Toggle>
@@ -159,7 +174,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                                     setLinkOpen(false);
                                 }}
                             >
-                                Xóa liên kết
+                                {t('common.remove_link')}
                             </Button>
                         )}
                         <Button
@@ -170,7 +185,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                                 setLinkOpen(false);
                             }}
                         >
-                            Áp dụng
+                            {t('common.apply')}
                         </Button>
                     </div>
                 </PopoverContent>
@@ -182,7 +197,7 @@ export function ImageBubbleMenu({ editor }: { editor: Editor }) {
                     updateAttrs({ width: event.target.value || null })
                 }
                 className="border-input h-8 rounded-md border bg-transparent px-1.5 text-xs"
-                title="Kích thước"
+                title={t('image_bubble_menu.size')}
             >
                 {WIDTHS.map((width) => (
                     <option key={width.label} value={width.value}>

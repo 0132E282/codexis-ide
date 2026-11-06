@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/popover';
 import { Toggle } from '@/components/ui/toggle';
 import { LinkEditForm } from './link-edit-form';
+import { t } from '@/lib/i18n';
 
 /** * Insert only: disabled inside an existing link, which LinkBubbleMenu edits. */
 export function LinkPopover({ editor }: { editor: Editor }) {
@@ -24,10 +25,10 @@ export function LinkPopover({ editor }: { editor: Editor }) {
                     disabled={disabled}
                     title={
                         onExistingLink
-                            ? 'Nhấp vào liên kết để sửa'
+                            ? t('link_popover.click_the_link_to')
                             : disabled
-                              ? 'Bôi đen văn bản trước để gắn liên kết'
-                              : 'Chèn liên kết'
+                              ? t('link_popover.select_text_first_to')
+                              : t('link_popover.insert_link')
                     }
                 >
                     <LinkIcon className="size-3.5" />

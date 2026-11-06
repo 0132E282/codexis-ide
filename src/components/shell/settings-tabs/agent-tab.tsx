@@ -3,14 +3,18 @@ import { SourceCell, ToolTable, type ToolColumn } from './tool-table';
 
 const columns: ToolColumn<ToolEntry>[] = [
     {
-        header: 'Tên',
+        header: 'common.name',
         cell: (row) => <span className="font-medium">{row.name}</span>,
     },
-    { header: 'Mô tả', grow: true, cell: (row) => row.description || '—' },
-    { header: 'Model', cell: (row) => row.model ?? '—' },
-    { header: 'Công cụ', cell: (row) => row.tools ?? '—' },
     {
-        header: 'Nguồn',
+        header: 'common.description',
+        grow: true,
+        cell: (row) => row.description || '—',
+    },
+    { header: 'Model', cell: (row) => row.model ?? '—' },
+    { header: 'agent_tab.tools', cell: (row) => row.tools ?? '—' },
+    {
+        header: 'common.source',
         clamp: false,
         cell: (row, detail) => (
             <SourceCell
@@ -31,7 +35,7 @@ export function AgentTab() {
             load={ideTools.agents}
             columns={columns}
             name={name}
-            emptyText="Chưa có agent nào được cấu hình."
+            emptyText={'agent_tab.no_agents_configured_yet'}
         />
     );
 }

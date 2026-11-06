@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { ALIGN_OPTIONS } from './constants';
+import { t } from '@/lib/i18n';
 
 export const TextAlign = TextAlignExtension.configure({
     types: ['heading', 'paragraph'],
@@ -48,7 +49,7 @@ export function AlignToolbar({ editor }: { editor: Editor }) {
                         }
                     >
                         <Icon className="size-3.5" />
-                        {label}
+                        {t(label)}
                     </DropdownMenuItem>
                 ))}
             </DropdownMenuContent>

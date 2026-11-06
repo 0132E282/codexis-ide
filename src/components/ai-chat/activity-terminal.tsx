@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ide, onTerminalData, onTerminalExit } from '@/lib/ide';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 const THEME = {
     dark: { background: '#09090b', foreground: '#e4e4e7' },
@@ -96,7 +97,9 @@ function ShellTerminal({
                 }),
                 onTerminalExit((id) => {
                     if (id === sessionId) {
-                        instance.writeln('\r\n\x1b[90m[Shell đã thoát]\x1b[0m');
+                        instance.writeln(
+                            `\r\n\x1b[90m[${t('activity_terminal.shell_exited')}]\x1b[0m`,
+                        );
                         ended.current();
                     }
                 }),
@@ -269,7 +272,9 @@ export function ActivityTerminal({
                             </button>
                             <button
                                 type="button"
-                                aria-label={`Đóng ${terminal.title}`}
+                                aria-label={t('activity_terminal.close_title', {
+                                    title: terminal.title,
+                                })}
                                 onClick={() => remove(terminal.id)}
                                 className="rounded-sm p-1 hover:bg-zinc-300 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:hover:bg-zinc-700"
                             >
@@ -283,7 +288,7 @@ export function ActivityTerminal({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Thêm terminal"
+                        aria-label={t('activity_terminal.add_terminal')}
                         onClick={add}
                         className="size-7 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     >
@@ -293,7 +298,7 @@ export function ActivityTerminal({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Chia đôi terminal"
+                        aria-label={t('activity_terminal.split_terminal')}
                         aria-pressed={split !== null}
                         onClick={divide}
                         className={cn(
@@ -307,7 +312,7 @@ export function ActivityTerminal({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label="Đóng terminal"
+                        aria-label={t('activity_terminal.close_terminal')}
                         onClick={onClose}
                         className="size-7 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     >

@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { CommitActions } from '@/components/ai-chat/commit-box';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import {
@@ -22,14 +23,16 @@ export function ChangesPanel({
 }) {
     return (
         <section
-            aria-label="Thay đổi so với git"
+            aria-label={t('changes_panel.changes_against_git')}
             className="@container relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden"
         >
             <div className="flex h-12 items-center gap-2 border-b px-3 text-sm font-medium">
-                Thay đổi
+                {t('common.changes')}
                 {(localChanges.files ?? []).length > 0 && (
                     <span className="text-muted-foreground tabular-nums">
-                        {(localChanges.files ?? []).length} tệp
+                        {t('changes_panel.count_files', {
+                            count: (localChanges.files ?? []).length,
+                        })}
                     </span>
                 )}
                 <CommitActions

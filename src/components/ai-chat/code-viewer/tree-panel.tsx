@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { Check, ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
@@ -75,12 +76,12 @@ export function TreePanel({
 }) {
     return (
         <aside
-            aria-label={`Cây thư mục ${sourceName}`}
+            aria-label={t('tree_panel.file_tree_name', { name: sourceName })}
             style={{ width: treeWidth.width }}
             className="relative ml-auto hidden min-h-0 max-w-full shrink-0 flex-col border-l md:flex"
         >
             <ResizeHandle
-                label="Đổi độ rộng cây thư mục"
+                label={t('tree_panel.resize_file_tree')}
                 {...treeWidth.handleProps}
             />
             {(repos.length > 1 || headerActions) && (
@@ -90,7 +91,9 @@ export function TreePanel({
                             <DropdownMenuTrigger asChild>
                                 <button
                                     type="button"
-                                    aria-label="Chọn dự án để xem tệp"
+                                    aria-label={t(
+                                        'tree_panel.choose_aproject_to',
+                                    )}
                                     className="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                 >
                                     <span className="truncate">
@@ -111,7 +114,12 @@ export function TreePanel({
                                     >
                                         <span className="truncate">
                                             {item.startsWith('local:')
-                                                ? `Máy local · ${item.slice(6)}`
+                                                ? t(
+                                                      'common.local_machine_name',
+                                                      {
+                                                          name: item.slice(6),
+                                                      },
+                                                  )
                                                 : item}
                                         </span>
                                         {item === repo && (
@@ -137,10 +145,10 @@ export function TreePanel({
                 >
                     <TabsList className="h-8 w-full">
                         <TabsTrigger value="files" className="text-xs">
-                            Tệp
+                            {t('common.files')}
                         </TabsTrigger>
                         <TabsTrigger value="changes" className="text-xs">
-                            Thay đổi
+                            {t('common.changes')}
                             {changedFileCount > 0 && (
                                 <span className="ml-1 tabular-nums">
                                     {changedFileCount}
@@ -151,14 +159,14 @@ export function TreePanel({
                 </Tabs>
             )}
             <nav
-                aria-label="Cây thư mục"
+                aria-label={t('tree_panel.file_tree')}
                 className="flex min-h-0 flex-1 flex-col gap-2 p-2"
             >
                 <Input
                     value={filter}
                     onChange={(event) => onFilterChange(event.target.value)}
-                    aria-label="Lọc tệp"
-                    placeholder="Lọc tệp..."
+                    aria-label={t('tree_panel.filter_files')}
+                    placeholder={t('tree_panel.filter_files2')}
                     className="h-8"
                 />
                 <div className="min-h-0 flex-1 overflow-y-auto">
@@ -173,7 +181,7 @@ export function TreePanel({
                         </p>
                     ) : tree.length === 0 ? (
                         <p className="px-2 text-sm text-muted-foreground">
-                            Không có tệp nào.
+                            {t('tree_panel.no_files')}
                         </p>
                     ) : (
                         <TreeItems

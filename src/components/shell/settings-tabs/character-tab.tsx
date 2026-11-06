@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { t } from '@/lib/i18n';
 import {
     avatarDataUrl,
     MAX_INSTRUCTIONS_LENGTH,
@@ -55,7 +56,7 @@ export function CharacterTab({
             setAvatarError(
                 caught instanceof Error
                     ? caught.message
-                    : 'Không cập nhật được ảnh.',
+                    : t('character_tab.could_not_update_the'),
             );
         }
     };
@@ -66,7 +67,7 @@ export function CharacterTab({
         }
 
         const utterance = new SpeechSynthesisUtterance(
-            'Xin chào, tôi là trợ lý.',
+            t('character_tab.hello_iam_your'),
         );
         const voice = window.speechSynthesis
             .getVoices()
@@ -83,15 +84,15 @@ export function CharacterTab({
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-                <Label>Ảnh đại diện trợ lý</Label>
+                <Label>{t('character_tab.assistant_picture')}</Label>
                 <div className="flex items-center gap-3">
                     <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted text-xs text-muted-foreground">
                         {settings.avatar === '' ? (
-                            'Mặc định'
+                            t('common.default')
                         ) : (
                             <img
                                 src={settings.avatar}
-                                alt="Ảnh đại diện trợ lý"
+                                alt={t('character_tab.assistant_picture')}
                                 className="size-full object-cover"
                             />
                         )}
@@ -101,7 +102,7 @@ export function CharacterTab({
                         type="file"
                         accept="image/png,image/jpeg,image/webp,image/gif"
                         className="sr-only"
-                        aria-label="Chọn ảnh đại diện"
+                        aria-label={t('character_tab.choose_apicture')}
                         tabIndex={-1}
                         onChange={(event) => {
                             const file = event.target.files?.[0];
@@ -120,7 +121,7 @@ export function CharacterTab({
                         onClick={() => fileInput.current?.click()}
                     >
                         <Upload aria-hidden="true" />
-                        Tải ảnh lên
+                        {t('character_tab.upload_picture')}
                     </Button>
                     {settings.avatar !== '' && (
                         <Button
@@ -133,7 +134,7 @@ export function CharacterTab({
                             }
                         >
                             <Trash2 aria-hidden="true" />
-                            Xoá ảnh
+                            {t('character_tab.remove_picture')}
                         </Button>
                     )}
                 </div>
@@ -145,7 +146,9 @@ export function CharacterTab({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="settings-user-name">Tên AI gọi bạn</Label>
+                    <Label htmlFor="settings-user-name">
+                        {t('character_tab.name_the_ai_calls')}
+                    </Label>
                     <Input
                         id="settings-user-name"
                         value={settings.userName}
@@ -159,12 +162,14 @@ export function CharacterTab({
                     />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="settings-assistant-name">Tên trợ lý</Label>
+                    <Label htmlFor="settings-assistant-name">
+                        {t('character_tab.assistant_name')}
+                    </Label>
                     <Input
                         id="settings-assistant-name"
                         value={settings.assistantName}
                         maxLength={MAX_NAME_LENGTH}
-                        placeholder="Trợ lý AI"
+                        placeholder={t('common.ai_assistant')}
                         onChange={(event) =>
                             onChange({
                                 ...settings,
@@ -176,7 +181,9 @@ export function CharacterTab({
             </div>
             {voices.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="settings-voice">Giọng đọc</Label>
+                    <Label htmlFor="settings-voice">
+                        {t('character_tab.voice')}
+                    </Label>
                     <div className="flex gap-2">
                         <select
                             id="settings-voice"
@@ -189,7 +196,9 @@ export function CharacterTab({
                             }
                             className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-9 min-w-0 flex-1 rounded-sm border px-3 text-sm outline-none focus-visible:ring-[3px]"
                         >
-                            <option value="">Mặc định của hệ thống</option>
+                            <option value="">
+                                {t('character_tab.system_default')}
+                            </option>
                             {voices.map((name) => (
                                 <option key={name} value={name}>
                                     {name}
@@ -200,8 +209,8 @@ export function CharacterTab({
                             type="button"
                             variant="outline"
                             size="sm"
-                            aria-label="Nghe thử giọng"
-                            title="Nghe thử giọng"
+                            aria-label={t('character_tab.preview_voice')}
+                            title={t('character_tab.preview_voice')}
                             className="h-9"
                             onClick={() => previewVoice(settings.voice)}
                         >
@@ -209,18 +218,20 @@ export function CharacterTab({
                         </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Giọng có sẵn trên máy này.
+                        {t('character_tab.voices_available_on_this')}
                     </p>
                 </div>
             )}
             <div className="flex flex-col gap-1.5">
-                <Label htmlFor="settings-instructions">Chỉ dẫn riêng</Label>
+                <Label htmlFor="settings-instructions">
+                    {t('character_tab.custom_instructions')}
+                </Label>
                 <textarea
                     id="settings-instructions"
                     value={settings.customInstructions}
                     maxLength={MAX_INSTRUCTIONS_LENGTH}
                     rows={6}
-                    placeholder="Ví dụ: Trả lời ngắn gọn, ưu tiên ví dụ bằng Rust."
+                    placeholder={t('character_tab.for_example_answer_briefly')}
                     onChange={(event) =>
                         onChange({
                             ...settings,
@@ -230,8 +241,10 @@ export function CharacterTab({
                     className="border-input bg-card placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full resize-y rounded-sm border px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
                 />
                 <p className="text-xs text-muted-foreground">
-                    {settings.customInstructions.length} /{' '}
-                    {MAX_INSTRUCTIONS_LENGTH} ký tự.
+                    {t('character_tab.count_max_characters', {
+                        count: settings.customInstructions.length,
+                        max: MAX_INSTRUCTIONS_LENGTH,
+                    })}
                 </p>
             </div>
         </div>

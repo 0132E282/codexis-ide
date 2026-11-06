@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FileViewerContext } from '@/contexts/file-viewer-context';
 import { detectFile, downloadViewerFile } from '@/lib/viewer-file';
+import { t } from '@/lib/i18n';
 
 const ICONS = {
     image: FileImage,
@@ -73,8 +74,10 @@ export function FileBlock({
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                         {file.type.kind === 'svg'
-                            ? 'Hình ảnh · SVG'
-                            : `Tệp · ${file.type.label}`}
+                            ? t('file_card.image_svg')
+                            : t('file_card.file_label', {
+                                  label: file.type.label,
+                              })}
                     </span>
                 </span>
             </span>
@@ -86,17 +89,19 @@ export function FileBlock({
                     size="sm"
                     onClick={() => viewer.open(file)}
                 >
-                    Xem
+                    {t('common.view')}
                 </Button>
                 <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    aria-label={`Tải xuống ${file.title}`}
+                    aria-label={t('file_card.download_title', {
+                        title: file.title,
+                    })}
                     onClick={() => downloadViewerFile(file)}
                 >
                     <Download aria-hidden="true" />
-                    Tải xuống
+                    {t('file_card.download')}
                 </Button>
             </span>
             <span className="hidden shrink-0 @max-lg:block">
@@ -107,7 +112,9 @@ export function FileBlock({
                             variant="ghost"
                             size="icon"
                             className="size-8"
-                            aria-label={`Tuỳ chọn cho ${file.title}`}
+                            aria-label={t('file_card.options_for_title', {
+                                title: file.title,
+                            })}
                         >
                             <MoreHorizontal aria-hidden="true" />
                         </Button>
@@ -115,13 +122,13 @@ export function FileBlock({
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={() => viewer.open(file)}>
                             <Eye aria-hidden="true" />
-                            Xem
+                            {t('common.view')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => downloadViewerFile(file)}
                         >
                             <Download aria-hidden="true" />
-                            Tải xuống
+                            {t('file_card.download')}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

@@ -17,6 +17,7 @@ import {
     languageOf,
     monacoTheme,
 } from '@/components/ai-chat/monaco-setup';
+import { t } from '@/lib/i18n';
 
 /** * Monaco editor for one file (loaded lazily by the code viewer): read-only unless `onChange` is given, then Cmd/Ctrl+S calls `onSave`. */
 export default function MonacoCode({
@@ -244,7 +245,7 @@ export default function MonacoCode({
 
             node.type = 'button';
             node.className = 'pm-revert-pop';
-            node.textContent = '\u21B6 Hoàn tác đoạn này';
+            node.textContent = `\u21B6 ${t('monaco_code.undo_this_section')}`;
             node.onclick = () => {
                 closePopup();
                 revert(hunk);
@@ -501,7 +502,9 @@ export default function MonacoCode({
             language={languageOf(path)}
             theme={monacoTheme()}
             loading={
-                <p className="m-4 text-sm text-muted-foreground">Đang tải...</p>
+                <p className="m-4 text-sm text-muted-foreground">
+                    {t('common.loading')}
+                </p>
             }
             onChange={(next) => onChange?.(next ?? '')}
             onMount={(editor, monaco) => {
@@ -567,8 +570,8 @@ export default function MonacoCode({
                         hintRoot.render(
                             <button
                                 type="button"
-                                title="Hỏi AI về đoạn này (⌘L)"
-                                aria-label="Hỏi AI về đoạn này"
+                                title={t('monaco_code.ask_ai_about_this')}
+                                aria-label={t('monaco_code.ask_ai_about_this2')}
                                 // * The editor must not see the press: it would drop the selection before the click.
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => askSelection(editor)}
@@ -602,7 +605,7 @@ export default function MonacoCode({
                 );
                 editor.addAction({
                     id: 'pm.chat-about-selection',
-                    label: 'Chat với AI về đoạn này',
+                    label: t('monaco_code.chat_with_ai_about'),
                     // * Cmd+L (Ctrl+L), like Cursor; the context menu shows it next to the label.
                     keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL],
                     contextMenuGroupId: '9_cutcopypaste',

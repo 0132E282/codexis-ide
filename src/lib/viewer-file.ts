@@ -1,4 +1,5 @@
 import { looksLikeSvg, readSvgFile } from '@/lib/svg-file';
+import { t } from '@/lib/i18n';
 
 /** * Largest source shown as a file card; anything bigger stays a plain code block. */
 const MAX_FILE_BYTES = 500 * 1024;
@@ -142,7 +143,7 @@ export function detectFile(
 
     const title = name
         ? (name.split(/[\\/]/).pop() ?? name)
-        : `Tệp ${type.label}`;
+        : t('viewer_file.label_file', { label: type.label });
 
     return {
         type,

@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react';
 import { HEADING_LEVELS } from './constants';
+import { t } from '@/lib/i18n';
 
 /** * Node comes from StarterKit. */
 export function HeadingToolbar({ editor }: { editor: Editor }) {
@@ -22,10 +23,10 @@ export function HeadingToolbar({ editor }: { editor: Editor }) {
             }}
             className="h-8 rounded-md border border-input bg-transparent px-1.5 text-sm"
         >
-            <option value={0}>Đoạn văn</option>
+            <option value={0}>{t('heading.paragraph')}</option>
             {HEADING_LEVELS.map((level) => (
                 <option key={level} value={level}>
-                    Tiêu đề {level}
+                    {t('heading.heading_level', { level })}
                 </option>
             ))}
         </select>

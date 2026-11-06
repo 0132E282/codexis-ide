@@ -1,7 +1,8 @@
+import { t } from '@/lib/i18n';
 /** * Largest SVG source shown as a file card; anything bigger stays a plain code block. */
 const MAX_SVG_BYTES = 500 * 1024;
 
-const DEFAULT_SVG_TITLE = 'Hình SVG';
+const DEFAULT_SVG_TITLE = 'svg_file.svg_image';
 
 export type SvgFile = {
     title: string;
@@ -108,7 +109,7 @@ export function readSvgFile(code: string): SvgFile | null {
     return safe === null
         ? null
         : {
-              title: svgTitleFromSource(code) ?? DEFAULT_SVG_TITLE,
+              title: svgTitleFromSource(code) ?? t(DEFAULT_SVG_TITLE),
               source: code.trim(),
               safe,
           };

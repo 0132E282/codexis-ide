@@ -1,6 +1,7 @@
 use super::state::AppState;
 use crate::agent;
 use crate::credentials::CredentialStore;
+use crate::profiles::ProfileStore;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -51,12 +52,15 @@ pub async fn inline_ask(
         return Err("Hãy nhập câu hỏi.".to_string());
     }
 
-    let environment = app.state::<CredentialStore>().environment();
+    let mut environment = app.state::<CredentialStore>().environment();
+
+    // * The same account as the chat: the one chosen for the Claude CLI, not the CLI's own login.
+    environment.extend(app.state::<ProfileStore>().active_environment("claude"));
     let prompt = inline_prompt(&relative, start_line, end_line, &text, question.trim());
 
     super::blocking("AI chưa trả lời được.", move || {
         let answer = agent::ask_once(workspace.root(), &prompt, &environment)
-            .ok_or("AI chưa trả lời được. Kiểm tra Claude đã đăng nhập chưa.")?;
+            .map_err(|error| format!("AI chưa trả lời được. {error}"))?;
 
         Ok(InlineAnswer {
             answer,

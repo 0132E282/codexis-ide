@@ -6,10 +6,15 @@ import {
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { t } from '@/lib/i18n';
 
 /** * What a file row can do from its right-click menu: copy its path (pasted into the chat it becomes a file tag) or add it to the chat. */
 export type FileActions = {
     copy: (path: string) => void;
+    /** * Copies just the name of the file or folder. */
+    copyName: (path: string) => void;
+    /** * Missing where nothing can be renamed (a GitHub repo); only files are renamed. */
+    rename?: (path: string) => void;
     /** * Missing when the chat cannot take a file reference. */
     ask?: (path: string) => void;
 };
@@ -46,14 +51,24 @@ export function FileContextMenu({
                     <ContextMenuSeparator />
                 )}
                 <ContextMenuItem onSelect={() => actions.copy(path)}>
-                    Sao chép đường dẫn
+                    {t('common.copy_path')}
                 </ContextMenuItem>
+                <ContextMenuItem onSelect={() => actions.copyName(path)}>
+                    {folder
+                        ? t('file_context_menu.copy_name')
+                        : t('common.copy_file_name')}
+                </ContextMenuItem>
+                {!folder && actions.rename !== undefined && (
+                    <ContextMenuItem onSelect={() => actions.rename?.(path)}>
+                        {t('common.rename')}
+                    </ContextMenuItem>
+                )}
                 {!folder && (
                     <ContextMenuItem
                         disabled={actions.ask === undefined}
                         onSelect={() => actions.ask?.(path)}
                     >
-                        Thêm tệp vào chat
+                        {t('common.add_file_to_chat')}
                     </ContextMenuItem>
                 )}
             </ContextMenuContent>

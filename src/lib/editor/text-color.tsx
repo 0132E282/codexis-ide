@@ -7,6 +7,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SWATCH_COLORS } from './constants';
+import { t } from '@/lib/i18n';
 
 /** * `color` lives on the shared `textStyle` mark registered by text-style.tsx. */
 export function TextColorToolbar({ editor }: { editor: Editor }) {
@@ -18,7 +19,7 @@ export function TextColorToolbar({ editor }: { editor: Editor }) {
                     variant="ghost"
                     size="sm"
                     className="h-8 min-w-8 px-1.5"
-                    title="Màu chữ"
+                    title={t('text_color.text_color')}
                 >
                     <Baseline
                         className="size-3.5"
@@ -63,7 +64,7 @@ export function TextColorToolbar({ editor }: { editor: Editor }) {
                             editor.chain().focus().unsetColor().run()
                         }
                     >
-                        Bỏ màu chữ
+                        {t('text_color.remove_text_color')}
                     </button>
                 </div>
             </DropdownMenuContent>

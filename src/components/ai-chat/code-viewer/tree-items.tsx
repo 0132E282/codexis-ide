@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { memo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { FileIcon } from '@/components/ai-chat/file-icon';
@@ -47,6 +48,7 @@ function TreeItemsList({
                     <li
                         key={node.path}
                         role="treeitem"
+                        data-path={node.path}
                         aria-expanded={isDir ? isOpen : undefined}
                         aria-selected={
                             node.path === selected || marked.has(node.path)
@@ -60,9 +62,9 @@ function TreeItemsList({
                                 {
                                     label: isDir
                                         ? isOpen
-                                            ? 'Thu gọn'
-                                            : 'Mở rộng'
-                                        : 'Mở tệp',
+                                            ? t('tree_items.collapse')
+                                            : t('tree_items.expand')
+                                        : t('common.open_file'),
                                     onSelect: () =>
                                         isDir
                                             ? onToggle(node.path)
@@ -129,14 +131,24 @@ function TreeItemsList({
                                 {isDir && changedDirs.has(node.path) && (
                                     <span
                                         role="img"
-                                        aria-label="Có tệp đã thay đổi"
-                                        title="Có tệp đã thay đổi"
+                                        aria-label={t(
+                                            'tree_items.contains_changed_files',
+                                        )}
+                                        title={t(
+                                            'tree_items.contains_changed_files',
+                                        )}
                                         className="ml-auto size-1.5 shrink-0 rounded-full bg-yellow-500"
                                     />
                                 )}
                                 {changed.has(node.path) && (
                                     <span
-                                        title={`Đã thay đổi (${CHANGE_BADGES[changed.get(node.path)!].label})`}
+                                        title={t('tree_items.changed_kind', {
+                                            kind: t(
+                                                CHANGE_BADGES[
+                                                    changed.get(node.path)!
+                                                ].label,
+                                            ),
+                                        })}
                                         className={cn(
                                             'ml-auto shrink-0 text-xs font-medium',
                                             CHANGE_BADGES[

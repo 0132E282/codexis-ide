@@ -4,7 +4,8 @@
 use serde::Serialize;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{ChildStdin, Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 /// Folders searched after `PATH`: a desktop app does not inherit the shell's `PATH`, so the usual install places are tried as well.
 const EXTRA_BIN_DIRS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", ".local/bin"];
@@ -79,6 +80,19 @@ impl Cli {
         if let (Self::Claude, Some(mode)) = (self, mode) {
             args.push("--permission-mode".to_string());
             args.push(mode.to_string());
+
+            // * "Hỏi từng việc": the CLI sends each permission question to this app on its output and waits for the answer on its input.
+            if mode == ASK_MODE {
+                args.extend(
+                    [
+                        "--input-format",
+                        "stream-json",
+                        "--permission-prompt-tool",
+                        "stdio",
+                    ]
+                    .map(String::from),
+                );
+            }
         }
 
         if let Some(model) = model {
@@ -137,6 +151,8 @@ pub enum Event {
     Subagent(String),
     /// The id of a sub-agent that has finished.
     SubagentDone(String),
+    /// The CLI asks whether it may use a tool, as JSON `{"id", "tool", "description", "input"}`; answered with `respond`.
+    Permission(String),
     Error(String),
     /// The CLI exited; always the last event of a turn.
     Done(String),
@@ -160,6 +176,31 @@ pub fn parse_line(cli: Cli, line: &str) -> Vec<Event> {
                 .map(Event::Session)
                 .into_iter()
                 .collect()
+        }
+        // * An account out of allowance gets an empty answer and only this event: without turning it into an error the chat stays silent and no other account is tried.
+        (Cli::Claude, Some("rate_limit_event"))
+            if value["rate_limit_info"]["status"] == "rejected" =>
+        {
+            let window = value["rate_limit_info"]["rateLimitType"]
+                .as_str()
+                .unwrap_or("unknown");
+
+            vec![Event::Error(format!(
+                "Tài khoản đã hết hạn mức ({window}): usage limit reached."
+            ))]
+        }
+        (Cli::Claude, Some("control_request")) if value["request"]["subtype"] == "can_use_tool" => {
+            let request = &value["request"];
+
+            vec![Event::Permission(
+                serde_json::json!({
+                    "id": value["request_id"],
+                    "tool": request["tool_name"],
+                    "description": request["description"],
+                    "input": request["input"],
+                })
+                .to_string(),
+            )]
         }
         (Cli::Claude, Some("stream_event")) => {
             let event = &value["event"];
@@ -392,6 +433,50 @@ pub fn valid_model(model: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-'))
 }
 
+/// The permission mode in which every tool use is asked of the person.
+pub const ASK_MODE: &str = "manual";
+
+/// The input of a running CLI that waits for answers to its permission questions; emptied when the turn's result arrives, which lets the CLI exit.
+pub type Responder = Arc<Mutex<Option<ChildStdin>>>;
+
+/// Answers one permission question of the CLI: allow it to run with `input`, or deny it.
+///
+/// # Errors
+/// Fails when the turn has already ended or the CLI no longer reads its input.
+pub fn respond(
+    responder: &Responder,
+    request_id: &str,
+    allow: bool,
+    input: &serde_json::Value,
+) -> Result<(), String> {
+    let decision = if allow {
+        serde_json::json!({"behavior": "allow", "updatedInput": input})
+    } else {
+        serde_json::json!({"behavior": "deny", "message": "Người dùng từ chối."})
+    };
+    let line = serde_json::json!({
+        "type": "control_response",
+        "response": {"subtype": "success", "request_id": request_id, "response": decision},
+    });
+    let mut guard = responder
+        .lock()
+        .map_err(|_| "Không gửi được câu trả lời.".to_string())?;
+    let stdin = guard
+        .as_mut()
+        .ok_or_else(|| "Lượt này đã kết thúc.".to_string())?;
+
+    writeln!(stdin, "{line}")
+        .and_then(|()| stdin.flush())
+        .map_err(|_| "Không gửi được câu trả lời.".to_string())
+}
+
+/// Whether a line of the CLI's output is the final result of the turn.
+fn is_result_line(line: &str) -> bool {
+    line.contains("\"result\"")
+        && serde_json::from_str::<serde_json::Value>(line)
+            .is_ok_and(|value| value["type"] == "result")
+}
+
 /// Permission modes of the Claude CLI the chat offers (`--permission-mode`).
 const MODES: [&str; 4] = ["plan", "auto", "acceptEdits", "manual"];
 
@@ -411,6 +496,8 @@ pub fn run_turn(
     mode: Option<&str>,
     add_dirs: &[String],
     environment: &[(&str, String)],
+    responder: Option<&Responder>,
+    on_spawn: impl Fn(u32),
     emit: impl Fn(Event),
 ) {
     let Some(program) = locate(cli.program()) else {
@@ -444,9 +531,27 @@ pub fn run_turn(
         }
     };
 
+    on_spawn(child.id());
+
     if let Some(mut stdin) = child.stdin.take() {
-        // Dropping stdin at the end of this block closes it, which is what tells the CLI the prompt is complete.
-        let _ = stdin.write_all(prompt.as_bytes());
+        match responder {
+            // * The input stays open: the CLI's permission questions are answered on it until the turn's result.
+            Some(responder) => {
+                let message = serde_json::json!({
+                    "type": "user",
+                    "message": {"role": "user", "content": prompt},
+                });
+                let _ = writeln!(stdin, "{message}").and_then(|()| stdin.flush());
+
+                if let Ok(mut guard) = responder.lock() {
+                    *guard = Some(stdin);
+                }
+            }
+            // Dropping stdin at the end of this block closes it, which is what tells the CLI the prompt is complete.
+            None => {
+                let _ = stdin.write_all(prompt.as_bytes());
+            }
+        }
     }
 
     if let Some(stdout) = child.stdout.take() {
@@ -456,6 +561,14 @@ pub fn run_turn(
         let mut subagents = std::collections::HashSet::new();
 
         for line in std::io::BufRead::lines(std::io::BufReader::new(stdout)).map_while(Result::ok) {
+            if let Some(responder) = responder {
+                if is_result_line(&line) {
+                    if let Ok(mut guard) = responder.lock() {
+                        guard.take();
+                    }
+                }
+            }
+
             for event in parse_line(cli, &line) {
                 match event {
                     Event::Delta(_) => streamed = true,
@@ -481,32 +594,62 @@ pub fn run_turn(
         }
     }
 
+    if let Some(responder) = responder {
+        if let Ok(mut guard) = responder.lock() {
+            guard.take();
+        }
+    }
+
     let _ = child.wait();
     emit(Event::Done(String::new()));
 }
 
-/// Asks the Claude CLI one question and returns its plain answer; None when the CLI is missing or fails.
-pub fn ask_once(root: &Path, prompt: &str, environment: &[(&str, String)]) -> Option<String> {
-    let program = locate(Cli::Claude.program())?;
+/// Asks the Claude CLI one question and returns its plain answer; Err carries the real reason (CLI missing, stderr, exit code).
+pub fn ask_once(
+    root: &Path,
+    prompt: &str,
+    environment: &[(&str, String)],
+) -> Result<String, String> {
+    let program = locate(Cli::Claude.program())
+        .ok_or_else(|| "Không tìm thấy Claude CLI (`claude`) trên máy.".to_string())?;
     let mut child = Command::new(program)
         .arg("-p")
         .current_dir(root)
         .envs(environment.iter().map(|(name, value)| (name, value)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
-        .ok()?;
+        .map_err(|error| format!("Không chạy được Claude CLI: {error}"))?;
 
-    child.stdin.take()?.write_all(prompt.as_bytes()).ok()?;
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| "Không mở được stdin của Claude CLI.".to_string())?
+        .write_all(prompt.as_bytes())
+        .map_err(|error| format!("Không gửi được câu hỏi tới Claude CLI: {error}"))?;
 
-    let output = child.wait_with_output().ok()?;
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("Claude CLI dừng bất thường: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .filter(|answer| !answer.is_empty())
+    if output.status.success() {
+        return if stdout.is_empty() {
+            Err("Claude CLI chạy xong nhưng không trả về nội dung.".to_string())
+        } else {
+            Ok(stdout)
+        };
+    }
+
+    // * Auth failures are often printed on stdout, other errors on stderr: show whichever has text.
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let detail = [stderr, stdout]
+        .into_iter()
+        .find(|text| !text.is_empty())
+        .unwrap_or_else(|| "không có thông báo lỗi".to_string());
+
+    Err(format!("Claude CLI lỗi ({}): {detail}", output.status))
 }
 
 /// Splits an answer into a commit title (its first line) and a description (the rest).
@@ -523,6 +666,37 @@ pub fn split_message(answer: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejected_rate_limit_becomes_a_limit_error() {
+        let rejected = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour"}}"#;
+        let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#;
+
+        let events = parse_line(Cli::Claude, rejected);
+
+        assert!(matches!(
+            events.as_slice(),
+            [Event::Error(message)] if crate::usage::is_limit_error(message)
+        ));
+        assert!(parse_line(Cli::Claude, allowed).is_empty());
+    }
+
+    #[test]
+    fn ask_mode_has_the_cli_ask_this_app_and_a_tool_question_becomes_an_event() {
+        let args = Cli::Claude.args(None, None, Some(ASK_MODE));
+        let line = r#"{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Write","description":"a.txt","input":{"file_path":"/a.txt"}}}"#;
+
+        assert!(args.contains(&"--permission-prompt-tool".to_string()));
+        assert!(!Cli::Claude
+            .args(None, None, Some("auto"))
+            .contains(&"--permission-prompt-tool".to_string()));
+        assert!(matches!(
+            parse_line(Cli::Claude, line).as_slice(),
+            [Event::Permission(json)] if json.contains(r#""id":"r1""#) && json.contains(r#""tool":"Write""#)
+        ));
+        assert!(is_result_line(r#"{"type":"result","result":"x"}"#));
+        assert!(!is_result_line(r#"{"type":"assistant","text":"result"}"#));
+    }
 
     #[test]
     fn extra_projects_become_add_dir_flags() {

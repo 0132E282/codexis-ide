@@ -3,12 +3,16 @@ import { SourceCell, ToolTable, type ToolColumn } from './tool-table';
 
 const columns: ToolColumn<RuleFile>[] = [
     {
-        header: 'Tên',
+        header: 'common.name',
         cell: (row) => <span className="font-medium">{row.name}</span>,
     },
-    { header: 'Nội dung đầu', grow: true, cell: (row) => row.excerpt || '—' },
     {
-        header: 'Nguồn',
+        header: 'rules_tab.beginning_of_content',
+        grow: true,
+        cell: (row) => row.excerpt || '—',
+    },
+    {
+        header: 'common.source',
         clamp: false,
         cell: (row, detail) => (
             <SourceCell
@@ -29,7 +33,7 @@ export function RulesTab() {
             load={ideTools.rules}
             columns={columns}
             name={name}
-            emptyText="Chưa có tệp rules nào."
+            emptyText={'rules_tab.no_rules_files_yet'}
         />
     );
 }

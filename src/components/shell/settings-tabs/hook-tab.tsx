@@ -3,13 +3,13 @@ import { SourceCell, ToolTable, type ToolColumn } from './tool-table';
 
 const columns: ToolColumn<HookEntry>[] = [
     {
-        header: 'Sự kiện',
+        header: 'hook_tab.event',
         cell: (row) => <span className="font-medium">{row.event}</span>,
     },
     { header: 'Matcher', cell: (row) => row.matcher },
-    { header: 'Loại', cell: (row) => row.kind },
+    { header: 'common.type', cell: (row) => row.kind },
     {
-        header: 'Lệnh',
+        header: 'common.command',
         grow: true,
         cell: (row) => (
             <span className="break-all font-mono text-xs">
@@ -18,7 +18,7 @@ const columns: ToolColumn<HookEntry>[] = [
         ),
     },
     {
-        header: 'Nguồn',
+        header: 'common.source',
         clamp: false,
         cell: (row, detail) => (
             <SourceCell compact={!detail} scope={row.scope} path={row.path} />
@@ -34,7 +34,7 @@ export function HookTab() {
             load={ideTools.hooks}
             columns={columns}
             name={name}
-            emptyText="Chưa có hook nào được cấu hình."
+            emptyText={'hook_tab.no_hooks_configured_yet'}
         />
     );
 }
