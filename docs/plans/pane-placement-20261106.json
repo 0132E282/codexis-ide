@@ -1,0 +1,292 @@
+{
+  "title": "Vị trí các ngăn: Move, Fill and arrange, Open in new window",
+  "description": "Kế hoạch triển khai docs/system/pane-placement.md: chọn vị trí trái/phải/trên/dưới hoặc chiếm cả vùng cho ngăn Plan, Background tasks, Side chat, Terminal; nhớ trong localStorage; mở cửa sổ mới là tuỳ chọn.",
+  "tags": [
+    "dock",
+    "layout",
+    "plan-pane",
+    "background-tasks",
+    "side-chat",
+    "frontend"
+  ],
+  "createdAt": "2026-11-06",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/pane-placement.md",
+    "related": [
+      "docs/system/side-chat.md",
+      "docs/system/plan-pane.md",
+      "docs/system/background-tasks.md"
+    ],
+    "note": "Q1 đã chốt 2026-11-06: Move = trái, phải, trên, dưới; Fill and arrange = chiếm cả vùng và chia cạnh ngăn khác đang mở."
+  },
+  "hardConstraints": [
+    "Chỉ thêm giao diện; không đổi lệnh Tauri (Open in new window đã hoãn, Q2)",
+    "Tuỳ chọn hiển thị lưu localStorage, không ghi vào dự án người dùng",
+    "Không thêm dependency",
+    "Không git commit/push khi người dùng chưa yêu cầu"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-L1",
+      "source": "1",
+      "text": "Chọn vị trí ngăn"
+    },
+    {
+      "id": "REQ-L2",
+      "source": "2",
+      "text": "Fill and arrange"
+    },
+    {
+      "id": "REQ-L3",
+      "source": "3",
+      "text": "Nhớ lựa chọn"
+    },
+    {
+      "id": "REQ-L4",
+      "source": "4",
+      "text": "Mở cửa sổ mới"
+    },
+    {
+      "id": "REQ-L5",
+      "source": "5",
+      "text": "Không phá bố cục hiện có"
+    },
+    {
+      "id": "REQ-L6",
+      "source": "6",
+      "text": "Đa ngữ, bàn phím, màn hẹp"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-L1",
+      "requirement": "REQ-L1",
+      "text": "Bốn biểu tượng Move đổi vị trí, có dấu chọn"
+    },
+    {
+      "id": "AC-L2",
+      "requirement": "REQ-L2",
+      "text": "Chiếm cả vùng ẩn ngăn khác, bấm lại trả bố cục"
+    },
+    {
+      "id": "AC-L3",
+      "requirement": "REQ-L3",
+      "text": "Mở lại app giữ vị trí; localStorage lỗi dùng mặc định"
+    },
+    {
+      "id": "AC-L4",
+      "requirement": "REQ-L4",
+      "text": "Open in new window mở cửa sổ riêng"
+    },
+    {
+      "id": "AC-L5",
+      "requirement": "REQ-L5",
+      "text": "Terminal mặc định dưới; Side chat một mình chiếm vùng"
+    },
+    {
+      "id": "AC-L6",
+      "requirement": "REQ-L6",
+      "text": "vi/en, phím, viewport hẹp không cuộn ngang"
+    }
+  ],
+  "verificationCommands": ["pnpm typecheck", "pnpm lint", "pnpm format:check"],
+  "codingGroups": [
+    {
+      "id": "LY1",
+      "name": "placement frontend",
+      "tasks": ["TASK-L01", "TASK-L02", "TASK-L03", "TASK-L04"],
+      "dependsOnGroups": [],
+      "parallel": false
+    },
+    {
+      "id": "LY2",
+      "name": "cửa sổ mới (tuỳ chọn)",
+      "tasks": ["TASK-L05"],
+      "dependsOnGroups": ["LY1"],
+      "parallel": false
+    },
+    {
+      "id": "LY3",
+      "name": "kiểm chứng",
+      "tasks": ["TASK-L06"],
+      "dependsOnGroups": ["LY1"],
+      "parallel": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-L01",
+      "title": "Hook usePanelPlacement và kiểu PanelPlacement",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Theo ảnh mẫu người dùng gửi",
+      "requirements": ["REQ-L1", "REQ-L3"],
+      "acceptanceCriteria": ["AC-L1", "AC-L3"],
+      "design": "pane-placement.md",
+      "inScope": "Đọc/ghi vị trí từng ngăn trong localStorage, bọc try/catch, giá trị lạ về mặc định",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": [],
+      "filesToChange": [
+        {
+          "path": "src/hooks/use-panel-placement.ts",
+          "changes": "Tạo mới"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "Hook trả mặc định khi localStorage lỗi hoặc giá trị lạ; typecheck và eslint sạch",
+      "doneWhen": "Hook trả mặc định khi localStorage lỗi hoặc giá trị lạ; typecheck và eslint sạch"
+    },
+    {
+      "id": "TASK-L02",
+      "title": "Thành phần PanelMenu (Move, Fill and arrange, Open in new window)",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Theo ảnh mẫu người dùng gửi",
+      "requirements": ["REQ-L1", "REQ-L2", "REQ-L6"],
+      "acceptanceCriteria": ["AC-L1", "AC-L2", "AC-L6"],
+      "design": "pane-placement.md",
+      "inScope": "Menu Radix với 4 biểu tượng Move có dấu chọn, 2 biểu tượng Fill, mục Open in new window ẩn khi chưa bật; khoá i18n vi/en",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": ["TASK-L01"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/panel-menu.tsx",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/lib/i18n/en/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/lib/i18n/vi/shell-chat.ts",
+          "changes": "Khoá mới"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "Playwright: mở menu, chọn từng vị trí, phím mũi tên, vi/en",
+      "doneWhen": "Playwright: mở menu, chọn từng vị trí, phím mũi tên, vi/en"
+    },
+    {
+      "id": "TASK-L03",
+      "title": "DockLayout vẽ bốn vùng và vùng fill",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Phụ thuộc dock của Side chat (TASK-S03)",
+      "requirements": ["REQ-L1", "REQ-L2", "REQ-L5"],
+      "acceptanceCriteria": ["AC-L1", "AC-L2", "AC-L5"],
+      "design": "pane-placement.md",
+      "inScope": "Gom ngăn theo placement; Terminal mặc định dưới; fill ẩn tạm các ngăn khác; Side chat một mình vẫn chiếm vùng",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": ["TASK-L02"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/dock-layout.tsx",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/app.tsx",
+          "changes": "Dùng DockLayout thay chỗ gắn terminal"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "Playwright: Terminal dưới như cũ; chuyển trái/phải/trên/dưới đúng; fill rồi trả lại bố cục",
+      "doneWhen": "Playwright: Terminal dưới như cũ; chuyển trái/phải/trên/dưới đúng; fill rồi trả lại bố cục",
+      "note": "Đã tạo dock-layout.tsx (DockLayout: bốn vùng, fill, fillWhenAlone, kéo đổi cỡ) và khoá i18n dock.resize_panel. CHƯA nối vào app.tsx/workspace-pane.tsx (TASK-L04); chưa chạy Playwright vì chưa có chỗ dùng."
+    },
+    {
+      "id": "TASK-L04",
+      "title": "Gắn PanelMenu vào Plan, Background tasks, Side chat, Terminal",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Theo ảnh mẫu người dùng gửi",
+      "requirements": ["REQ-L1", "REQ-L2"],
+      "acceptanceCriteria": ["AC-L1", "AC-L2"],
+      "design": "pane-placement.md",
+      "inScope": "Mỗi ngăn dùng PanelMenu ở nút phóng to; nhớ vị trí riêng",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": ["TASK-L03"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/background-tasks-pane.tsx",
+          "changes": "Gắn menu"
+        },
+        {
+          "path": "src/components/ai-chat/activity-terminal.tsx",
+          "changes": "Gắn menu"
+        },
+        {
+          "path": "src/components/shell/chat-panel.tsx",
+          "changes": "Gắn menu cho Side chat/Plan"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "Playwright: mỗi ngăn đổi vị trí độc lập, mở lại app vẫn giữ",
+      "doneWhen": "Playwright: mỗi ngăn đổi vị trí độc lập, mở lại app vẫn giữ"
+    },
+    {
+      "id": "TASK-L05",
+      "title": "Open in new window (tuỳ chọn, chờ Q2)",
+      "status": "DEFERRED",
+      "priority": "P2",
+      "priorityReason": "Q2 đã chốt 2026-11-06: hoãn, không thêm lệnh Tauri",
+      "requirements": ["REQ-L4"],
+      "acceptanceCriteria": ["AC-L4"],
+      "design": "pane-placement.md",
+      "inScope": "Lệnh Tauri window_open_panel và quyền cửa sổ; ẩn mục khi chưa làm",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": ["TASK-L04"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/commands/files.rs",
+          "changes": "Lệnh mới (nếu duyệt Q2)"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Đăng ký lệnh"
+        },
+        {
+          "path": "src/lib/api.ts",
+          "changes": "Hàm gọi lệnh"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "cargo test; mở cửa sổ thật thủ công",
+      "doneWhen": "cargo test; mở cửa sổ thật thủ công"
+    },
+    {
+      "id": "TASK-L06",
+      "title": "Kiểm chứng cuối: viewport hẹp, a11y, ảnh chứng, cập nhật tài liệu",
+      "status": "TODO",
+      "priority": "P1",
+      "priorityReason": "Theo ảnh mẫu người dùng gửi",
+      "requirements": ["REQ-L6"],
+      "acceptanceCriteria": ["AC-L6"],
+      "design": "pane-placement.md",
+      "inScope": "Playwright viewport hẹp, bàn phím, vi/en; cập nhật docs/system/pane-placement.md",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; kéo thả ngăn",
+      "dependencies": ["TASK-L04"],
+      "filesToChange": [
+        {
+          "path": "docs/system/pane-placement.md",
+          "changes": "Cập nhật sau kiểm"
+        }
+      ],
+      "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
+      "test": "Có ảnh chứng .agents/storage/evidence/pane-placement/, lint và typecheck không thêm lỗi",
+      "doneWhen": "Có ảnh chứng .agents/storage/evidence/pane-placement/, lint và typecheck không thêm lỗi"
+    }
+  ],
+  "risks": ["Làm sau SIDE TASK-S03 (dock) và BG TASK-B05 để không đè app.tsx"],
+  "openQuestions": [],
+  "resolvedQuestions": [
+    {
+      "id": "Q1",
+      "answer": "Như giả định: Move 4 vị trí, Fill and arrange gồm chiếm cả vùng và chia cạnh ngăn khác"
+    },
+    {
+      "id": "Q2",
+      "answer": "Hoãn; ẩn mục Open in new window, không thêm lệnh Tauri"
+    }
+  ]
+}

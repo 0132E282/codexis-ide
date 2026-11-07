@@ -2,55 +2,14 @@
 //!
 //! The file may hold environment values, so it is owner-only on Unix. A file that is not a database is moved aside (`*.corrupt`) and replaced by a new one, so the IDE still starts.
 
+use crate::{migrations, sql};
 use rusqlite::Connection;
+use sea_query::{Alias, Expr, ExprTrait, Order, Query};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Environment variable naming the database file (falls back to `rynox.db` in the app data folder).
 pub const DB_ENV: &str = "RYNOX_DB";
-
-const SCHEMA: &str = "
-    CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        position INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        folders TEXT NOT NULL,
-        env TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS meta (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS chat_turns (
-        workspace TEXT NOT NULL,
-        id TEXT NOT NULL,
-        position INTEGER NOT NULL,
-        cli TEXT NOT NULL,
-        prompt TEXT NOT NULL,
-        answer TEXT NOT NULL,
-        error TEXT,
-        archived INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (workspace, id)
-    );
-    CREATE TABLE IF NOT EXISTS conversations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        workspace TEXT NOT NULL,
-        title TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS conversation_sessions (
-        conversation INTEGER NOT NULL,
-        cli TEXT NOT NULL,
-        session TEXT NOT NULL,
-        PRIMARY KEY (conversation, cli)
-    );
-    CREATE TABLE IF NOT EXISTS chat_sessions (
-        workspace TEXT NOT NULL,
-        cli TEXT NOT NULL,
-        session TEXT NOT NULL,
-        PRIMARY KEY (workspace, cli)
-    );
-";
 
 /// The database file: `RYNOX_DB` when set and not empty, else `rynox.db` inside `data_dir`.
 pub fn path(data_dir: &Path) -> PathBuf {
@@ -85,9 +44,10 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
 fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     let connection = Connection::open(path)?;
 
-    connection.execute_batch(SCHEMA)?;
+    connection.execute_batch(migrations::CREATE_CORE_TABLES)?;
     add_archived_column(&connection)?;
     add_conversation_column(&connection)?;
+    add_steps_column(&connection)?;
     group_old_turns(&connection)?;
 
     // The file may hold secrets: owner only.
@@ -101,90 +61,117 @@ fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     Ok(connection)
 }
 
-/// Adds `column` to `table` (with its `definition`) when a file made by an older version lacks it.
-///
-/// `table`, `column` and `definition` are fixed names written in this file, never user input.
-fn add_column_if_missing(
-    connection: &Connection,
-    table: &str,
-    column: &str,
-    definition: &str,
-) -> rusqlite::Result<()> {
-    let has_column = connection
-        .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")?
-        .exists([table, column])?;
-
-    if !has_column {
-        connection.execute(
-            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
-            [],
-        )?;
-    }
-
-    Ok(())
-}
-
 /// Files made before conversations could be archived lack the column.
 fn add_archived_column(connection: &Connection) -> rusqlite::Result<()> {
-    add_column_if_missing(
+    migrations::apply_if_column_missing(
         connection,
         "chat_turns",
         "archived",
-        "INTEGER NOT NULL DEFAULT 0",
+        migrations::ADD_ARCHIVED_TO_CHAT_TURNS,
     )
 }
 
 /// Files made before conversations were listed lack the column.
 fn add_conversation_column(connection: &Connection) -> rusqlite::Result<()> {
-    add_column_if_missing(
+    migrations::apply_if_column_missing(
         connection,
         "chat_turns",
         "conversation",
-        "INTEGER NOT NULL DEFAULT 0",
+        migrations::ADD_CONVERSATION_TO_CHAT_TURNS,
+    )
+}
+
+/// Files made before the steps of the AI were kept lack the column.
+fn add_steps_column(connection: &Connection) -> rusqlite::Result<()> {
+    migrations::apply_if_column_missing(
+        connection,
+        "chat_turns",
+        "steps",
+        migrations::ADD_STEPS_TO_CHAT_TURNS,
     )
 }
 
 /// Turns saved before conversations were listed (conversation 0) are grouped: each workspace's current turns become one conversation (with its CLI session ids), its archived turns another.
 fn group_old_turns(connection: &Connection) -> rusqlite::Result<()> {
-    let mut groups = connection
-        .prepare("SELECT DISTINCT workspace, archived FROM chat_turns WHERE conversation = 0")?;
-    let groups = groups
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let groups = sql::query_all(
+        connection,
+        Query::select()
+            .distinct()
+            .columns([Alias::new("workspace"), Alias::new("archived")])
+            .from(Alias::new("chat_turns"))
+            .and_where(Expr::col(Alias::new("conversation")).eq(0_i64)),
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+    )?;
 
     for (workspace, archived) in groups {
         let title: String = if archived == 0 {
-            connection
-                .query_row(
-                    "SELECT prompt FROM chat_turns WHERE workspace = ?1 AND archived = 0 AND conversation = 0 ORDER BY position LIMIT 1",
-                    [&workspace],
-                    |row| row.get::<_, String>(0),
-                )
-                .map(|prompt| crate::chats::title_of(&prompt))
-                .unwrap_or_default()
+            sql::query_first(
+                connection,
+                Query::select()
+                    .column(Alias::new("prompt"))
+                    .from(Alias::new("chat_turns"))
+                    .and_where(Expr::col(Alias::new("workspace")).eq(workspace.as_str()))
+                    .and_where(Expr::col(Alias::new("archived")).eq(0_i64))
+                    .and_where(Expr::col(Alias::new("conversation")).eq(0_i64))
+                    .order_by(Alias::new("position"), Order::Asc)
+                    .limit(1),
+                |row| row.get::<_, String>(0),
+            )?
+            .map(|prompt| crate::chats::title_of(&prompt))
+            .unwrap_or_default()
         } else {
             "Cuộc trò chuyện cũ".to_string()
         };
 
-        connection.execute(
-            "INSERT INTO conversations (workspace, title, updated_at) VALUES (?1, ?2, CAST(strftime('%s', 'now') AS INTEGER) - ?3)",
-            rusqlite::params![workspace, title, archived],
-        )?;
+        let mut insert = Query::insert();
+
+        insert
+            .into_table(Alias::new("conversations"))
+            .columns([
+                Alias::new("workspace"),
+                Alias::new("title"),
+                Alias::new("updated_at"),
+            ])
+            .values_panic([
+                workspace.as_str().into(),
+                title.into(),
+                Expr::cust_with_values("CAST(strftime('%s', 'now') AS INTEGER) - ?", [archived]),
+            ]);
+        sql::execute(connection, &insert)?;
 
         let conversation = connection.last_insert_rowid();
 
-        connection.execute(
-            "UPDATE chat_turns SET conversation = ?1 WHERE workspace = ?2 AND archived = ?3 AND conversation = 0",
-            rusqlite::params![conversation, workspace, archived],
+        sql::execute(
+            connection,
+            Query::update()
+                .table(Alias::new("chat_turns"))
+                .value(Alias::new("conversation"), conversation)
+                .and_where(Expr::col(Alias::new("workspace")).eq(workspace.as_str()))
+                .and_where(Expr::col(Alias::new("archived")).eq(archived))
+                .and_where(Expr::col(Alias::new("conversation")).eq(0_i64)),
         )?;
 
         if archived == 0 {
-            connection.execute(
-                "INSERT OR REPLACE INTO conversation_sessions (conversation, cli, session) SELECT ?1, cli, session FROM chat_sessions WHERE workspace = ?2",
-                rusqlite::params![conversation, workspace],
-            )?;
+            let mut sessions = Query::select();
+
+            sessions
+                .expr(Expr::val(conversation))
+                .columns([Alias::new("cli"), Alias::new("session")])
+                .from(Alias::new("chat_sessions"))
+                .and_where(Expr::col(Alias::new("workspace")).eq(workspace.as_str()));
+
+            let mut copy = Query::insert();
+
+            copy.replace()
+                .into_table(Alias::new("conversation_sessions"))
+                .columns([
+                    Alias::new("conversation"),
+                    Alias::new("cli"),
+                    Alias::new("session"),
+                ])
+                .select_from(sessions)
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            sql::execute(connection, &copy)?;
         }
     }
 
@@ -195,97 +182,14 @@ fn group_old_turns(connection: &Connection) -> rusqlite::Result<()> {
 pub fn in_memory() -> Connection {
     let connection = Connection::open_in_memory().expect("in-memory database");
 
-    connection.execute_batch(SCHEMA).expect("schema");
+    connection
+        .execute_batch(migrations::CREATE_CORE_TABLES)
+        .expect("schema");
     add_archived_column(&connection).expect("schema");
 
     connection
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    fn column_exists(connection: &Connection, table: &str, column: &str) -> bool {
-        connection
-            .prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")
-            .unwrap()
-            .exists([table, column])
-            .unwrap()
-    }
-
-    #[test]
-    fn missing_column_is_added_with_its_default() {
-        let connection = Connection::open_in_memory().unwrap();
-
-        connection
-            .execute_batch("CREATE TABLE things (id INTEGER); INSERT INTO things VALUES (1);")
-            .unwrap();
-        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
-
-        let flag: i64 = connection
-            .query_row("SELECT flag FROM things", [], |row| row.get(0))
-            .unwrap();
-
-        assert_eq!(flag, 7);
-    }
-
-    #[test]
-    fn adding_an_existing_column_twice_keeps_the_rows() {
-        let connection = Connection::open_in_memory().unwrap();
-
-        connection
-            .execute_batch("CREATE TABLE things (id INTEGER); INSERT INTO things VALUES (1);")
-            .unwrap();
-        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
-        add_column_if_missing(&connection, "things", "flag", "INTEGER NOT NULL DEFAULT 7").unwrap();
-
-        let rows: i64 = connection
-            .query_row("SELECT COUNT(*) FROM things", [], |row| row.get(0))
-            .unwrap();
-
-        assert_eq!(rows, 1);
-    }
-
-    #[test]
-    fn old_chat_turns_are_upgraded_and_grouped_into_a_conversation() {
-        let dir = TempDir::new().unwrap();
-        let file = dir.path().join("old.db");
-        let old = Connection::open(&file).unwrap();
-
-        old.execute_batch(
-            "CREATE TABLE chat_turns (
-                workspace TEXT NOT NULL,
-                id TEXT NOT NULL,
-                position INTEGER NOT NULL,
-                cli TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                answer TEXT NOT NULL,
-                error TEXT,
-                PRIMARY KEY (workspace, id)
-            );
-            INSERT INTO chat_turns VALUES ('w', 't1', 0, 'claude', 'hello', 'hi', NULL);
-            INSERT INTO chat_turns VALUES ('w', 't2', 1, 'claude', 'again', 'yes', NULL);",
-        )
-        .unwrap();
-        drop(old);
-
-        let connection = open(&file).unwrap();
-
-        assert!(column_exists(&connection, "chat_turns", "archived"));
-        assert!(column_exists(&connection, "chat_turns", "conversation"));
-
-        let (turns, groups): (i64, i64) = connection
-            .query_row(
-                "SELECT COUNT(*), COUNT(DISTINCT conversation) FROM chat_turns WHERE conversation != 0",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        let conversations: i64 = connection
-            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
-            .unwrap();
-
-        assert_eq!((turns, groups, conversations), (2, 1, 1));
-    }
-}
+#[path = "../tests/unit/db.rs"]
+mod tests;

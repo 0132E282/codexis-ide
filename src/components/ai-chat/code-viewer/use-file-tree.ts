@@ -142,6 +142,9 @@ export function useFileTree({
         [],
     );
 
+    /** Closes every folder of the tree. */
+    const collapseAll = useCallback(() => setOpenDirs(new Set()), []);
+
     /** Reads the project's files again. */
     const reload = useCallback(() => {
         forgetRequest(`tree.${repo}.${branch ?? ''}`);
@@ -163,6 +166,7 @@ export function useFileTree({
 
     return {
         reload,
+        collapseAll,
         revealPath,
         paths,
         error,

@@ -120,9 +120,21 @@ export const shellMainVietnamese: Record<string, string> = {
     'sidebar.remove_from_list_the': 'Xóa khỏi danh sách (không xóa thư mục)',
     'sidebar.remove_project_name_from': 'Xóa dự án {name} khỏi danh sách',
     'sidebar.sidebar': 'Thanh bên',
+    'sidebar.github_signed_in': 'GitHub: {account}',
+    'sidebar.sign_in_with_github': 'Đăng nhập bằng GitHub',
     'sidebar.statistics': 'Thống kê',
     'sidebar_toggle.collapse_sidebar': 'Thu gọn thanh bên',
     'sidebar_toggle.open_sidebar': 'Mở thanh bên',
+    'changed_files.title': 'Đã sửa {count} tệp trên máy local ({project})',
+    'changed_files.modified': 'Sửa',
+    'changed_files.created': 'Tạo',
+    'changed_files.deleted': 'Xóa',
+    'changed_files.applied': 'đã áp dụng',
+    'changed_files.reverted': 'đã hoàn tác',
+    'changed_files.review': 'Xem lại thay đổi',
+    'changed_files.discard_all':
+        'Hoàn tác thay đổi của {count} tệp? Không thể khôi phục lại.',
+    'changed_files.discarded': 'Đã hoàn tác thay đổi',
     'turn_steps.edited_count_files': 'Đã sửa {count} tệp',
     'turn_steps.working': 'Đang làm việc…',
     'usage_dialog.24_hours': '24 giờ',
@@ -141,4 +153,41 @@ export const shellMainVietnamese: Record<string, string> = {
     'usage_dialog.which_clis_are_in':
         'CLI nào đang dùng và CLI nào đã dừng vì hạn mức.',
     'workspace_pane.open_chat_panel': 'Mở khung chat',
+    'errors.vscode.not_installed':
+        "Không mở được VS Code. Cài VS Code và chạy “Shell Command: Install 'code' command in PATH”.",
+    'errors.remote.pairing_code_failed': 'Không tạo được mã ghép đôi.',
+    'errors.remote.port_failed': 'Không mở được cổng kết nối.',
+    'errors.workspace.unknown_root':
+        'Thư mục gốc không có trong danh sách cho phép.',
+    'errors.workspace.bad_path': 'Đường dẫn không hợp lệ.',
+    'errors.workspace.denied':
+        'Tệp này bị chặn vì có thể chứa bí mật hoặc thuộc thư mục hệ thống.',
+    'errors.workspace.not_found': 'Không tìm thấy tệp.',
+    'errors.workspace.not_text':
+        'Không đọc được tệp này (không phải văn bản UTF-8 nhỏ).',
+    'errors.workspace.too_large': 'Nội dung quá lớn.',
+    'errors.workspace.conflict':
+        'Tệp đã thay đổi kể từ lúc đề xuất. Hãy yêu cầu AI đề xuất lại.',
+    'errors.workspace.write_failed': 'Không ghi được tệp.',
+    'errors.projects.invalid_name': 'Tên dự án không hợp lệ.',
+    'errors.projects.too_many':
+        'Dự án có quá nhiều mục hoặc đã đạt giới hạn số dự án.',
+    'errors.projects.invalid_folder':
+        'Thư mục không tồn tại hoặc không hợp lệ.',
+    'errors.projects.invalid_env': 'Biến môi trường không hợp lệ.',
+    'errors.projects.not_found': 'Không tìm thấy dự án.',
+    'errors.projects.no_folder': 'Dự án chưa có thư mục để mở.',
+    'errors.projects.save_failed': 'Không lưu được danh sách dự án.',
+    'errors.files.tree_failed': 'Không đọc được cây thư mục.',
+    'errors.files.format_failed': 'Không format được tệp.',
+    'errors.git.nothing_to_commit': 'Không có thay đổi nào để commit.',
+    'errors.git.commit_failed':
+        'Không commit được. Kiểm tra tên và email git của bạn.',
+    'errors.git.worktree_failed':
+        'Không tạo được worktree. Dự án cần là kho git đã có ít nhất một commit.',
+    'errors.git.changes_failed': 'Không đọc được thay đổi.',
+    'errors.git.branches_failed': 'Không đọc được nhánh.',
+    'errors.git.head_failed': 'Không đọc được bản đã commit.',
+    'errors.git.restore_failed': 'Không hoàn tác được tệp.',
+    'errors.git.ai_message_failed': 'AI chưa viết được nội dung.',
 };

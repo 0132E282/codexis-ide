@@ -17,7 +17,14 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["app"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE5QUUxNzgxNjZDRjFDMDkKUldRSkhNOW1nUmV1cVVkYkxzd0JVNGlNejB3NFU5RFllcXQxZ0phRzlWNDFUT2V1WnE3SjRwYVMK",
+      "endpoints": ["https://github.com/0132E282/codexis-ide/releases/latest/download/latest.json"]
+    }
   }
 }

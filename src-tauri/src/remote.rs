@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter, EventId, Listener};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, watch};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::WebSocketStream;
 
 /// Phones connected at once.
 const MAX_PHONES: usize = 3;
@@ -61,7 +62,7 @@ pub fn tokens_match(given: &str, expected: &str) -> bool {
 fn generate_token() -> Result<String, String> {
     let mut bytes = [0u8; 16];
 
-    getrandom::fill(&mut bytes).map_err(|_| "Không tạo được mã ghép đôi.".to_string())?;
+    getrandom::fill(&mut bytes).map_err(|_| "remote.pairing_code_failed".to_string())?;
 
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
@@ -84,15 +85,97 @@ fn local_host() -> String {
         .map_or_else(|| "127.0.0.1".to_string(), |address| address.to_string())
 }
 
-/// The `{"type":"event", ...}` message for a chat event (the payload of `agent-event`); None when it is not an object.
+/// Prefix of the `runId` of a side chat run; its events never leave the desktop.
+const SIDE_RUN_PREFIX: &str = "side-";
+
+/// The `{"type":"event", ...}` message for a chat event (the payload of `agent-event`); None when it is not an object
+/// or when it belongs to a side chat run.
 fn event_message(payload: &str) -> Option<String> {
     let mut value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+    let object = value.as_object_mut()?;
 
-    value
-        .as_object_mut()?
-        .insert("type".to_string(), "event".into());
+    if object
+        .get("runId")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|run_id| run_id.starts_with(SIDE_RUN_PREFIX))
+    {
+        return None;
+    }
+
+    object.insert("type".to_string(), "event".into());
 
     Some(value.to_string())
+}
+
+/// The only door between a phone and the app: checks the token, limits the phones at once and accepts nothing but a prompt to send.
+struct PhoneGate {
+    token: String,
+    phones: AtomicUsize,
+}
+
+impl PhoneGate {
+    fn new(token: String) -> Self {
+        Self {
+            token,
+            phones: AtomicUsize::new(0),
+        }
+    }
+
+    /// Whether another phone may still try to connect.
+    fn has_room(&self) -> bool {
+        self.phones.load(Ordering::SeqCst) < MAX_PHONES
+    }
+
+    /// Handshake, then the phone must introduce itself with the token; answers `ready` when it does.
+    /// A wrong or late introduction closes the connection and gives `None`.
+    async fn admit(&self, stream: TcpStream) -> Option<WebSocketStream<TcpStream>> {
+        let Ok(Ok(mut socket)) =
+            tokio::time::timeout(AUTH_TIMEOUT, tokio_tungstenite::accept_async(stream)).await
+        else {
+            return None;
+        };
+        let first = tokio::time::timeout(AUTH_TIMEOUT, socket.next()).await;
+        let signed_in = matches!(
+            first,
+            Ok(Some(Ok(Message::Text(ref text))))
+                if matches!(parse_message(text.as_str()), Some(ClientMessage::Auth { token: ref given }) if tokens_match(given, &self.token))
+        );
+
+        if !signed_in
+            || socket
+                .send(Message::text(r#"{"type":"ready"}"#))
+                .await
+                .is_err()
+        {
+            let _ = socket.close(None).await;
+
+            return None;
+        }
+
+        Some(socket)
+    }
+
+    /// Counts a phone that got in; the number of phones now.
+    fn joined(&self) -> usize {
+        self.phones.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Counts a phone that left; the number of phones now.
+    fn left(&self) -> usize {
+        self.phones.fetch_sub(1, Ordering::SeqCst) - 1
+    }
+
+    /// The prompt of a `send` message; None for any other message, an empty prompt or one that is too long.
+    fn accepted_prompt(text: &str) -> Option<String> {
+        match parse_message(text)? {
+            ClientMessage::Send { prompt }
+                if !prompt.trim().is_empty() && prompt.chars().count() <= MAX_PROMPT_CHARS =>
+            {
+                Some(prompt)
+            }
+            _ => None,
+        }
+    }
 }
 
 struct Running {
@@ -109,6 +192,11 @@ pub struct Remote {
 }
 
 impl Remote {
+    /// Whether the phone server is running.
+    pub fn is_running(&self) -> bool {
+        self.running.lock().expect("remote lock poisoned").is_some()
+    }
+
     /// Starts the server, or returns the running one's info.
     pub fn start(&self, app: &AppHandle) -> Result<Info, String> {
         let mut running = self.running.lock().expect("remote lock poisoned");
@@ -117,22 +205,23 @@ impl Remote {
             return Ok(current.info.clone());
         }
 
-        let listener = StdTcpListener::bind("0.0.0.0:0")
-            .map_err(|_| "Không mở được cổng kết nối.".to_string())?;
+        let listener =
+            StdTcpListener::bind("0.0.0.0:0").map_err(|_| "remote.port_failed".to_string())?;
 
         listener
             .set_nonblocking(true)
-            .map_err(|_| "Không mở được cổng kết nối.".to_string())?;
+            .map_err(|_| "remote.port_failed".to_string())?;
 
         let port = listener
             .local_addr()
-            .map_err(|_| "Không mở được cổng kết nối.".to_string())?
+            .map_err(|_| "remote.port_failed".to_string())?
             .port();
         let info = Info {
             host: local_host(),
             port,
             token: generate_token()?,
         };
+        let gate = Arc::new(PhoneGate::new(info.token.clone()));
         let (events, _) = broadcast::channel::<String>(256);
         let (stop, stopped) = watch::channel(false);
         let sender = events.clone();
@@ -143,13 +232,7 @@ impl Remote {
             }
         });
 
-        tauri::async_runtime::spawn(serve(
-            listener,
-            app.clone(),
-            info.token.clone(),
-            events,
-            stopped,
-        ));
+        tauri::async_runtime::spawn(serve(listener, app.clone(), gate, events, stopped));
 
         *running = Some(Running {
             info: info.clone(),
@@ -172,14 +255,13 @@ impl Remote {
 async fn serve(
     listener: StdTcpListener,
     app: AppHandle,
-    token: String,
+    gate: Arc<PhoneGate>,
     events: broadcast::Sender<String>,
     mut stopped: watch::Receiver<bool>,
 ) {
     let Ok(listener) = TcpListener::from_std(listener) else {
         return;
     };
-    let phones = Arc::new(AtomicUsize::new(0));
 
     loop {
         tokio::select! {
@@ -187,17 +269,16 @@ async fn serve(
             accepted = listener.accept() => {
                 let Ok((stream, _)) = accepted else { continue };
 
-                if phones.load(Ordering::SeqCst) >= MAX_PHONES {
+                if !gate.has_room() {
                     continue;
                 }
 
                 tauri::async_runtime::spawn(phone(
                     stream,
                     app.clone(),
-                    token.clone(),
+                    Arc::clone(&gate),
                     events.subscribe(),
                     stopped.clone(),
-                    Arc::clone(&phones),
                 ));
             }
         }
@@ -208,35 +289,14 @@ async fn serve(
 async fn phone(
     stream: TcpStream,
     app: AppHandle,
-    token: String,
+    gate: Arc<PhoneGate>,
     mut events: broadcast::Receiver<String>,
     mut stopped: watch::Receiver<bool>,
-    phones: Arc<AtomicUsize>,
 ) {
-    let Ok(Ok(mut socket)) =
-        tokio::time::timeout(AUTH_TIMEOUT, tokio_tungstenite::accept_async(stream)).await
-    else {
+    let Some(mut socket) = gate.admit(stream).await else {
         return;
     };
-    let first = tokio::time::timeout(AUTH_TIMEOUT, socket.next()).await;
-    let signed_in = matches!(
-        first,
-        Ok(Some(Ok(Message::Text(ref text))))
-            if matches!(parse_message(text.as_str()), Some(ClientMessage::Auth { token: ref given }) if tokens_match(given, &token))
-    );
-
-    if !signed_in
-        || socket
-            .send(Message::text(r#"{"type":"ready"}"#))
-            .await
-            .is_err()
-    {
-        let _ = socket.close(None).await;
-
-        return;
-    }
-
-    let count = phones.fetch_add(1, Ordering::SeqCst) + 1;
+    let count = gate.joined();
     let _ = app.emit("remote-connected", count);
 
     loop {
@@ -244,10 +304,8 @@ async fn phone(
             _ = stopped.changed() => break,
             incoming = socket.next() => match incoming {
                 Some(Ok(Message::Text(text))) => {
-                    if let Some(ClientMessage::Send { prompt }) = parse_message(text.as_str()) {
-                        if !prompt.trim().is_empty() && prompt.chars().count() <= MAX_PROMPT_CHARS {
-                            let _ = app.emit("remote-send", serde_json::json!({ "prompt": prompt }));
-                        }
+                    if let Some(prompt) = PhoneGate::accepted_prompt(text.as_str()) {
+                        let _ = app.emit("remote-send", serde_json::json!({ "prompt": prompt }));
                     }
                 }
                 Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
@@ -267,66 +325,10 @@ async fn phone(
     }
 
     let _ = socket.close(None).await;
-    let count = phones.fetch_sub(1, Ordering::SeqCst) - 1;
+    let count = gate.left();
     let _ = app.emit("remote-disconnected", count);
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn token_is_32_hex_characters_and_never_repeats() {
-        let first = generate_token().unwrap();
-
-        assert_eq!(first.len(), 32);
-        assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        assert_ne!(first, generate_token().unwrap());
-    }
-
-    #[test]
-    fn tokens_match_only_when_equal() {
-        assert!(tokens_match("abc", "abc"));
-        assert!(!tokens_match("abd", "abc"));
-        assert!(!tokens_match("ab", "abc"));
-        assert!(!tokens_match("abcd", "abc"));
-        assert!(!tokens_match("", "abc"));
-    }
-
-    #[test]
-    fn messages_of_the_phone_are_parsed() {
-        assert_eq!(
-            parse_message(r#"{"type":"auth","token":"t"}"#),
-            Some(ClientMessage::Auth {
-                token: "t".to_string()
-            })
-        );
-        assert_eq!(
-            parse_message(r#"{"type":"send","prompt":"hi"}"#),
-            Some(ClientMessage::Send {
-                prompt: "hi".to_string()
-            })
-        );
-        assert_eq!(parse_message(r#"{"type":"other"}"#), None);
-        assert_eq!(parse_message("not json"), None);
-    }
-
-    #[test]
-    fn only_a_network_address_is_reachable() {
-        assert!(reachable("192.168.1.20".parse().unwrap()));
-        assert!(!reachable("127.0.0.1".parse().unwrap()));
-        assert!(!reachable("0.0.0.0".parse().unwrap()));
-        assert!(!reachable("::1".parse().unwrap()));
-    }
-
-    #[test]
-    fn chat_events_get_the_event_type() {
-        let message = event_message(r#"{"runId":"r","kind":"text","text":"x"}"#).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&message).unwrap();
-
-        assert_eq!(value["type"], "event");
-        assert_eq!(value["runId"], "r");
-        assert_eq!(value["kind"], "text");
-        assert_eq!(event_message("[1]"), None);
-    }
-}
+#[path = "../tests/unit/remote.rs"]
+mod tests;

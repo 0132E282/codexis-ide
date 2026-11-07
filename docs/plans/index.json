@@ -1,0 +1,85 @@
+[
+  {
+    "title": "Lộ trình tổng: thứ tự triển khai OOP refactor và 4 tính năng mới",
+    "description": "Gộp 5 plan (OOP refactor, bảng Context, Side chat, ngăn Plan, ngăn Background tasks) thành một thứ tự làm duy nhất, chỉ ra file dùng chung (agent.rs, remote.rs, workspace-pane.tsx, dock) để không đè nhau. Không thay thế plan chi tiết, chỉ dẫn tới chúng.",
+    "tags": [
+      "roadmap",
+      "oop",
+      "context",
+      "side-chat",
+      "plan-pane",
+      "background-tasks"
+    ],
+    "path": "docs/plans/roadmap-20261106.json"
+  },
+  {
+    "title": "Refactor backend Rust sang OOP (CliKind, AgentCli, AuthTool, permission)",
+    "description": "Kế hoạch triển khai thiết kế OOP ở docs/system/architecture.md mục 4–7: một nguồn danh tính CLI, đa hình thay match rải rác, lớp quyền thống nhất, chia nhóm A–G chạy song song sau Phase 0. Giữ nguyên contract Tauri, frontend, Cargo.toml và hành vi.",
+    "tags": ["backend", "rust", "oop", "refactor", "tauri", "permission"],
+    "path": "docs/plans/oop-refactor-backend-20261106.json"
+  },
+  {
+    "title": "Bảng Context: hiện mức dùng ngữ cảnh của cuộc chat",
+    "description": "Kế hoạch triển khai docs/system/context-panel.md: đọc usage từ CLI, phát Event::Context, popover phần trăm đã dùng. Không thêm lệnh Tauri, không đổi DB.",
+    "tags": ["context", "usage", "chat", "rust", "frontend"],
+    "path": "docs/plans/context-panel-20261106.json"
+  },
+  {
+    "title": "Side chat: ngăn phụ nhiều tab, đứng một mình, sống chung với Terminal",
+    "description": "Kế hoạch triển khai docs/system/side-chat.md: side chat dùng lại agent_send với runId side-, nhiều tab, dock cột phải (phóng to, đóng, chiếm cả vùng khi đứng một mình), cùng quy ước dock với Terminal; chỉ đọc, không lưu DB, chặn rò sang điện thoại.",
+    "tags": [
+      "side-chat",
+      "dock",
+      "terminal",
+      "chat",
+      "frontend",
+      "rust",
+      "remote"
+    ],
+    "path": "docs/plans/side-chat-20261106.json"
+  },
+  {
+    "title": "Ngăn Plan: hiện kế hoạch AI đang viết, lưu theo tên dự án",
+    "description": "Kế hoạch triển khai docs/system/plan-pane.md: Rust phát Event::Plan từ control_request ExitPlanMode (chế độ plan dùng stream-json; todo TodoWrite/Task* hoãn theo chụp CLI 2026-11-07), lưu plan và logs vào projects/<tên dự án>/ trong dữ liệu app (không ghi vào dự án), lệnh plan_load, ngăn Plan trong dock phải cùng Side chat.",
+    "tags": ["plan-pane", "dock", "logs", "chat", "rust", "frontend"],
+    "path": "docs/plans/plan-pane-20261106.json"
+  },
+  {
+    "title": "Ngăn Background tasks: việc chạy nền của AI",
+    "description": "Kế hoạch triển khai docs/system/background-tasks.md: Rust dựng bảng việc nền từ sự kiện system của Claude CLI (task_started, task_updated, task_notification; không có BashOutput/KillShell, không có pid) và sub-agent, dừng qua CLI (control_request hoặc TaskStop qua model), Event::Background, 3 lệnh Tauri, lưu tasks.json theo tên dự án trong dữ liệu app, ngăn Background tasks ở dock dưới cạnh Terminal.",
+    "tags": [
+      "background-tasks",
+      "dock",
+      "terminal",
+      "chat",
+      "rust",
+      "frontend"
+    ],
+    "path": "docs/plans/background-tasks-20261106.json"
+  },
+  {
+    "title": "Chế độ quyền: thêm Bypass permissions và đồng bộ menu Mode",
+    "description": "Thêm chế độ bypassPermissions (có xác nhận mỗi lần chọn), sắp xếp menu Mode theo ảnh mẫu (Auto khuyên dùng, Manual, Accept edits, Plan, Bypass), mô tả từng chế độ và phím số 1–5.",
+    "tags": ["permission", "mode", "composer", "rust", "frontend"],
+    "path": "docs/plans/permission-modes-20261106.json"
+  },
+  {
+    "title": "Vị trí các ngăn: Move, Fill and arrange, Open in new window",
+    "description": "Kế hoạch triển khai docs/system/pane-placement.md: chọn vị trí trái/phải/trên/dưới hoặc chiếm cả vùng cho ngăn Plan, Background tasks, Side chat, Terminal; nhớ trong localStorage; mở cửa sổ mới là tuỳ chọn.",
+    "tags": [
+      "dock",
+      "layout",
+      "plan-pane",
+      "background-tasks",
+      "side-chat",
+      "frontend"
+    ],
+    "path": "docs/plans/pane-placement-20261106.json"
+  },
+  {
+    "title": "Session rail: thanh thông tin phiên (Environment, Context, Connectors, Outputs, GitHub)",
+    "description": "Kế hoạch triển khai docs/system/session-rail.md: ngăn dock chỉ đọc với dữ liệu thật từ ContextUsage, tools_mcp, steps đã lưu, git và gh.",
+    "tags": ["session-rail", "dock", "context", "github", "rust", "frontend"],
+    "path": "docs/plans/session-rail-20261107.json"
+  }
+]

@@ -21,7 +21,8 @@ export const aiChatEnglish: Record<string, string> = {
     'branch_popover.project_branches_and_worktrees2':
         'Project branches and worktrees',
     'branch_popover.this_folder_is_not': 'This folder is not a git repository.',
-    'choice_card.other': 'Other…',
+    'choice_card.close': 'Close',
+    'choice_card.other': 'Something else',
     'choice_card.other_answer': 'Other answer',
     'choice_card.recommended': '(Recommended)',
     'choice_card.skip': 'Skip',
@@ -95,6 +96,7 @@ export const aiChatEnglish: Record<string, string> = {
     'monaco_code.ask_ai_about_this': 'Ask AI about this section (⌘L)',
     'monaco_code.ask_ai_about_this2': 'Ask AI about this section',
     'monaco_code.chat_with_ai_about': 'Chat with AI about this section',
+    'mermaid_block.diagram': 'Diagram',
     'monaco_code.undo_this_section': 'Undo this section',
     'quick_open.find_file': 'Find file',
     'quick_open.find_file_by_name': 'Find file by name…',

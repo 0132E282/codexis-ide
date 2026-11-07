@@ -10,8 +10,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import Field from '@/components/form/field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     errorText,
@@ -21,6 +20,11 @@ import {
     type Project,
 } from '@/lib/ide';
 import { t } from '@/lib/i18n';
+import {
+    DISPLAY_NAME_MAX_LENGTH,
+    ENV_KEY_MAX_LENGTH,
+    ENV_VALUE_MAX_LENGTH,
+} from '@/lib/limits';
 
 const UNSUPPORTED = 'new_project_dialog.not_supported_in_this';
 
@@ -137,20 +141,15 @@ export function NewProjectDialog({
                         <TabsTrigger value="remote">Remote Control</TabsTrigger>
                     </TabsList>
                     <TabsContent value="local" className="grid gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="project-name">
-                                {t('common.name')}
-                            </Label>
-                            <Input
-                                id="project-name"
-                                value={name}
-                                maxLength={100}
-                                placeholder={t('new_project_dialog.my_app')}
-                                onChange={(event) =>
-                                    setName(event.target.value)
-                                }
-                            />
-                        </div>
+                        <Field
+                            name="project-name"
+                            label={t('common.name')}
+                            autoComplete="off"
+                            value={name}
+                            maxLength={DISPLAY_NAME_MAX_LENGTH}
+                            placeholder={t('new_project_dialog.my_app')}
+                            onChange={(event) => setName(event.target.value)}
+                        />
                         <div className="grid gap-2">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm font-medium">
@@ -252,8 +251,12 @@ export function NewProjectDialog({
                                             key={index}
                                             className="flex items-center gap-2"
                                         >
-                                            <Input
+                                            <Field
+                                                name={`env-key-${index}`}
+                                                className="min-w-0 flex-1"
+                                                autoComplete="off"
                                                 value={entry.key}
+                                                maxLength={ENV_KEY_MAX_LENGTH}
                                                 aria-label={t(
                                                     'new_project_dialog.variable_name',
                                                 )}
@@ -266,8 +269,11 @@ export function NewProjectDialog({
                                                     })
                                                 }
                                             />
-                                            <Input
+                                            <Field
+                                                name={`env-value-${index}`}
+                                                className="min-w-0 flex-1"
                                                 value={entry.value}
+                                                maxLength={ENV_VALUE_MAX_LENGTH}
                                                 aria-label={t('common.value')}
                                                 placeholder={t(
                                                     'new_project_dialog.value',

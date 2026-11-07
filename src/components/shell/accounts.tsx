@@ -1,9 +1,11 @@
+import { Github } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiKeySection } from '@/components/shell/settings-tabs/api-key-section';
 import { ManageAccountsPage } from '@/components/shell/manage-accounts-page';
+import { ClaudeIcon, CodexIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type AuthStatus } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
@@ -13,6 +15,17 @@ const LABEL: Record<AuthProvider, string> = {
     claude: 'Claude',
     codex: 'ChatGPT (Codex)',
     github: 'GitHub',
+};
+
+const ICON: Record<AuthProvider, ReactNode> = {
+    claude: <ClaudeIcon aria-hidden="true" className="size-5 shrink-0" />,
+    codex: <CodexIcon className="size-5 shrink-0 rounded-sm" />,
+    github: (
+        <Github
+            aria-hidden="true"
+            className="size-5 shrink-0 text-muted-foreground"
+        />
+    ),
 };
 
 const INSTALL_HINT: Record<AuthProvider, string> = {
@@ -109,6 +122,7 @@ function AccountRow({
     return (
         <li className="flex flex-col gap-1 rounded-md border p-3">
             <div className="flex items-center gap-3">
+                {ICON[status.provider]}
                 <button
                     type="button"
                     onClick={onManage}

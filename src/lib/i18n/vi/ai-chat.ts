@@ -21,7 +21,8 @@ export const aiChatVietnamese: Record<string, string> = {
     'branch_popover.project_branches_and_worktrees2':
         'Nhánh và worktree của dự án',
     'branch_popover.this_folder_is_not': 'Thư mục này không phải repo git.',
-    'choice_card.other': 'Khác…',
+    'choice_card.close': 'Đóng',
+    'choice_card.other': 'Điều khác…',
     'choice_card.other_answer': 'Câu trả lời khác',
     'choice_card.recommended': '(Khuyến nghị)',
     'choice_card.skip': 'Bỏ qua',
@@ -94,6 +95,7 @@ export const aiChatVietnamese: Record<string, string> = {
     'monaco_code.ask_ai_about_this': 'Hỏi AI về đoạn này (⌘L)',
     'monaco_code.ask_ai_about_this2': 'Hỏi AI về đoạn này',
     'monaco_code.chat_with_ai_about': 'Chat với AI về đoạn này',
+    'mermaid_block.diagram': 'Sơ đồ',
     'monaco_code.undo_this_section': 'Hoàn tác đoạn này',
     'quick_open.find_file': 'Tìm tệp',
     'quick_open.find_file_by_name': 'Tìm tệp theo tên…',

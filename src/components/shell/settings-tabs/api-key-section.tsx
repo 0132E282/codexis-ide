@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import Field from '@/components/form/field';
 import { t } from '@/lib/i18n';
+import { API_KEY_MAX_LENGTH } from '@/lib/limits';
 import { errorText } from '@/lib/ide';
 import {
     ideCredentials,
@@ -64,11 +65,14 @@ export function ApiKeySection() {
                 </Badge>
             </div>
             <form onSubmit={submit} className="flex gap-2">
-                <Input
+                <Field
+                    name="api-key"
+                    className="min-w-0 flex-1"
                     type="password"
                     autoComplete="off"
                     spellCheck={false}
                     value={value}
+                    maxLength={API_KEY_MAX_LENGTH}
                     onChange={(event) => setValue(event.target.value)}
                     placeholder={
                         status?.set

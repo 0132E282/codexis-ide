@@ -3,6 +3,7 @@ use super::projects::ProjectsReply;
 use crate::chats::ChatStore;
 use crate::projects::{NewProject, Project, ProjectStore};
 use crate::workspace::{Workspace, WorkspaceError};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
@@ -75,7 +76,7 @@ impl AppState {
     }
 
     /// The workspace at `root`, so several projects can stay open at once: `None` is the open workspace. Any other root must be the open one or the first folder of a saved project, so a caller can never reach a folder the user did not add.
-    pub(super) fn workspace_for(&self, root: Option<&str>) -> Result<Workspace, String> {
+    pub(crate) fn workspace_for(&self, root: Option<&str>) -> Result<Workspace, String> {
         let active = self.workspace()?;
         let Some(root) = root else {
             return Ok(active);
@@ -101,6 +102,32 @@ impl AppState {
     /// The root path of the workspace at `root`, the key chats are stored under.
     pub(super) fn workspace_key(&self, root: Option<&str>) -> Result<String, String> {
         Ok(self.workspace_for(root)?.root().display().to_string())
+    }
+
+    /// The name and id the data of the project at `root` is kept under: those of the saved project whose first folder is `root`; a folder that is no saved project gets its own folder name and a hash of the path.
+    pub(super) fn project_identity(&self, root: &Path) -> (String, String) {
+        let root_text = root.to_string_lossy();
+        let saved = self
+            .lock_projects()
+            .projects()
+            .iter()
+            .find(|project| {
+                project
+                    .folders
+                    .first()
+                    .is_some_and(|folder| *folder == root_text)
+            })
+            .map(|project| (project.name.clone(), project.id.clone()));
+
+        saved.unwrap_or_else(|| {
+            let name = root
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let hash = format!("{:x}", Sha256::digest(root_text.as_bytes()));
+
+            (name, hash[..12].to_string())
+        })
     }
 
     pub(super) fn list_projects(&self) -> ProjectsReply {
@@ -192,6 +219,23 @@ mod tests {
             .collect();
 
         (state, ids)
+    }
+
+    #[test]
+    fn a_saved_project_keeps_its_name_and_id_and_an_unsaved_folder_gets_a_hash() {
+        let data = tempfile::tempdir().unwrap();
+        let saved = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let (state, ids) = state_with_projects(data.path(), &[saved.path()]);
+        let saved_root = fs::canonicalize(saved.path()).unwrap();
+        let (name, id) = state.project_identity(&saved_root);
+
+        assert_eq!((name.as_str(), &id), ("p0", &ids[0]));
+
+        let (name, id) = state.project_identity(other.path());
+
+        assert_eq!(name, other.path().file_name().unwrap().to_string_lossy());
+        assert_eq!(state.project_identity(other.path()).1, id);
     }
 
     #[test]

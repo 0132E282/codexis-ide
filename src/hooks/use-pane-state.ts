@@ -11,8 +11,8 @@ export type PaneState = {
     activeFile: string | null;
     /** Counter bumped by "Cuộc trò chuyện mới". */
     newChat: number;
-    /** Conversation picked in the sidebar. */
-    picked: number | null;
+    /** Conversation picked in the sidebar (`n` changes on every click, so picking the same chat again opens it again). */
+    picked: { id: number; n: number } | null;
     /** Conversation shown. */
     conversation: number | null;
     /** Sub-agents the AI has started in the running turn. */

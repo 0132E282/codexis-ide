@@ -2,9 +2,10 @@
 //!
 //! History belongs to a workspace (its root path) and is split into conversations, as the Claude CLI splits its sessions: each conversation has a title taken from its first message, a last-used time, its turns and the session id of each CLI, so opening it again continues the same `claude` / `codex` conversation.
 
-use crate::agent::Cli;
-use crate::db;
+use crate::cli::CliKind;
+use crate::{db, sql, validation};
 use rusqlite::{params, Connection, OptionalExtension};
+use sea_query::{Alias, Condition, Expr, ExprTrait, Query, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -12,15 +13,24 @@ use std::path::PathBuf;
 
 /// Oldest turns beyond this many per workspace are dropped.
 pub const MAX_TURNS: i64 = 500;
-const MAX_ID_BYTES: usize = 64;
-const MAX_PROMPT_BYTES: usize = 200_000;
 const MAX_ANSWER_BYTES: usize = 2_000_000;
-const MAX_STEPS_BYTES: usize = 4_000_000;
-const MAX_SESSION_BYTES: usize = 256;
+
+/// Sizes of the saved turns of one conversation (see `ChatStore::size_of`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ConversationSize {
+    pub turns: i64,
+    pub failed_turns: i64,
+    pub prompt_characters: i64,
+    pub answer_characters: i64,
+    /// CLI of the newest saved turn (None: no turn yet).
+    pub last_cli: Option<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatError {
     Invalid,
+    /// Refused by `validation`; holds its `validation.*` key.
+    Rejected(&'static str),
     SaveFailed,
     LoadFailed,
 }
@@ -29,9 +39,10 @@ impl ChatError {
     /// Fixed user-facing text.
     pub fn message(self) -> &'static str {
         match self {
-            Self::Invalid => "Dữ liệu cuộc trò chuyện không hợp lệ.",
-            Self::SaveFailed => "Không lưu được cuộc trò chuyện.",
-            Self::LoadFailed => "Không đọc được cuộc trò chuyện đã lưu.",
+            Self::Invalid => "chats.invalid",
+            Self::Rejected(key) => key,
+            Self::SaveFailed => "chats.save_failed",
+            Self::LoadFailed => "chats.load_failed",
         }
     }
 }
@@ -43,6 +54,22 @@ impl fmt::Display for ChatError {
 }
 
 impl std::error::Error for ChatError {}
+
+impl From<validation::ValidationError> for ChatError {
+    fn from(error: validation::ValidationError) -> Self {
+        [
+            validation::KEY_EMPTY,
+            validation::KEY_TOO_LONG,
+            validation::KEY_CONTROL_CHAR,
+            validation::KEY_BAD_RUN_ID,
+            validation::KEY_BAD_SESSION,
+            validation::KEY_BAD_STEPS,
+        ]
+        .into_iter()
+        .find(|key| *key == error.key())
+        .map_or(Self::Invalid, Self::Rejected)
+    }
+}
 
 pub type Result<T> = std::result::Result<T, ChatError>;
 
@@ -115,16 +142,18 @@ impl ChatStore {
     }
 
     fn owns(&self, workspace: &str, conversation: i64) -> bool {
-        self.connection
-            .query_row(
-                "SELECT 1 FROM conversations WHERE id = ?1 AND workspace = ?2",
-                params![conversation, workspace],
-                |_| Ok(()),
-            )
-            .optional()
-            .ok()
-            .flatten()
-            .is_some()
+        sql::query_first(
+            &self.connection,
+            Query::select()
+                .expr(Expr::val(1_i64))
+                .from(Alias::new("conversations"))
+                .and_where(Expr::col(Alias::new("id")).eq(conversation))
+                .and_where(Expr::col(Alias::new("workspace")).eq(workspace)),
+            |_| Ok(()),
+        )
+        .ok()
+        .flatten()
+        .is_some()
     }
 
     /// Conversations of `workspace` that have at least one turn, the most recently used first.
@@ -162,9 +191,7 @@ impl ChatStore {
     /// # Errors
     /// Fails on a conversation of another workspace or when the database cannot be read.
     pub fn load(&mut self, workspace: &str, conversation: Option<i64>) -> Result<ChatHistory> {
-        if workspace.is_empty() {
-            return Err(ChatError::Invalid);
-        }
+        validation::workspace_key(workspace)?;
 
         let id = match conversation {
             Some(id) if self.owns(workspace, id) => id,
@@ -175,11 +202,13 @@ impl ChatStore {
             },
         };
         let read = || -> rusqlite::Result<ChatHistory> {
-            let mut turns = self.connection.prepare(
-                "SELECT id, cli, prompt, answer, error, steps FROM chat_turns WHERE conversation = ?1 ORDER BY position",
-            )?;
-            let turns = turns
-                .query_map([id], |row| {
+            let turns = sql::list_ordered(
+                &self.connection,
+                "chat_turns",
+                &["id", "cli", "prompt", "answer", "error", "steps"],
+                Condition::all().add(Expr::col(Alias::new("conversation")).eq(id)),
+                "position",
+                |row| {
                     Ok(ChatTurn {
                         id: row.get(0)?,
                         cli: row.get(1)?,
@@ -188,14 +217,20 @@ impl ChatStore {
                         error: row.get(4)?,
                         steps: row.get(5)?,
                     })
-                })?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
-            let mut sessions = self.connection.prepare(
-                "SELECT cli, session FROM conversation_sessions WHERE conversation = ?1",
+                },
             )?;
-            let sessions = sessions
-                .query_map([id], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<rusqlite::Result<HashMap<String, String>>>()?;
+            let sessions = sql::query_all(
+                &self.connection,
+                Query::select()
+                    .columns([Alias::new("cli"), Alias::new("session")])
+                    .from(Alias::new("conversation_sessions"))
+                    .and_where(Expr::col(Alias::new("conversation")).eq(id)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )?
+            .into_iter()
+            // * A session that is not valid (a row written before the checks) never goes back to a CLI.
+            .filter(|(_, session)| validation::valid_session(session).is_ok())
+            .collect::<HashMap<String, String>>();
 
             Ok(ChatHistory {
                 conversation: id,
@@ -207,21 +242,81 @@ impl ChatStore {
         read().map_err(|_| ChatError::LoadFailed)
     }
 
+    /// The saved steps (JSON) of every turn of `conversation`, oldest first; turns with no steps are left out.
+    ///
+    /// # Errors
+    /// Fails on a conversation of another workspace or when the database cannot be read.
+    pub fn steps_of(&self, workspace: &str, conversation: i64) -> Result<Vec<String>> {
+        validation::workspace_key(workspace)?;
+
+        if !self.owns(workspace, conversation) {
+            return Err(ChatError::Invalid);
+        }
+
+        sql::list_ordered(
+            &self.connection,
+            "chat_turns",
+            &["steps"],
+            Condition::all().add(Expr::col(Alias::new("conversation")).eq(conversation)),
+            "position",
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .map(|steps| steps.into_iter().flatten().collect())
+        .map_err(|_| ChatError::LoadFailed)
+    }
+
+    /// Sizes of the saved turns of `conversation`: how many, how many ended in an error and the characters of what was asked and answered. Sizes only, never the text.
+    ///
+    /// # Errors
+    /// Fails on a conversation of another workspace or when the database cannot be read.
+    pub fn size_of(&self, workspace: &str, conversation: i64) -> Result<ConversationSize> {
+        validation::workspace_key(workspace)?;
+
+        if !self.owns(workspace, conversation) {
+            return Err(ChatError::Invalid);
+        }
+
+        self.connection
+            .query_row(
+                "SELECT COUNT(*),
+                        COALESCE(SUM(error IS NOT NULL), 0),
+                        COALESCE(SUM(LENGTH(prompt)), 0),
+                        COALESCE(SUM(LENGTH(answer)), 0),
+                        (SELECT cli FROM chat_turns WHERE conversation = ?1 ORDER BY position DESC LIMIT 1)
+                 FROM chat_turns WHERE conversation = ?1",
+                params![conversation],
+                |row| {
+                    Ok(ConversationSize {
+                        turns: row.get(0)?,
+                        failed_turns: row.get(1)?,
+                        prompt_characters: row.get(2)?,
+                        answer_characters: row.get(3)?,
+                        last_cli: row.get(4)?,
+                    })
+                },
+            )
+            .map_err(|_| ChatError::LoadFailed)
+    }
+
     /// Saves a turn of `conversation`: a new id goes to the end, a known id is updated in place. The first message names the conversation.
     ///
     /// # Errors
     /// Fails on an unknown CLI or conversation, an empty or oversized field, or when the database cannot be written.
     pub fn save_turn(&mut self, workspace: &str, conversation: i64, turn: &ChatTurn) -> Result<()> {
-        if Cli::parse(&turn.cli).is_none()
-            || turn.id.is_empty()
-            || turn.id.len() > MAX_ID_BYTES
-            || turn.prompt.len() > MAX_PROMPT_BYTES
+        validation::workspace_key(workspace)?;
+        validation::run_id(&turn.id, "")?;
+        validation::prompt(&turn.prompt)?;
+
+        if let Some(error) = &turn.error {
+            validation::turn_error(error)?;
+        }
+
+        if let Some(steps) = &turn.steps {
+            validation::steps_json(steps)?;
+        }
+
+        if CliKind::parse_agent(&turn.cli).is_none()
             || turn.answer.len() > MAX_ANSWER_BYTES
-            || turn
-                .steps
-                .as_ref()
-                .is_some_and(|steps| steps.len() > MAX_STEPS_BYTES)
-            || workspace.is_empty()
             || !self.owns(workspace, conversation)
         {
             return Err(ChatError::Invalid);
@@ -229,13 +324,15 @@ impl ChatStore {
 
         let write = |connection: &mut Connection| -> rusqlite::Result<()> {
             let transaction = connection.transaction()?;
-            let known: Option<i64> = transaction
-                .query_row(
-                    "SELECT position FROM chat_turns WHERE workspace = ?1 AND id = ?2",
-                    params![workspace, turn.id],
-                    |row| row.get(0),
-                )
-                .optional()?;
+            let known: Option<i64> = sql::query_first(
+                &transaction,
+                Query::select()
+                    .column(Alias::new("position"))
+                    .from(Alias::new("chat_turns"))
+                    .and_where(Expr::col(Alias::new("workspace")).eq(workspace))
+                    .and_where(Expr::col(Alias::new("id")).eq(turn.id.as_str())),
+                |row| row.get(0),
+            )?;
             let position = match known {
                 Some(position) => position,
                 None => transaction.query_row(
@@ -275,9 +372,12 @@ impl ChatStore {
                 "UPDATE conversations SET title = ?2 WHERE id = ?1 AND title = ''",
                 params![conversation, title_of(&turn.prompt)],
             )?;
-            transaction.execute(
-                "DELETE FROM chat_turns WHERE workspace = ?1 AND position <= ?2 - ?3",
-                params![workspace, position, MAX_TURNS],
+            sql::delete_where(
+                &transaction,
+                "chat_turns",
+                Condition::all()
+                    .add(Expr::col(Alias::new("workspace")).eq(workspace))
+                    .add(Expr::col(Alias::new("position")).lte(position - MAX_TURNS)),
             )?;
 
             transaction.commit()
@@ -291,9 +391,7 @@ impl ChatStore {
     /// # Errors
     /// Fails on an empty workspace key or when the database cannot be written.
     pub fn new_conversation(&mut self, workspace: &str) -> Result<i64> {
-        if workspace.is_empty() {
-            return Err(ChatError::Invalid);
-        }
+        validation::workspace_key(workspace)?;
 
         let empty: Option<i64> = self
             .connection
@@ -333,15 +431,17 @@ impl ChatStore {
         let write = |connection: &mut Connection| -> rusqlite::Result<()> {
             let transaction = connection.transaction()?;
 
-            transaction.execute(
-                "DELETE FROM chat_turns WHERE conversation = ?1",
-                [conversation],
-            )?;
-            transaction.execute(
-                "DELETE FROM conversation_sessions WHERE conversation = ?1",
-                [conversation],
-            )?;
-            transaction.execute("DELETE FROM conversations WHERE id = ?1", [conversation])?;
+            for (table, column) in [
+                ("chat_turns", "conversation"),
+                ("conversation_sessions", "conversation"),
+                ("conversations", "id"),
+            ] {
+                sql::delete_where(
+                    &transaction,
+                    table,
+                    Condition::all().add(Expr::col(Alias::new(column)).eq(conversation)),
+                )?;
+            }
 
             transaction.commit()
         };
@@ -360,226 +460,27 @@ impl ChatStore {
         cli: &str,
         session: &str,
     ) -> Result<()> {
-        if Cli::parse(cli).is_none()
-            || session.is_empty()
-            || session.len() > MAX_SESSION_BYTES
-            || !self.owns(workspace, conversation)
-        {
+        validation::valid_session(session)?;
+
+        if CliKind::parse_agent(cli).is_none() || !self.owns(workspace, conversation) {
             return Err(ChatError::Invalid);
         }
 
-        self.connection
-            .execute(
-                "INSERT OR REPLACE INTO conversation_sessions (conversation, cli, session) VALUES (?1, ?2, ?3)",
-                params![conversation, cli, session],
-            )
-            .map(|_| ())
-            .map_err(|_| ChatError::SaveFailed)
+        sql::upsert(
+            &self.connection,
+            "conversation_sessions",
+            &["conversation", "cli"],
+            vec![
+                ("conversation", Value::from(conversation)),
+                ("cli", Value::from(cli)),
+                ("session", Value::from(session)),
+            ],
+        )
+        .map(|_| ())
+        .map_err(|_| ChatError::SaveFailed)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn store() -> (tempfile::TempDir, ChatStore) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = ChatStore::open(dir.path().join("rynox.db"));
-
-        (dir, store)
-    }
-
-    fn turn(id: &str, answer: &str) -> ChatTurn {
-        ChatTurn {
-            id: id.into(),
-            cli: "claude".into(),
-            prompt: format!("hỏi {id}"),
-            answer: answer.into(),
-            error: None,
-            steps: None,
-        }
-    }
-
-    #[test]
-    fn turns_and_sessions_survive_a_reopen_and_stay_in_their_conversation() {
-        let (dir, mut store) = store();
-        let a = store.load("/a", None).unwrap().conversation;
-        let b = store.load("/b", None).unwrap().conversation;
-
-        store.save_turn("/a", a, &turn("t1", "một")).unwrap();
-        store.save_turn("/a", a, &turn("t2", "hai")).unwrap();
-        store.save_turn("/b", b, &turn("t1x", "khác")).unwrap();
-        store.save_session("/a", a, "claude", "sess-1").unwrap();
-        store.save_session("/a", a, "codex", "sess-2").unwrap();
-        drop(store);
-
-        let mut reopened = ChatStore::open(dir.path().join("rynox.db"));
-        let history = reopened.load("/a", None).unwrap();
-
-        assert_eq!(history.conversation, a);
-        assert_eq!(
-            history
-                .turns
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            ["t1", "t2"]
-        );
-        assert_eq!(history.sessions["claude"], "sess-1");
-        assert_eq!(history.sessions["codex"], "sess-2");
-        assert_eq!(reopened.load("/b", None).unwrap().turns[0].answer, "khác");
-    }
-
-    #[test]
-    fn saving_a_known_turn_updates_it_in_place() {
-        let (_dir, mut store) = store();
-        let c = store.load("/a", None).unwrap().conversation;
-
-        store.save_turn("/a", c, &turn("t1", "nửa")).unwrap();
-        store.save_turn("/a", c, &turn("t2", "hai")).unwrap();
-        store.save_turn("/a", c, &turn("t1", "đủ câu")).unwrap();
-
-        let turns = store.load("/a", Some(c)).unwrap().turns;
-
-        assert_eq!(turns.len(), 2);
-        assert_eq!(turns[0].answer, "đủ câu");
-        assert_eq!(turns[1].id, "t2");
-    }
-
-    #[test]
-    fn conversations_are_listed_with_a_title_from_the_first_message_and_kept_apart() {
-        let (_dir, mut store) = store();
-        let first = store.load("/a", None).unwrap().conversation;
-
-        store.save_turn("/a", first, &turn("t1", "x")).unwrap();
-
-        let second = store.new_conversation("/a").unwrap();
-
-        assert_ne!(first, second);
-        // An empty conversation is not listed, and asking for another one reuses it.
-        assert_eq!(store.list("/a").unwrap().len(), 1);
-        assert_eq!(store.new_conversation("/a").unwrap(), second);
-
-        store.save_turn("/a", second, &turn("t2", "y")).unwrap();
-
-        let list = store.list("/a").unwrap();
-
-        assert_eq!(list.len(), 2);
-        assert_eq!(list[0].id, second);
-        assert_eq!(list[0].title, "hỏi t2");
-        assert_eq!(store.load("/a", Some(first)).unwrap().turns.len(), 1);
-        assert!(store.list("/other").unwrap().is_empty());
-    }
-
-    #[test]
-    fn a_conversation_of_another_workspace_is_refused_and_delete_removes_everything() {
-        let (_dir, mut store) = store();
-        let c = store.load("/a", None).unwrap().conversation;
-
-        store.save_turn("/a", c, &turn("t1", "x")).unwrap();
-        store.save_session("/a", c, "claude", "s").unwrap();
-
-        assert_eq!(store.load("/b", Some(c)), Err(ChatError::Invalid));
-        assert_eq!(
-            store.save_turn("/b", c, &turn("t9", "x")),
-            Err(ChatError::Invalid)
-        );
-        assert_eq!(store.delete_conversation("/b", c), Err(ChatError::Invalid));
-
-        store.delete_conversation("/a", c).unwrap();
-
-        assert!(store.list("/a").unwrap().is_empty());
-    }
-
-    #[test]
-    fn only_the_newest_turns_are_kept() {
-        let (_dir, mut store) = store();
-        let c = store.load("/a", None).unwrap().conversation;
-
-        for number in 0..MAX_TURNS + 3 {
-            store
-                .save_turn("/a", c, &turn(&format!("t{number}"), "x"))
-                .unwrap();
-        }
-
-        let turns = store.load("/a", Some(c)).unwrap().turns;
-
-        assert_eq!(turns.len() as i64, MAX_TURNS);
-        assert_eq!(turns[0].id, "t3");
-    }
-
-    #[test]
-    fn turns_saved_before_conversations_are_grouped_on_open() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("rynox.db");
-        let old = Connection::open(&path).unwrap();
-
-        old.execute_batch(
-            "CREATE TABLE chat_turns (
-                workspace TEXT NOT NULL, id TEXT NOT NULL, position INTEGER NOT NULL,
-                cli TEXT NOT NULL, prompt TEXT NOT NULL, answer TEXT NOT NULL, error TEXT,
-                archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (workspace, id));
-             CREATE TABLE chat_sessions (
-                workspace TEXT NOT NULL, cli TEXT NOT NULL, session TEXT NOT NULL,
-                PRIMARY KEY (workspace, cli));
-             INSERT INTO chat_turns VALUES ('/a', 'o1', 1, 'claude', 'cũ', 'x', NULL, 1);
-             INSERT INTO chat_turns VALUES ('/a', 'n1', 2, 'claude', 'hiện tại', 'y', NULL, 0);
-             INSERT INTO chat_sessions VALUES ('/a', 'claude', 'sess');",
-        )
-        .unwrap();
-        drop(old);
-
-        let mut store = ChatStore::open(path);
-        let list = store.list("/a").unwrap();
-
-        assert_eq!(list.len(), 2);
-        assert_eq!(list[0].title, "hiện tại");
-        assert_eq!(list[1].title, "Cuộc trò chuyện cũ");
-
-        let current = store.load("/a", None).unwrap();
-
-        assert_eq!(current.turns[0].id, "n1");
-        assert_eq!(current.sessions["claude"], "sess");
-    }
-
-    #[test]
-    fn titles_skip_attachments_and_are_cut() {
-        assert_eq!(title_of("@/tmp/a.png\nxin chào"), "xin chào");
-        assert_eq!(
-            title_of(&"a".repeat(80)).chars().count(),
-            MAX_TITLE_CHARS + 1
-        );
-        assert_eq!(title_of("@/tmp/a.png"), "");
-    }
-
-    #[test]
-    fn bad_input_is_refused() {
-        let (_dir, mut store) = store();
-        let c = store.load("/a", None).unwrap().conversation;
-        let mut unknown_cli = turn("t1", "x");
-
-        unknown_cli.cli = "gemini".into();
-
-        assert_eq!(
-            store.save_turn("/a", c, &unknown_cli),
-            Err(ChatError::Invalid)
-        );
-        assert_eq!(
-            store.save_turn("/a", c, &turn("", "x")),
-            Err(ChatError::Invalid)
-        );
-        assert_eq!(
-            store.save_turn("", c, &turn("t1", "x")),
-            Err(ChatError::Invalid)
-        );
-        assert_eq!(
-            store.save_session("/a", c, "claude", ""),
-            Err(ChatError::Invalid)
-        );
-        assert_eq!(
-            store.save_session("/a", c, "gemini", "s"),
-            Err(ChatError::Invalid)
-        );
-        assert!(store.load("/a", Some(c)).unwrap().turns.is_empty());
-    }
-}
+#[path = "../tests/unit/chats.rs"]
+mod tests;

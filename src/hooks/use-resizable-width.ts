@@ -36,12 +36,19 @@ export function useResizableWidth(
     const drag = useRef<{ start: number; startWidth: number } | null>(null);
     const frame = useRef<number | undefined>(undefined);
     const latest = useRef(width);
+    const [dragging, setDragging] = useState(false);
 
     useEffect(() => {
         latest.current = width;
     }, [width]);
 
-    useEffect(() => () => cancelAnimationFrame(frame.current ?? 0), []);
+    useEffect(
+        () => () => {
+            cancelAnimationFrame(frame.current ?? 0);
+            document.body.style.userSelect = '';
+        },
+        [],
+    );
 
     const clamp = useCallback(
         (value: number) => Math.min(max, Math.max(min, value)),
@@ -60,7 +67,13 @@ export function useResizableWidth(
     }, [storageKey]);
 
     const onPointerDown = (event: PointerEvent<HTMLElement>) => {
+        // * Only the primary button drags; a right-click must not start a drag that never ends.
+        if (event.button !== 0) {
+            return;
+        }
+
         event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
         drag.current = {
             start: axis === 'x' ? event.clientX : event.clientY,
             startWidth: latest.current,
@@ -89,13 +102,22 @@ export function useResizableWidth(
         frame.current = requestAnimationFrame(() => setWidth(next));
     };
 
-    const endDrag = () => {
+    // * Runs on pointer up, pointer cancel and lost capture (e.g. a drag released outside the window), so the drag never stays stuck.
+    const endDrag = (event: PointerEvent<HTMLElement>) => {
         if (drag.current === null) {
             return;
         }
 
         drag.current = null;
+        setDragging(false);
         document.body.style.userSelect = '';
+
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+
+        // * Mouse use must not leave the handle focused (and highlighted); keyboard focus is untouched.
+        event.currentTarget.blur();
         save();
     };
 
@@ -157,11 +179,13 @@ export function useResizableWidth(
             'aria-valuenow': Math.round(width),
             'aria-valuemin': min,
             'aria-valuemax': max,
+            'data-dragging': dragging,
             tabIndex: 0,
             onPointerDown,
             onPointerMove,
             onPointerUp: endDrag,
             onPointerCancel: endDrag,
+            onLostPointerCapture: endDrag,
             onKeyDown,
         },
     };

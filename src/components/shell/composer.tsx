@@ -1,5 +1,5 @@
 import { ArrowUp, Folder, Mic, Plus, Volume2, X } from 'lucide-react';
-import { memo, useRef, type FormEvent } from 'react';
+import { memo, useRef, type FormEvent, type ReactNode } from 'react';
 import {
     pastedFiles,
     pastedPaths,
@@ -18,6 +18,7 @@ import { referenceForPaste } from '@/lib/editor-copy';
 import type { AgentCli } from '@/lib/ide';
 import type { ToolEntry } from '@/lib/ide-tools';
 import { t } from '@/lib/i18n';
+import { CHAT_PROMPT_MAX_LENGTH } from '@/lib/limits';
 
 export { MODES, pastedPaths };
 export type { Attachment };
@@ -51,6 +52,9 @@ export const Composer = memo(function Composer({
     onExtraRootsChange,
     worktree,
     onWorktreeChange,
+    railOpen,
+    onToggleRail,
+    popup,
 }: {
     /** Name of the project the conversation is attached to (null: none). */
     project: string | null;
@@ -93,6 +97,12 @@ export const Composer = memo(function Composer({
     /** Worktree mode: the AI works on its own git branch, in a copy of the project. */
     worktree: boolean;
     onWorktreeChange: (on: boolean) => void;
+    /** The session rail popup is open. */
+    railOpen?: boolean;
+    /** Opens or closes the session rail popup. */
+    onToggleRail?: () => void;
+    /** Laid above the top of the message box (the session rail popup). */
+    popup?: ReactNode;
 }) {
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -119,8 +129,9 @@ export const Composer = memo(function Composer({
     return (
         <form
             onSubmit={submit}
-            className="mx-auto w-[min(100%-2rem,48rem)] pb-4"
+            className="relative mx-auto w-[min(100%-2rem,48rem)] pb-4"
         >
+            {popup}
             {project !== null && (
                 <div className="mb-2 flex items-center gap-2">
                     <>
@@ -178,6 +189,7 @@ export const Composer = memo(function Composer({
                 <textarea
                     ref={input}
                     value={value}
+                    maxLength={CHAT_PROMPT_MAX_LENGTH}
                     onChange={(event) => {
                         onChange(event.target.value);
                         setActiveSuggestion(0);
@@ -338,6 +350,8 @@ export const Composer = memo(function Composer({
                 onModeChange={onModeChange}
                 agentTeam={agentTeam}
                 onAgentTeamChange={onAgentTeamChange}
+                railOpen={railOpen}
+                onToggleRail={onToggleRail}
             />
         </form>
     );

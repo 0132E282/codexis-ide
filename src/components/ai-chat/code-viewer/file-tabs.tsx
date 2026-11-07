@@ -20,6 +20,7 @@ function FileTabsBar({
     previewTab,
     dirtyPaths,
     actions,
+    tabsStart,
     tabsEnd,
     tools,
     onOpen,
@@ -35,6 +36,8 @@ function FileTabsBar({
     /** * Tabs with an unsaved edit (get a dot). */
     dirtyPaths: Set<string>;
     actions: FileActions;
+    /** Buttons pinned to the left end of the tab bar, before the first tab. */
+    tabsStart?: ReactNode;
     /** Buttons pinned to the right end of the tab bar. */
     tabsEnd?: ReactNode;
     /** Buttons of the open file (view switch, AI edit, ask the AI), just before `tabsEnd`. */
@@ -56,6 +59,11 @@ function FileTabsBar({
             aria-label={t('file_tabs.open_files')}
             className="flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b px-2"
         >
+            {tabsStart !== undefined && (
+                <div className="sticky left-0 flex shrink-0 items-center bg-background pr-1">
+                    {tabsStart}
+                </div>
+            )}
             {tabs.map((path) => {
                 const name = path.split('/').pop() ?? path;
                 const active = path === selected;

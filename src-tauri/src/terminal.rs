@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -11,6 +11,10 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 const READ_CHUNK: usize = 8192;
+const MAX_SESSIONS: usize = 16;
+const MAX_ID_BYTES: usize = 64;
+const MAX_WRITE_BYTES: usize = 64 * 1024;
+const MAX_DIMENSION: u16 = 500;
 
 /// What a shell printed, sent to the panel as the `terminal-data` event.
 #[derive(Debug, Clone, Serialize)]
@@ -24,14 +28,24 @@ pub enum TerminalError {
     Pty(String),
     Unknown(String),
     Poisoned,
+    BadId,
+    Exists,
+    TooMany,
+    BadSize,
+    TooLarge,
 }
 
 impl std::fmt::Display for TerminalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Pty(message) => write!(f, "Terminal lỗi: {message}"),
-            Self::Unknown(id) => write!(f, "Không có terminal {id}."),
-            Self::Poisoned => write!(f, "Terminal không dùng được."),
+            Self::Pty(message) => write!(f, "terminal.failed|{message}"),
+            Self::Unknown(id) => write!(f, "terminal.unknown|{id}"),
+            Self::Poisoned => write!(f, "terminal.unavailable"),
+            Self::BadId => write!(f, "terminal.bad_id"),
+            Self::Exists => write!(f, "terminal.exists"),
+            Self::TooMany => write!(f, "terminal.too_many"),
+            Self::BadSize => write!(f, "terminal.bad_size"),
+            Self::TooLarge => write!(f, "terminal.too_large"),
         }
     }
 }
@@ -40,7 +54,7 @@ impl std::error::Error for TerminalError {}
 
 struct Session {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn Child + Send + Sync>,
 }
 
@@ -52,6 +66,29 @@ pub struct Terminals {
 
 fn pty_error(error: impl std::fmt::Display) -> TerminalError {
     TerminalError::Pty(error.to_string())
+}
+
+/// An id the panel may use: 1 to 64 letters, digits, `_` or `-`.
+fn check_id(id: &str) -> Result<(), TerminalError> {
+    let valid = !id.is_empty()
+        && id.len() <= MAX_ID_BYTES
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
+
+    if valid {
+        Ok(())
+    } else {
+        Err(TerminalError::BadId)
+    }
+}
+
+fn check_size(columns: u16, rows: u16) -> Result<(), TerminalError> {
+    if (1..=MAX_DIMENSION).contains(&columns) && (1..=MAX_DIMENSION).contains(&rows) {
+        Ok(())
+    } else {
+        Err(TerminalError::BadSize)
+    }
 }
 
 fn shell_program() -> String {
@@ -92,6 +129,10 @@ impl Terminals {
         columns: u16,
         rows: u16,
     ) -> Result<(), TerminalError> {
+        check_id(&id)?;
+        check_size(columns, rows)?;
+        self.check_free(&id)?;
+
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows,
@@ -153,37 +194,72 @@ impl Terminals {
             let _ = app.emit("terminal-exit", reader_id);
         });
 
-        self.sessions
-            .lock()
-            .map_err(|_| TerminalError::Poisoned)?
-            .insert(
-                id,
-                Session {
-                    master: pair.master,
-                    writer,
-                    child,
-                },
-            );
+        let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
+
+        // * Checked again under the lock: another open may have taken the id or the last slot while this shell started.
+        if let Err(error) = Self::check_slot(&sessions, &id) {
+            let mut child = child;
+            let _ = child.kill();
+
+            return Err(error);
+        }
+
+        sessions.insert(
+            id,
+            Session {
+                master: pair.master,
+                writer: Arc::new(Mutex::new(writer)),
+                child,
+            },
+        );
 
         Ok(())
     }
 
+    fn check_free(&self, id: &str) -> Result<(), TerminalError> {
+        let sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
+
+        Self::check_slot(&sessions, id)
+    }
+
+    fn check_slot(sessions: &HashMap<String, Session>, id: &str) -> Result<(), TerminalError> {
+        if sessions.contains_key(id) {
+            Err(TerminalError::Exists)
+        } else if sessions.len() >= MAX_SESSIONS {
+            Err(TerminalError::TooMany)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Sends what the user typed to the shell.
     pub fn write(&self, id: &str, data: &str) -> Result<(), TerminalError> {
-        let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
-        let session = sessions
-            .get_mut(id)
-            .ok_or_else(|| TerminalError::Unknown(id.to_string()))?;
+        if data.len() > MAX_WRITE_BYTES {
+            return Err(TerminalError::TooLarge);
+        }
 
-        session
-            .writer
+        // * Only this shell's writer is held while writing, so a shell that stops reading cannot block the other terminals.
+        let writer = {
+            let sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
+
+            sessions
+                .get(id)
+                .ok_or_else(|| TerminalError::Unknown(id.to_string()))?
+                .writer
+                .clone()
+        };
+        let mut writer = writer.lock().map_err(|_| TerminalError::Poisoned)?;
+
+        writer
             .write_all(data.as_bytes())
-            .and_then(|()| session.writer.flush())
+            .and_then(|()| writer.flush())
             .map_err(pty_error)
     }
 
     /// Tells the shell the panel changed size.
     pub fn resize(&self, id: &str, columns: u16, rows: u16) -> Result<(), TerminalError> {
+        check_size(columns, rows)?;
+
         let sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
         let session = sessions
             .get(id)
@@ -217,44 +293,5 @@ impl Terminals {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn complete_text_holds_back_a_cut_character() {
-        let bytes = "ab\u{1EA1}".as_bytes();
-        let (text, rest) = complete_text(&bytes[..bytes.len() - 1]);
-
-        assert_eq!(text, "ab");
-        assert_eq!(rest.len(), 2);
-        assert_eq!(complete_text(bytes), ("ab\u{1EA1}", &[][..]));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_shell_runs_in_a_pseudo_terminal() {
-        let pair = native_pty_system()
-            .openpty(PtySize {
-                rows: 24,
-                cols: 80,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
-        let mut command = CommandBuilder::new("/bin/sh");
-
-        command.args(["-c", "echo hello"]);
-
-        let mut child = pair.slave.spawn_command(command).unwrap();
-        let mut reader = pair.master.try_clone_reader().unwrap();
-        let mut output = String::new();
-
-        drop(pair.slave);
-        child.wait().unwrap();
-        let mut buffer = [0u8; 64];
-        let read = reader.read(&mut buffer).unwrap();
-
-        output.push_str(&String::from_utf8_lossy(&buffer[..read]));
-        assert!(output.contains("hello"));
-    }
-}
+#[path = "../tests/unit/terminal.rs"]
+mod tests;

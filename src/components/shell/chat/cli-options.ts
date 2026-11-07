@@ -26,21 +26,35 @@ export const MODELS: Record<
 };
 
 // * Permission modes of the Claude CLI (`--permission-mode`); "auto" is the one the chat starts with.
-export const MODES: { value: string; label: string; hint: string }[] = [
-    { value: 'plan', label: 'Plan', hint: 'cli_options.plan_only_do_not' },
+export const MODES: {
+    value: string;
+    label: string;
+    hint: string;
+    recommended?: boolean;
+    /** Needs the person to confirm before it is used (accepts every permission). */
+    dangerous?: boolean;
+}[] = [
     {
         value: 'auto',
         label: 'Auto',
         hint: 'cli_options.auto_approve_safe_actions',
+        recommended: true,
+    },
+    {
+        value: 'manual',
+        label: 'cli_options.ask_each_time',
+        hint: 'cli_options.ask_before_every_action',
     },
     {
         value: 'acceptEdits',
         label: 'cli_options.auto_edit_files',
         hint: 'cli_options.automatically_accept_every_file',
     },
+    { value: 'plan', label: 'Plan', hint: 'cli_options.plan_only_do_not' },
     {
-        value: 'manual',
-        label: 'cli_options.ask_each_time',
-        hint: 'cli_options.ask_before_every_action',
+        value: 'bypassPermissions',
+        label: 'cli_options.bypass_permissions',
+        hint: 'cli_options.accepts_all_permissions',
+        dangerous: true,
     },
 ];

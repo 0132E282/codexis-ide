@@ -2,8 +2,9 @@
 //!
 //! Environment values are stored as plain text in that file (owner-only permissions on Unix) and are never printed: `EnvVar` redacts its value in `Debug` and errors carry fixed messages only.
 
-use crate::db;
-use rusqlite::{params, Connection, OptionalExtension};
+use crate::{db, seeders, sql, validation};
+use rusqlite::{params, Connection};
+use sea_query::{Alias, Condition, Expr, ExprTrait, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
@@ -36,13 +37,13 @@ impl ProjectError {
     /// Fixed user-facing text.
     pub fn message(self) -> &'static str {
         match self {
-            Self::InvalidName => "Tên dự án không hợp lệ.",
-            Self::TooMany => "Dự án có quá nhiều mục hoặc đã đạt giới hạn số dự án.",
-            Self::InvalidFolder => "Thư mục không tồn tại hoặc không hợp lệ.",
-            Self::InvalidEnv => "Biến môi trường không hợp lệ.",
-            Self::NotFound => "Không tìm thấy dự án.",
-            Self::NoFolder => "Dự án chưa có thư mục để mở.",
-            Self::SaveFailed => "Không lưu được danh sách dự án.",
+            Self::InvalidName => "projects.invalid_name",
+            Self::TooMany => "projects.too_many",
+            Self::InvalidFolder => "projects.invalid_folder",
+            Self::InvalidEnv => "projects.invalid_env",
+            Self::NotFound => "projects.not_found",
+            Self::NoFolder => "projects.no_folder",
+            Self::SaveFailed => "projects.save_failed",
         }
     }
 }
@@ -126,17 +127,7 @@ impl ProjectStore {
     }
 
     fn import_legacy(&mut self) {
-        let imported = self
-            .connection
-            .query_row(
-                "SELECT value FROM meta WHERE key = ?1",
-                [LEGACY_IMPORTED],
-                |_| Ok(()),
-            )
-            .optional()
-            .is_ok_and(|row| row.is_some());
-
-        if imported {
+        if seeders::is_done(&self.connection, LEGACY_IMPORTED) {
             return;
         }
 
@@ -151,11 +142,7 @@ impl ProjectStore {
             }
         }
 
-        // Best effort: without the flag the import is only tried again at the next start.
-        let _ = self.connection.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, '1')",
-            [LEGACY_IMPORTED],
-        );
+        seeders::mark_done(&self.connection, LEGACY_IMPORTED);
     }
 
     pub fn projects(&self) -> &[Project] {
@@ -273,10 +260,13 @@ impl ProjectStore {
 }
 
 fn read_saved(connection: &Connection) -> rusqlite::Result<Saved> {
-    let mut statement =
-        connection.prepare("SELECT id, name, folders, env FROM projects ORDER BY position")?;
-    let projects = statement
-        .query_map([], |row| {
+    let projects = sql::list_ordered(
+        connection,
+        "projects",
+        &["id", "name", "folders", "env"],
+        Condition::all(),
+        "position",
+        |row| {
             let folders: String = row.get(2)?;
             let env: String = row.get(3)?;
 
@@ -286,13 +276,11 @@ fn read_saved(connection: &Connection) -> rusqlite::Result<Saved> {
                 folders: serde_json::from_str(&folders).unwrap_or_default(),
                 env: serde_json::from_str(&env).unwrap_or_default(),
             })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let selected = connection
-        .query_row("SELECT value FROM meta WHERE key = ?1", [SELECTED], |row| {
-            row.get(0)
-        })
-        .optional()?;
+        },
+    )?;
+    let selected = sql::find_by_key(connection, "meta", &["value"], "key", SELECTED, |row| {
+        row.get(0)
+    })?;
 
     Ok(Saved { projects, selected })
 }
@@ -302,7 +290,7 @@ fn write_saved(connection: &mut Connection, saved: &Saved) -> Result<()> {
     let write = |connection: &mut Connection| -> rusqlite::Result<()> {
         let transaction = connection.transaction()?;
 
-        transaction.execute("DELETE FROM projects", [])?;
+        sql::delete_where(&transaction, "projects", Condition::all())?;
 
         for (position, project) in saved.projects.iter().enumerate() {
             transaction.execute(
@@ -318,11 +306,20 @@ fn write_saved(connection: &mut Connection, saved: &Saved) -> Result<()> {
         }
 
         match &saved.selected {
-            Some(id) => transaction.execute(
-                "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
-                params![SELECTED, id],
+            Some(id) => sql::upsert(
+                &transaction,
+                "meta",
+                &["key"],
+                vec![
+                    ("key", Value::from(SELECTED)),
+                    ("value", Value::from(id.as_str())),
+                ],
             )?,
-            None => transaction.execute("DELETE FROM meta WHERE key = ?1", [SELECTED])?,
+            None => sql::delete_where(
+                &transaction,
+                "meta",
+                Condition::all().add(Expr::col(Alias::new("key")).eq(SELECTED)),
+            )?,
         };
 
         transaction.commit()
@@ -362,8 +359,9 @@ fn checked_env(env: Vec<EnvVar>) -> Result<Vec<EnvVar>> {
 
     for var in &env {
         if !valid_env_key(&var.key)
+            || validation::env_name(&var.key).is_err()
             || var.value.len() > MAX_ENV_VALUE_BYTES
-            || var.value.contains('\0')
+            || validation::env_value(&var.value).is_err()
             || !seen.insert(var.key.as_str())
         {
             return Err(ProjectError::InvalidEnv);
@@ -385,194 +383,5 @@ fn valid_env_key(key: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    fn store() -> (TempDir, ProjectStore) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = ProjectStore::load(dir.path().join("data").join("rynox.db"));
-
-        (dir, store)
-    }
-
-    fn new_project(name: &str, folders: &[&Path]) -> NewProject {
-        NewProject {
-            name: name.to_string(),
-            folders: folders
-                .iter()
-                .map(|folder| folder.display().to_string())
-                .collect(),
-            env: vec![EnvVar {
-                key: "API_TOKEN".into(),
-                value: "s3cret".into(),
-            }],
-        }
-    }
-
-    #[test]
-    fn added_project_survives_a_reload() {
-        let (dir, mut store) = store();
-        let folder = dir.path().join("app");
-
-        fs::create_dir(&folder).unwrap();
-
-        let added = store.add(new_project("  Ứng dụng  ", &[&folder])).unwrap();
-        store.select(&added.id).unwrap();
-
-        let reloaded = ProjectStore::load(store.path.clone());
-
-        assert_eq!(reloaded.projects(), std::slice::from_ref(&added));
-        assert_eq!(reloaded.selected(), Some(added.id.as_str()));
-        assert_eq!(added.name, "Ứng dụng");
-        assert_eq!(
-            added.folders,
-            [fs::canonicalize(&folder).unwrap().display().to_string()]
-        );
-    }
-
-    #[test]
-    fn adding_the_same_folders_returns_the_existing_project() {
-        let (dir, mut store) = store();
-        let folder = dir.path().join("app");
-
-        fs::create_dir(&folder).unwrap();
-
-        let first = store.add(new_project("app", &[&folder])).unwrap();
-        let again = store.add(new_project("other name", &[&folder])).unwrap();
-
-        assert_eq!(again, first);
-        assert_eq!(store.projects().len(), 1);
-    }
-
-    #[test]
-    fn ids_are_not_reused_while_a_later_project_exists() {
-        let (_dir, mut store) = store();
-        let first = store.add(new_project("a", &[])).unwrap();
-        let second = store.add(new_project("b", &[])).unwrap();
-
-        store.remove(&first.id).unwrap();
-
-        let third = store.add(new_project("c", &[])).unwrap();
-
-        assert_ne!(third.id, second.id);
-    }
-
-    #[test]
-    fn bad_input_is_refused_and_nothing_is_saved() {
-        let (dir, mut store) = store();
-        let file = dir.path().join("file.txt");
-
-        fs::write(&file, "x").unwrap();
-
-        let refused = [
-            (new_project("   ", &[]), ProjectError::InvalidName),
-            (
-                new_project("x", &[&dir.path().join("missing")]),
-                ProjectError::InvalidFolder,
-            ),
-            (new_project("x", &[&file]), ProjectError::InvalidFolder),
-        ];
-
-        for (project, error) in refused {
-            assert_eq!(store.add(project).unwrap_err(), error);
-        }
-
-        for key in ["", "1A", "A B", "A=B", "A\n"] {
-            let mut project = new_project("x", &[]);
-
-            project.env[0].key = key.into();
-
-            assert_eq!(
-                store.add(project).unwrap_err(),
-                ProjectError::InvalidEnv,
-                "key {key:?}"
-            );
-        }
-
-        let mut duplicate = new_project("x", &[]);
-
-        duplicate.env.push(duplicate.env[0].clone());
-
-        assert_eq!(store.add(duplicate).unwrap_err(), ProjectError::InvalidEnv);
-        assert!(store.projects().is_empty());
-        assert!(ProjectStore::load(store.path.clone()).projects().is_empty());
-    }
-
-    #[test]
-    fn removing_the_selected_project_clears_the_selection() {
-        let (_dir, mut store) = store();
-        let project = store.add(new_project("a", &[])).unwrap();
-
-        store.select(&project.id).unwrap();
-        store.remove(&project.id).unwrap();
-
-        assert_eq!(store.selected(), None);
-        assert_eq!(store.remove(&project.id), Err(ProjectError::NotFound));
-        assert_eq!(store.select("p99"), Err(ProjectError::NotFound));
-    }
-
-    #[test]
-    fn file_that_is_not_a_database_is_moved_aside_and_the_store_starts_empty() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("rynox.db");
-
-        fs::write(
-            &path,
-            "this is not a database, just text that is long enough",
-        )
-        .unwrap();
-
-        let store = ProjectStore::load(path.clone());
-
-        assert!(store.projects().is_empty());
-        assert!(dir.path().join("rynox.db.corrupt").exists());
-    }
-
-    #[test]
-    fn projects_of_an_old_json_file_are_copied_in_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("rynox.db");
-        let legacy = dir.path().join("projects.json");
-        let json =
-            r#"{"projects":[{"id":"p3","name":"Cũ","folders":[],"env":[]}],"selected":"p3"}"#;
-
-        fs::write(&legacy, json).unwrap();
-
-        let mut store = ProjectStore::load(path.clone());
-
-        assert_eq!(store.projects().len(), 1);
-        assert_eq!(store.selected(), Some("p3"));
-        assert_eq!(fs::read_to_string(&legacy).unwrap(), json);
-
-        // Deleted in the app: the old file must not bring it back at the next start.
-        store.remove("p3").unwrap();
-
-        assert!(ProjectStore::load(path).projects().is_empty());
-    }
-
-    #[test]
-    fn debug_output_never_shows_a_value() {
-        let var = EnvVar {
-            key: "API_TOKEN".into(),
-            value: "s3cret".into(),
-        };
-
-        assert!(!format!("{var:?}").contains("s3cret"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn store_file_is_owner_only() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let (_dir, mut store) = store();
-
-        store.add(new_project("a", &[])).unwrap();
-
-        let mode = fs::metadata(&store.path).unwrap().permissions().mode();
-
-        assert_eq!(mode & 0o777, 0o600);
-    }
-}
+#[path = "../tests/unit/projects.rs"]
+mod tests;

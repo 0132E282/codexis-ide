@@ -7,6 +7,12 @@ pub fn remote_start(app: AppHandle, remote: State<Remote>) -> Result<remote::Inf
     remote.start(&app)
 }
 
+/// Whether the phone server is running now (the rail's Remote Control switch).
+#[tauri::command]
+pub fn remote_status(remote: State<Remote>) -> bool {
+    remote.is_running()
+}
+
 /// Stops the phone server: every phone is dropped and the token stops working.
 #[tauri::command]
 pub fn remote_stop(app: AppHandle, remote: State<Remote>) {

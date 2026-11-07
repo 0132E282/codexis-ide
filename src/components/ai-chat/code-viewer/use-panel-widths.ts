@@ -3,7 +3,10 @@ import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { CHAT_OPEN_WIDTH, SIDEBAR_WIDTH, TREE_MAX_WIDTH } from './constants';
 
 /** * Widths of the file and tree columns. Either can be dragged out to the full width: the chat then shrinks, and closes once it is too narrow to use. */
-export function usePanelWidths(chatCollapsed: boolean) {
+export function usePanelWidths(
+    chatCollapsed: boolean,
+    treeEdge: 'leading' | 'trailing' = 'leading',
+) {
     const fileWidth = useResizableWidth(
         'ai-chat.width.file',
         704,
@@ -15,6 +18,9 @@ export function usePanelWidths(chatCollapsed: boolean) {
         256,
         256,
         TREE_MAX_WIDTH,
+        'x',
+        // * The tree on the left of the editor is dragged by its right edge.
+        treeEdge,
     );
 
     // * The chat was opened again: the columns give back the room it needs, or it would be squeezed shut at once.

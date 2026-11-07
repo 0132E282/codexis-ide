@@ -1,0 +1,669 @@
+{
+  "title": "Ngăn Plan: hiện kế hoạch AI đang viết, lưu theo tên dự án",
+  "description": "Kế hoạch triển khai docs/system/plan-pane.md (sửa 2026-11-07 theo kết quả chụp CLI thật P01, Claude 2.1.319): đợt này chỉ phần văn bản kế hoạch, Rust phát Event::Plan từ control_request can_use_tool ExitPlanMode (chế độ plan chạy với --input-format stream-json); phần todo (TodoWrite/Task*) HOÃN; lưu plan và logs vào projects/<tên dự án>/ trong dữ liệu app (không ghi vào dự án), lệnh plan_load, ngăn Plan trong dock phải cùng Side chat.",
+  "tags": [
+    "plan-pane",
+    "dock",
+    "logs",
+    "chat",
+    "rust",
+    "frontend",
+    "exit-plan-mode"
+  ],
+  "createdAt": "2026-11-06",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/plan-pane.md",
+    "related": [
+      "docs/system/side-chat.md",
+      "docs/system/background-tasks.md",
+      "docs/system/context-panel.md",
+      "docs/system/architecture.md"
+    ],
+    "note": "Tên công cụ và trường đã chụp thật với claude 2.1.319 (TASK-P01, 2026-11-07); xem plan-pane.md mục 2.1. Codex chưa kiểm được (tài khoản hết hạn mức tới 2026-12-01)."
+  },
+  "hardConstraints": [
+    "Tính năng viết ở backend Rust; frontend chỉ vẽ",
+    "Chỉ thêm lệnh plan_load và Event::Plan; không đổi DB, không thêm dependency; không truyền --tools hay CLAUDE_CODE_ENABLE_TASKS (phần todo hoãn)",
+    "Plan và logs lưu trong <app_data_dir>/projects/<khoá-dự-án>/, không ghi vào thư mục dự án người dùng",
+    "Logs không ghi prompt, answer, khoá API, biến môi trường",
+    "Không git commit/push khi người dùng chưa yêu cầu"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-P1",
+      "source": "1",
+      "text": "Mở/đóng/phóng to ngăn Plan trong dock"
+    },
+    {
+      "id": "REQ-P2",
+      "source": "2",
+      "text": "Hiện todo của AI theo thời gian thực",
+      "status": "DEFERRED",
+      "deferredReason": "Claude 2.1.319 không phát TodoWrite/Task* khi app chạy claude -p không có --tools (đã chụp, TASK-P01); bật được chỉ khi liệt kê toàn bộ tool qua --tools hoặc dùng bộ Task* cần gộp theo id. Codex chưa kiểm được.",
+      "reopenWhen": "Một trong: (a) bản claude đang cài có TodoWrite hoặc Task* trong tập tool mặc định của -p/stream-json; (b) người dùng duyệt việc truyền --tools đầy đủ hoặc CLAUDE_CODE_ENABLE_TASKS cho chat; (c) chụp được sự kiện todo_list của codex exec --json (sau 2026-12-01 hoặc đổi tài khoản)."
+    },
+    {
+      "id": "REQ-P3",
+      "source": "3",
+      "text": "Hiện văn bản plan khi Claude ở chế độ plan trình plan qua ExitPlanMode"
+    },
+    {
+      "id": "REQ-P4",
+      "source": "4",
+      "text": "Trạng thái rỗng"
+    },
+    {
+      "id": "REQ-P5",
+      "source": "5",
+      "text": "Tính ở backend Rust (Rust tách plan từ control_request ExitPlanMode)"
+    },
+    {
+      "id": "REQ-P6",
+      "source": "6",
+      "text": "Theo từng cuộc chat, sub-agent không lẫn"
+    },
+    {
+      "id": "REQ-P7",
+      "source": "7",
+      "text": "Chỉ thêm lệnh plan_load, không đổi DB, không thêm thư viện"
+    },
+    {
+      "id": "REQ-P8",
+      "source": "8",
+      "text": "Điện thoại không bị ảnh hưởng ngoài ý muốn"
+    },
+    {
+      "id": "REQ-P9",
+      "source": "9",
+      "text": "Lưu plan theo tên dự án trong dữ liệu app, không ghi vào dự án"
+    },
+    {
+      "id": "REQ-P10",
+      "source": "10",
+      "text": "Lưu logs theo tên dự án, không ghi nội dung"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-P1",
+      "requirement": "REQ-P1",
+      "text": "Nút mở, phóng to, đóng hoạt động; tab Plan chung dock với Side chat"
+    },
+    {
+      "id": "AC-P2",
+      "requirement": "REQ-P2",
+      "text": "TodoWrite mới thay danh sách, đúng thứ tự và trạng thái (HOÃN cùng REQ-P2)",
+      "status": "DEFERRED"
+    },
+    {
+      "id": "AC-P3",
+      "requirement": "REQ-P3",
+      "text": "Ở chế độ plan, app chạy Claude với --input-format stream-json --permission-prompt-tool stdio; control_request can_use_tool tool_name=ExitPlanMode làm Rust phát Event::Plan {kind:text, markdown:input.plan} rồi Event::Permission như cũ; ngăn hiện Markdown; planFilePath không được đưa vào Event::Plan"
+    },
+    {
+      "id": "AC-P4",
+      "requirement": "REQ-P4",
+      "text": "Rỗng hiện đủ biểu tượng, tiêu đề, gợi ý, vi/en"
+    },
+    {
+      "id": "AC-P5",
+      "requirement": "REQ-P5",
+      "text": "Frontend không tự tách plan từ Event::Tool hay Event::Permission; chỉ đọc Event::Plan"
+    },
+    {
+      "id": "AC-P6",
+      "requirement": "REQ-P6",
+      "text": "Công cụ có parent (sub-agent) không phát Plan; chuyển cuộc chat reset ngăn"
+    },
+    {
+      "id": "AC-P7",
+      "requirement": "REQ-P7",
+      "text": "generate_handler chỉ thêm plan_load; db.rs, Cargo.toml không đổi"
+    },
+    {
+      "id": "AC-P8",
+      "requirement": "REQ-P8",
+      "text": "Điện thoại bỏ qua kind plan, không lỗi"
+    },
+    {
+      "id": "AC-P9",
+      "requirement": "REQ-P9",
+      "text": "projects/<khoá>/plans/<session>.json có sau lượt có ExitPlanMode; thư mục dự án không có tệp mới (git status sạch) khi chưa duyệt plan"
+    },
+    {
+      "id": "AC-P10",
+      "requirement": "REQ-P10",
+      "text": "logs/<ngày>.log có dòng của lượt, không chứa prompt, answer, khoá API; xoay vòng 14 ngày và 5 MB"
+    },
+    {
+      "id": "AC-P11",
+      "requirement": "REQ-P3",
+      "text": "Duyệt/từ chối plan dùng thẻ hỏi quyền có sẵn: allow ghi control_response behavior allow (CLI thoát plan mode), deny ghi behavior deny (tool_result is_error); không có lượt nào treo chờ trả lời sau khi kết quả lượt đến"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal",
+    "pnpm typecheck",
+    "pnpm lint"
+  ],
+  "codingGroups": [
+    {
+      "id": "PG1",
+      "name": "plan backend (ExitPlanMode) và lưu trữ",
+      "tasks": [
+        "TASK-P01",
+        "TASK-P02",
+        "TASK-P03",
+        "TASK-P07",
+        "TASK-P08",
+        "TASK-P09"
+      ],
+      "dependsOnGroups": [],
+      "parallel": false
+    },
+    {
+      "id": "PG2",
+      "name": "plan frontend",
+      "tasks": ["TASK-P04", "TASK-P05"],
+      "dependsOnGroups": ["PG1"],
+      "parallel": false
+    },
+    {
+      "id": "PG3",
+      "name": "kiểm chứng và tài liệu",
+      "tasks": ["TASK-P06"],
+      "dependsOnGroups": ["PG2"],
+      "parallel": false
+    },
+    {
+      "id": "PG-DEFERRED",
+      "name": "todo của AI (hoãn)",
+      "tasks": ["TASK-P10"],
+      "dependsOnGroups": ["PG2"],
+      "parallel": false,
+      "note": "Không giao coder tới khi REQ-P2 được mở lại"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-P01",
+      "title": "Chụp TodoWrite và ExitPlanMode thật của Claude (và thử Codex)",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Tên công cụ và trường là [chưa kiểm]; sai thì ngăn im lặng",
+      "requirements": ["REQ-P2", "REQ-P3"],
+      "acceptanceCriteria": ["AC-P2", "AC-P3"],
+      "design": "plan-pane.md mục 2, Q1, Q4",
+      "inScope": "Chạy lượt thử có TodoWrite và plan mode; chép dòng assistant tool_use làm fixture; tra sự kiện todo của codex exec --json",
+      "outOfScope": "Sửa mã sản phẩm",
+      "dependencies": [],
+      "filesToChange": [],
+      "approach": "1. Chạy claude -p stream-json ở thư mục tạm. 2. Ghi tên công cụ và trường. 3. Cập nhật thiết kế nếu khác.",
+      "test": "Có fixture thật cho TodoWrite và ExitPlanMode; kết luận về Codex",
+      "doneWhen": "Tên công cụ, trường, trạng thái được xác nhận trong thiết kế (đã ghi plan-pane.md mục 2.1); Codex ghi là chưa kiểm được",
+      "result": "2026-11-07, claude 2.1.319: claude -p stdin văn bản không có TodoWrite/Task*/ExitPlanMode; --input-format stream-json có ExitPlanMode (control_request can_use_tool, input {plan, planFilePath}, requires_user_interaction true; allow thoát plan mode, deny ra tool_result is_error); TodoWrite chỉ có khi ép --tools TodoWrite (input.todos[{content,status,activeForm}], gửi lại cả danh sách); bộ Task* cần CLAUDE_CODE_ENABLE_TASKS=1 --tools ..., gộp theo id. Codex: không chạy được lượt (hết hạn mức tới 2026-12-01), chưa kết luận về todo_list; chuyển thành Q1. Chi tiết: plan-pane.md mục 2.1.",
+      "evidence": "Mẫu thô trong scratchpad phiên (p01-plan.jsonl, p01-todowrite.jsonl, p01-taskcreate.jsonl, s01-plan-deny.jsonl); dòng then chốt chép vào plan-pane.md mục 2.1"
+    },
+    {
+      "id": "TASK-P02",
+      "title": "plan.rs: Plan, Todo, from_tool",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Nơi duy nhất tách và giới hạn dữ liệu plan",
+      "requirements": ["REQ-P2", "REQ-P3", "REQ-P5"],
+      "acceptanceCriteria": ["AC-P2", "AC-P3", "AC-P5"],
+      "design": "plan-pane.md 3.6, 3.7",
+      "inScope": "enum Plan, struct Todo, TodoStatus; from_tool(name, input) trả Option; giới hạn 100 todo, 500 ký tự, 100 000 ký tự markdown; bỏ todo có trạng thái lạ; test thuần bằng fixture",
+      "outOfScope": "Đọc dòng CLI (TASK-P03)",
+      "dependencies": ["TASK-P01"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/plan.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm pub mod plan;"
+        }
+      ],
+      "approach": "1. Dùng fixture TASK-P01. 2. serde camelCase. 3. Thiếu trường trả None.",
+      "test": "TodoWrite đúng thứ tự và trạng thái; trạng thái lạ bị bỏ; quá giới hạn bị cắt; ExitPlanMode ra Text; công cụ khác trả None",
+      "doneWhen": "cargo test module plan pass, clippy sạch",
+      "revisionNote": "2026-11-07: viết theo giả định cũ (TodoWrite và ExitPlanMode cùng đến như tool_use). Theo P01: nhánh \"ExitPlanMode\" => text_from(input.plan) ĐÚNG trường, giữ nguyên; trường planFilePath bị bỏ qua (không đưa đường dẫn ~/.claude/plans ra ngoài). Nhánh \"TodoWrite\" => todos_from: trường content/status khớp (activeForm bị bỏ qua) nhưng app hiện không bao giờ nhận TodoWrite: GIỮ mã và test, đánh dấu HOÃN trong doc comment, không gọi tới nó ở P03; không thêm Task*. Việc chỉnh plan.rs (doc comment bỏ [chưa kiểm], thêm test bằng input ExitPlanMode thật có planFilePath) làm trong TASK-P03. Status DONE giữ nguyên."
+    },
+    {
+      "id": "TASK-P03",
+      "title": "Claude agent: chế độ plan dùng stream-json, phát Event::Plan từ control_request ExitPlanMode",
+      "status": "DONE",
+      "progressNote": "2026-11-07: Event::Plan (agent.rs); claude.rs: control_request ExitPlanMode phát Plan rồi Permission, assistant tool_use không phát Plan; mode plan chạy stream-json + stdio + Responder (asks_person dùng chung turn_args và commands/agent.rs). AN TOÀN SIDE CHAT: run có runId bắt đầu bằng side- được map mode plan sang planReadOnly (agent::mode_for_run) = --permission-mode plan, stdin văn bản, không Responder, nên không có ExitPlanMode và không thoát plan mode; test plan_mode_asks_the_person_but_the_side_chat_stays_read_only. Chưa kiểm bằng lượt CLI thật trong app.",
+      "priority": "P0",
+      "priorityReason": "Đưa plan tới frontend qua agent-event sẵn có",
+      "requirements": ["REQ-P3", "REQ-P5", "REQ-P6"],
+      "acceptanceCriteria": ["AC-P3", "AC-P5", "AC-P6", "AC-P11"],
+      "design": "plan-pane.md 2.1, 3.3, 3.4, 3.7, 4",
+      "inScope": "1) agent.rs: thêm Event::Plan(String) (doc comment: JSON của plan::Plan), đặt trước Done để Done vẫn là sự kiện cuối của lượt. 2) agent/claude.rs turn_args: mode \"plan\" cũng thêm --input-format stream-json --permission-prompt-tool stdio như ASK_MODE. 3) agent/claude.rs parse_line, nhánh control_request can_use_tool: khi request.tool_name == \"ExitPlanMode\" gọi Plan::from_tool(\"ExitPlanMode\", request.input) và phát Event::Plan TRƯỚC Event::Permission; các tool_name khác giữ nguyên. 4) commands/agent.rs: tạo Responder cho cả mode \"plan\" (không chỉ ASK_MODE) để trả lời được control_request. 5) plan.rs: sửa doc comment theo P01 (ExitPlanMode đã kiểm; TodoWrite hoãn), thêm test với input thật {plan, planFilePath}.",
+      "outOfScope": "Phát Plan từ tool_use TodoWrite/Task* (HOÃN theo REQ-P2); phát Plan từ dòng assistant tool_use ExitPlanMode (trùng với control_request); truyền --tools hay CLAUDE_CODE_ENABLE_TASKS; đổi serde biến thể cũ; Codex. Làm tuần tự với bảng Context, Background tasks và refactor OOP nhóm A (cùng sửa parse_line).",
+      "dependencies": ["TASK-P01", "TASK-P02"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Thêm biến thể Event::Plan(String) trước Done"
+        },
+        {
+          "path": "src-tauri/src/agent/claude.rs",
+          "changes": "turn_args: plan mode dùng stream-json + permission-prompt-tool stdio; parse_line: control_request ExitPlanMode phát Event::Plan rồi Event::Permission; test"
+        },
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "Responder cho mode plan (dòng tạo responder ~208)"
+        },
+        {
+          "path": "src-tauri/src/plan.rs",
+          "changes": "Doc comment theo P01; test input ExitPlanMode thật có planFilePath"
+        }
+      ],
+      "approach": "1. Thêm hằng PLAN_MODE (\"plan\") cạnh ASK_MODE hoặc dùng chuỗi trong MODES, theo convention agent.rs. 2. Một hàm nhỏ 'mode cần stdin stream-json' dùng chung cho turn_args và commands/agent.rs để hai nơi không lệch. 3. Nhánh control_request: match tool_name. 4. Test bằng dòng control_request thật từ plan-pane.md mục 2.1.",
+      "test": "cargo test agent: control_request ExitPlanMode ra [Event::Plan(text), Event::Permission]; control_request Write chỉ ra Event::Permission; input thiếu plan chỉ ra Event::Permission; turn_args mode plan có --input-format stream-json và --permission-prompt-tool stdio; mode auto không có; assistant tool_use ExitPlanMode/TodoWrite KHÔNG ra Event::Plan; test agent cũ còn nguyên. Thủ công (pnpm start, dự án thử trong thư mục tạm): chế độ plan, yêu cầu nhiều bước -> thẻ hỏi quyền ExitPlanMode hiện, Event::Plan tới frontend; deny -> lượt kết thúc, git status dự án sạch.",
+      "doneWhen": "cargo test/clippy/fmt sạch; một lượt plan thật phát Event::Plan; lượt không treo khi deny"
+    },
+    {
+      "id": "TASK-P07",
+      "title": "project_data.rs: thư mục lưu theo tên dự án trong dữ liệu app",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Nền cho lưu plan, logs và tasks theo dự án (quyết định người dùng 2026-11-06)",
+      "requirements": ["REQ-P9", "REQ-P10"],
+      "acceptanceCriteria": ["AC-P9", "AC-P10"],
+      "design": "plan-pane.md 3.8, 3.9",
+      "inScope": "ProjectData::dir(data_dir, name, id): khoá làm sạch (chữ, số, -, _), trùng tên thêm 8 ký tự id, tên rỗng dùng id; tạo thư mục; kiểm nằm trong projects/ (chặn .., symlink); ghi nguyên tử (tệp tạm rồi đổi tên); lỗi ghi trả Err để nơi gọi bỏ qua",
+      "outOfScope": "Đổi tên thư mục khi đổi tên dự án; ghi vào thư mục dự án người dùng",
+      "dependencies": ["TASK-P01"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/project_data.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm pub mod project_data;"
+        }
+      ],
+      "approach": "1. Dùng db::path để biết thư mục dữ liệu. 2. Viết hàm làm sạch có test. 3. Test ghi nguyên tử trên thư mục tạm.",
+      "test": "Tên có ../, tên trùng, tên rỗng, symlink ra ngoài, ghi hai lần liên tiếp",
+      "doneWhen": "cargo test module project_data pass, clippy sạch",
+      "revisionNote": "2026-11-07: không bị ảnh hưởng bởi P01; status DONE giữ nguyên."
+    },
+    {
+      "id": "TASK-P08",
+      "title": "Ghi plan khi Event::Plan và lệnh plan_load",
+      "status": "DONE",
+      "progressNote": "2026-11-07: plan_store.rs (gộp text/todos, ghi nguyên tử plans/<session>.json), lệnh plan_load (commands/plan.rs, trong generate_handler), ide.planLoad; commands/agent.rs ghi plan khi Event::Plan. Test tempdir pass; chưa kiểm trong app thật.",
+      "priority": "P1",
+      "priorityReason": "Mở lại cuộc chat cũ thấy plan; thay Q2 cũ",
+      "requirements": ["REQ-P7", "REQ-P9"],
+      "acceptanceCriteria": ["AC-P7", "AC-P9"],
+      "design": "plan-pane.md 3.8 (sequence)",
+      "inScope": "commands/agent.rs ghi plans/<session>.json khi phát Event::Plan (hiện chỉ dạng text từ ExitPlanMode; session id từ Event::Session cùng lượt); lệnh plan_load(root, session) -> Option<String> qua workspace_for(root); thêm vào generate_handler; src/lib/ide.ts gọi lệnh; frontend gọi khi mở cuộc chat; lỗi ghi bị bỏ qua, không làm hỏng lượt",
+      "outOfScope": "Dựng lại plan từ cột steps; ghi vào thư mục dự án",
+      "dependencies": ["TASK-P03", "TASK-P07"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "Ghi plan theo lượt"
+        },
+        {
+          "path": "src-tauri/src/commands/chat.rs",
+          "changes": "Lệnh plan_load (hoặc commands/plan.rs, chốt khi làm)"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm plan_load vào generate_handler"
+        },
+        {
+          "path": "src/lib/ide.ts",
+          "changes": "Hàm planLoad"
+        }
+      ],
+      "approach": "1. Ghi sau khi phát Event::Plan. 2. plan_load đọc tệp và trả chuỗi JSON. 3. Cập nhật ide.ts cùng lượt (quy ước contract).",
+      "test": "Lượt plan có ExitPlanMode tạo tệp; plan_load trả đúng nội dung; session lạ trả None; root ngoài dự án đã lưu bị từ chối",
+      "doneWhen": "Test qua, git status dự án thử nghiệm sạch",
+      "revisionNote": "2026-11-07: đổi nguồn plan từ TodoWrite sang ExitPlanMode; ghi đè tệp khi có ExitPlanMode mới trong cùng session (lần bị deny rồi trình lại)."
+    },
+    {
+      "id": "TASK-P09",
+      "title": "Logs theo ngày trong dữ liệu app",
+      "status": "DONE",
+      "progressNote": "2026-11-07: run_log.rs (allowlist tên công cụ/mã lỗi, tệp theo ngày, xoá >14 ngày, 5 MB); commands/agent.rs ghi start/tool/error/end. Chưa ghi kind plan hay quyết định allow/deny. Test pass; chưa kiểm lượt thật.",
+      "priority": "P1",
+      "priorityReason": "Nhật ký lượt chat theo dự án, không lộ nội dung",
+      "requirements": ["REQ-P10"],
+      "acceptanceCriteria": ["AC-P10"],
+      "design": "plan-pane.md 3.8 (Logs)",
+      "inScope": "Dòng JSON {ts, runId, cli, kind, ...} cho bắt đầu, tên công cụ, key lỗi, kết thúc; không ghi prompt, answer, khoá API, biến môi trường; tệp theo ngày; xoá tệp quá 14 ngày; tối đa 5 MB mỗi tệp",
+      "outOfScope": "Màn hình xem log",
+      "dependencies": ["TASK-P07"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/project_data.rs",
+          "changes": "Hàm ghi dòng log (hoặc logs.rs, chốt khi làm)"
+        },
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "Gọi ghi log theo sự kiện"
+        }
+      ],
+      "approach": "1. Chọn trường an toàn theo danh sách cho phép. 2. Xoay vòng khi mở ngày mới. 3. Lỗi ghi bị bỏ qua.",
+      "test": "Log không chứa prompt/answer/khoá; tệp cũ hơn 14 ngày bị xoá; vượt 5 MB thì cắt",
+      "doneWhen": "Test qua, mở một lượt thật thấy dòng log đúng",
+      "revisionNote": "2026-11-07: không đổi phạm vi; kind log có thể gồm plan và quyết định allow/deny của ExitPlanMode (không ghi nội dung plan)."
+    },
+    {
+      "id": "TASK-P04",
+      "title": "Frontend: nhận kind=plan (markdown), nạp bằng plan_load, chấm mới",
+      "status": "DONE",
+      "progressNote": "2026-11-07: kind=plan (chỉ text) vào PlanData: turn-events withPlan, use-agent-turns, use-chat-session (state plan, planLoad theo session claude khi mở cuộc chat, reset khi đổi/tạo mới). Chưa kiểm trên UI chạy thật.",
+      "priority": "P1",
+      "priorityReason": "Cầu nối dữ liệu cho ngăn",
+      "requirements": ["REQ-P3", "REQ-P6"],
+      "acceptanceCriteria": ["AC-P3", "AC-P6"],
+      "design": "plan-pane.md 3.5, 3.6, 3.8",
+      "inScope": "Kiểu Plan trong turn-events.ts khớp JSON Rust ({kind:'text', markdown} và {kind:'todos', todos} giữ trong kiểu cho tương thích, nhưng chỉ nhánh text được nối); use-agent-turns.ts giữ markdown mới nhất theo cuộc chat (đổ vào PlanData {todos: [], markdown}); gọi planLoad khi mở cuộc chat cũ; reset khi chuyển cuộc chat chưa có plan; cờ chưa xem",
+      "outOfScope": "Tính toán plan ở frontend; nối todo (HOÃN theo REQ-P2); đổi thẻ hỏi quyền hiện có",
+      "dependencies": ["TASK-P08"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/chat/turn-events.ts",
+          "changes": "Kiểu và nhánh plan"
+        },
+        {
+          "path": "src/components/shell/chat/use-agent-turns.ts",
+          "changes": "State plan theo cuộc chat, gọi planLoad"
+        }
+      ],
+      "approach": "1. Đọc cách xử lý các kind hiện có. 2. Thêm nhánh plan. 3. Không đụng turn đã lưu.",
+      "test": "Cuộc chat mới Empty; nhận kind=plan text thì hiện Markdown, ExitPlanMode lần sau thay bản cũ; mở cuộc cũ có tệp thì hiện plan",
+      "doneWhen": "Typecheck không thêm lỗi so với 22 lỗi có sẵn",
+      "revisionNote": "2026-11-07: chỉ phần markdown; phần todo hoãn."
+    },
+    {
+      "id": "TASK-P05",
+      "title": "plan-pane.tsx: ngăn Plan trong dock phải",
+      "status": "PARTIAL",
+      "priority": "P1",
+      "priorityReason": "Phần người dùng nhìn thấy theo ảnh mẫu",
+      "requirements": ["REQ-P1", "REQ-P3", "REQ-P4", "REQ-P8"],
+      "acceptanceCriteria": ["AC-P1", "AC-P3", "AC-P4", "AC-P8"],
+      "design": "plan-pane.md 1, 3.6; side-chat.md 3.7",
+      "inScope": "Tab Plan trong dock phải chung với Side chat; phóng to, đóng; trạng thái rỗng ba phần; Markdown qua markdown-content.tsx; chấm mới; khoá i18n vi và en",
+      "outOfScope": "Sửa/duyệt plan trong ngăn; nối dữ liệu todo (HOÃN, REQ-P2)",
+      "dependencies": ["TASK-P04"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/plan-pane.tsx",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/components/shell/workspace-pane.tsx",
+          "changes": "Gắn tab Plan vào dock"
+        },
+        {
+          "path": "src/components/shell/chat-panel.tsx",
+          "changes": "Nút mở và chấm mới"
+        },
+        {
+          "path": "src/lib/i18n/en/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/lib/i18n/vi/shell-chat.ts",
+          "changes": "Khoá mới"
+        }
+      ],
+      "approach": "1. Tái dùng component theo components.md. 2. Vẽ đúng ảnh mẫu. 3. Dùng dữ liệu giả trong Playwright. Làm sau TASK-S04 của plan Side chat.",
+      "test": "Playwright: rỗng đủ ba phần; Markdown; phóng to, đóng; chấm mới; vi/en; viewport hẹp không cuộn ngang",
+      "doneWhen": "Có ảnh chứng Playwright, lint và typecheck không thêm lỗi",
+      "progressNote": "2026-11-07 (nối): thêm plan-dock.tsx (cột phải, phóng to, đóng) và nút Plan có chấm mới trong workspace-pane.tsx; ChatPanel nhận onPlan. Chưa chụp ảnh Playwright, chưa chạy UI. 2026-11-07: đã tạo src/components/shell/plan-pane.tsx (PlanPane, props plan/expanded/onToggleExpanded/onClose; kiểu PlanData) và khoá i18n plan_pane.* vi/en. CHƯA nối: workspace-pane.tsx (tab dock), chat-panel.tsx (nút mở, chấm mới), use-agent-turns.ts; chưa chụp ảnh Playwright.",
+      "revisionNote": "2026-11-07: TodoList và khoá plan_pane.status_* đã viết trong plan-pane.tsx giữ nguyên (không xoá khi chưa được yêu cầu); dữ liệu todo luôn rỗng tới khi mở lại REQ-P2 nên Playwright không cần kiểm ba trạng thái todo đợt này. Status PARTIAL giữ nguyên."
+    },
+    {
+      "id": "TASK-P06",
+      "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
+      "status": "TODO",
+      "priority": "P1",
+      "priorityReason": "Đóng AC có bằng chứng chạy thật",
+      "requirements": [
+        "REQ-P1",
+        "REQ-P3",
+        "REQ-P4",
+        "REQ-P5",
+        "REQ-P6",
+        "REQ-P7",
+        "REQ-P8",
+        "REQ-P9",
+        "REQ-P10"
+      ],
+      "acceptanceCriteria": [
+        "AC-P1",
+        "AC-P3",
+        "AC-P4",
+        "AC-P5",
+        "AC-P6",
+        "AC-P7",
+        "AC-P8",
+        "AC-P9",
+        "AC-P10",
+        "AC-P11"
+      ],
+      "design": "plan-pane.md toàn bộ",
+      "inScope": "Chạy 5 lệnh kiểm chứng; trong pnpm start ở dự án thử (thư mục tạm): chế độ plan, gửi yêu cầu nhiều bước, thấy Markdown plan trong ngăn và thẻ hỏi quyền ExitPlanMode; deny thì dự án không đổi; allow thì ghi nhận hành vi sau khi thoát plan mode (Q7); kiểm tệp trong dữ liệu app; cập nhật trạng thái tài liệu và architecture.md",
+      "outOfScope": "Mục Ngoài phạm vi",
+      "dependencies": ["TASK-P05", "TASK-P09"],
+      "filesToChange": [
+        {
+          "path": "docs/system/plan-pane.md",
+          "changes": "Cập nhật trạng thái"
+        },
+        {
+          "path": "docs/system/architecture.md",
+          "changes": "Thêm Event::Plan, plan_load, lưu theo dự án"
+        }
+      ],
+      "approach": "1. Chạy kiểm chứng. 2. Chạy app. 3. Cập nhật tài liệu.",
+      "test": "Markdown khớp input.plan của lượt thật; tệp plan và log đúng chỗ; dự án thử sạch khi deny",
+      "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã",
+      "revisionNote": "2026-11-07: bỏ kiểm todo (hoãn)."
+    },
+    {
+      "id": "TASK-P10",
+      "title": "Todo của AI (TodoWrite/Task*) trong ngăn Plan",
+      "status": "DEFERRED",
+      "priority": "P2",
+      "priorityReason": "Hoãn theo quyết định 2026-11-07: CLI hiện không phát todo trong cách app chạy",
+      "requirements": ["REQ-P2"],
+      "acceptanceCriteria": ["AC-P2"],
+      "design": "plan-pane.md 2.1, 6",
+      "inScope": "Khi mở lại: chốt cách bật tool (--tools đầy đủ hoặc Task*), Plan::from_tool cho Task* gộp theo id, phát Event::Plan kind todos, nối TodoList có sẵn",
+      "outOfScope": "Làm trong đợt này",
+      "dependencies": ["TASK-P03", "TASK-P04"],
+      "filesToChange": [],
+      "approach": "Lập lại plan khi điều kiện reopenWhen của REQ-P2 thoả; chụp lại CLI trước khi code",
+      "test": "Xác định khi mở lại",
+      "doneWhen": "Không áp dụng đợt này",
+      "deferredReason": "Xem REQ-P2.deferredReason",
+      "reopenWhen": "Xem REQ-P2.reopenWhen"
+    }
+  ],
+  "risks": [
+    "Tên công cụ hoặc trường khác bản claude đang cài: đã chụp 2.1.319 (P01); bản CLI khác có thể đổi (vd bỏ ExitPlanMode hoặc đổi control_request) -> Plan::from_tool trả None, ngăn im lặng, lượt không hỏng",
+    "Chế độ plan chuyển sang --input-format stream-json --permission-prompt-tool stdio: người dùng có thể nhận thêm thẻ hỏi quyền cho các tool khác trong plan mode (S01 thấy có can_use_tool khác); xem Q8",
+    "Duyệt (allow) ExitPlanMode làm CLI thoát plan mode và bắt đầu ghi tệp vào dự án trong CÙNG lượt: chế độ plan của app không còn chỉ đọc sau khi người dùng duyệt; chưa kiểm các lần ghi sau đó có hỏi quyền qua stdio không (Q7)",
+    "Từ chối (deny) ExitPlanMode: model thường gọi AskUserQuestion (cũng là can_use_tool); thẻ hỏi quyền hiện có trả allow với updatedInput nguyên trạng, chưa kiểm câu trả lời cho AskUserQuestion có hợp lệ không",
+    "Plan mode của CLI tự ghi ~/.claude/plans/<tên>.md ngoài dự án và ngoài dữ liệu app, không hỏi quyền; app không kiểm soát, chỉ ghi nhận; planFilePath không được đưa ra Event::Plan",
+    "Hook của người dùng (~/.claude/settings) có thể đổi hành vi so với kết quả đo (đo với --setting-sources local)",
+    "Lượt treo nếu stdin stream-json không đóng: Responder phải đóng khi có dòng result như ASK_MODE hiện tại",
+    "Một ExitPlanMode đến hai lần (assistant tool_use và control_request): chỉ phát từ control_request để không trùng",
+    "Phần todo hoãn: REQ-P2 chưa đáp ứng; TodoList trong plan-pane.tsx và nhánh TodoWrite trong plan.rs là mã chưa dùng tới",
+    "Bốn việc cùng sửa parse_line (Context, Plan, Background, refactor OOP nhóm A): làm tuần tự",
+    "Tên dự án lạ hoặc trùng: khoá làm sạch + id, có test",
+    "Ghi đĩa lỗi không được làm hỏng lượt chat",
+    "Dock phải dùng chung với Side chat: TASK-P05 sau TASK-S04"
+  ],
+  "rollback": "Git revert từng nhóm khi được phép commit; thư mục projects/ trong dữ liệu app có thể xoá tay, không ảnh hưởng DB.",
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Codex có sự kiện todo/plan (todo_list) trong exec --json?",
+      "default": "Chỉ Claude đợt này; chưa kiểm được (hết hạn mức tới 2026-12-01)"
+    },
+    {
+      "id": "Q3",
+      "question": "Điện thoại có xem plan?",
+      "default": "Không"
+    },
+    {
+      "id": "Q4",
+      "question": "Đổi tên dự án có đổi thư mục lưu?",
+      "default": "Không"
+    },
+    {
+      "id": "Q5",
+      "question": "Giới hạn log 14 ngày và 5 MB, chưa có màn hình xem log?",
+      "default": "Có"
+    },
+    {
+      "id": "Q6",
+      "question": "Ngăn tự mở khi có plan đầu tiên hay chỉ bật chấm?",
+      "default": "Chỉ bật chấm"
+    },
+    {
+      "id": "Q7",
+      "question": "Khi người dùng duyệt plan (allow ExitPlanMode), CLI thoát plan mode và sửa tệp ngay trong lượt: chấp nhận hành vi này cho chế độ Plan của app?",
+      "default": "Chấp nhận như Claude Code (người dùng chủ động bấm duyệt); kiểm ở TASK-P06 xem các lần ghi sau có hỏi quyền không"
+    },
+    {
+      "id": "Q8",
+      "question": "Trong chế độ plan (nay chạy stdio), các can_use_tool khác ExitPlanMode xử lý thế nào?",
+      "default": "Hiện thẻ hỏi quyền như chế độ Hỏi từng việc; không tự động allow/deny"
+    }
+  ],
+  "revisionHistory": [
+    {
+      "date": "2026-11-06",
+      "note": "Bản đầu, giả định Claude -p có TodoWrite và ExitPlanMode."
+    },
+    {
+      "date": "2026-11-07",
+      "note": "Sửa theo kết quả chụp P01 (claude 2.1.319): claude -p không có TodoWrite/Task*/ExitPlanMode; ExitPlanMode chỉ có khi --input-format stream-json và đến dưới dạng control_request can_use_tool. Quyết định người dùng: đợt này chỉ làm phần kế hoạch qua ExitPlanMode; phần todo HOÃN (REQ-P2 DEFERRED). Cập nhật P01..P09, AC, rủi ro, câu hỏi mở."
+    }
+  ],
+  "cliEvidence": {
+    "capturedAt": "2026-11-06/07",
+    "claudeVersion": "2.1.319",
+    "codexVersion": "0.165.0 (không chạy được lượt: hết hạn mức tới 2026-12-01)",
+    "rawSamples": "Thư mục scratchpad của phiên (tạm, có thể mất): p01-plan.jsonl, p01-todowrite.jsonl, p01-taskcreate.jsonl, s01-plan-deny.jsonl; dòng then chốt đã chép vào plan-pane.md mục 2.1 để làm fixture.",
+    "facts": [
+      "claude -p với stdin văn bản (cách app chạy mọi chế độ trừ manual): danh sách tool KHÔNG có TodoWrite, Task*, ExitPlanMode, EnterPlanMode, AskUserQuestion; ToolSearch select:TodoWrite/TaskCreate trả 'No matching deferred tools found'.",
+      "--input-format stream-json: có thêm AskUserQuestion, EnterPlanMode, ExitPlanMode; vẫn không có TodoWrite/Task*.",
+      "ExitPlanMode đến dưới dạng {type:control_request, request_id, request:{subtype:can_use_tool, tool_name:ExitPlanMode, display_name, input:{plan, planFilePath}, tool_use_id}}, requires_user_interaction true; đồng thời có dòng assistant tool_use ExitPlanMode cùng input.",
+      "Trả lời allow: tool_result 'User has approved your plan...' và CLI thoát plan mode trong cùng lượt (model bắt đầu ghi tệp ngay sau). Trả lời deny: tool_result is_error mang message, model thường gọi tiếp AskUserQuestion.",
+      "Plan mode vẫn ghi tệp kế hoạch ngoài dự án: ~/.claude/plans/<tên ngẫu nhiên>.md (không hỏi quyền); planFilePath trỏ tới tệp đó.",
+      "TodoWrite chỉ có khi ép --tools TodoWrite (+ CLAUDE_CODE_ENABLE_TASKS=0): input {todos:[{content,status,activeForm}]}, status pending|in_progress|completed, mỗi lần gửi lại cả danh sách.",
+      "Bản mới thay TodoWrite bằng Task* (CLAUDE_CODE_ENABLE_TASKS=1 --tools TaskCreate,TaskUpdate,...): TaskCreate{subject,description} -> tool_use_result.task.id; TaskUpdate{taskId,status} -> statusChange{from,to}; phải gộp theo id.",
+      "--tools giới hạn TOÀN BỘ tập tool nên app không thể 'bật thêm' TodoWrite mà giữ tập mặc định.",
+      "Hook của người dùng (~/.claude/settings) có thể chặn Write khi chạy claude -p; kết quả trên đo với --setting-sources local."
+    ]
+  },
+  "executionOrder": [
+    "TASK-P01",
+    "TASK-P02",
+    "TASK-P07",
+    "TASK-P03",
+    "TASK-P08",
+    "TASK-P09",
+    "TASK-P04",
+    "TASK-P05",
+    "TASK-P06"
+  ],
+  "traceability": [
+    {
+      "requirement": "REQ-P1",
+      "acceptanceCriteria": ["AC-P1"],
+      "tasks": ["TASK-P05", "TASK-P06"],
+      "test": "Playwright mở/phóng to/đóng, tab chung dock",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P2",
+      "acceptanceCriteria": ["AC-P2"],
+      "tasks": ["TASK-P10"],
+      "test": "Hoãn",
+      "result": "DEFERRED: CLI không phát TodoWrite/Task* với -p không có --tools (P01)"
+    },
+    {
+      "requirement": "REQ-P3",
+      "acceptanceCriteria": ["AC-P3", "AC-P11"],
+      "tasks": [
+        "TASK-P01",
+        "TASK-P02",
+        "TASK-P03",
+        "TASK-P04",
+        "TASK-P05",
+        "TASK-P06"
+      ],
+      "test": "cargo test control_request ExitPlanMode; lượt plan thật; Playwright Markdown",
+      "result": "P01 đã chụp; P02 DONE theo plan (chưa chạy lại test trong lần sửa này); còn lại chưa chạy"
+    },
+    {
+      "requirement": "REQ-P4",
+      "acceptanceCriteria": ["AC-P4"],
+      "tasks": ["TASK-P05", "TASK-P06"],
+      "test": "Playwright trạng thái rỗng vi/en",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P5",
+      "acceptanceCriteria": ["AC-P5"],
+      "tasks": ["TASK-P02", "TASK-P03", "TASK-P06"],
+      "test": "Rà mã frontend không dò tool_name; cargo test plan/agent",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P6",
+      "acceptanceCriteria": ["AC-P6"],
+      "tasks": ["TASK-P03", "TASK-P04", "TASK-P06"],
+      "test": "Test parse_line có parent; chuyển cuộc chat",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P7",
+      "acceptanceCriteria": ["AC-P7"],
+      "tasks": ["TASK-P08", "TASK-P06"],
+      "test": "git diff db.rs, Cargo.toml; generate_handler",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P8",
+      "acceptanceCriteria": ["AC-P8"],
+      "tasks": ["TASK-P05", "TASK-P06"],
+      "test": "Điện thoại nhận kind plan không lỗi",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-P9",
+      "acceptanceCriteria": ["AC-P9"],
+      "tasks": ["TASK-P07", "TASK-P08", "TASK-P06"],
+      "test": "Tệp plans/<session>.json; git status dự án thử",
+      "result": "P07 DONE; còn lại chưa chạy"
+    },
+    {
+      "requirement": "REQ-P10",
+      "acceptanceCriteria": ["AC-P10"],
+      "tasks": ["TASK-P07", "TASK-P09", "TASK-P06"],
+      "test": "Log không chứa nội dung; xoay vòng",
+      "result": "Chưa chạy"
+    }
+  ]
+}

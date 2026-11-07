@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityTerminal } from '@/components/ai-chat/activity-terminal';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { LoginScreen } from '@/components/shell/accounts';
@@ -6,6 +6,7 @@ import { DialogsHost } from '@/components/shell/dialogs-host';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Sidebar } from '@/components/shell/sidebar';
 import { SidebarToggle } from '@/components/shell/sidebar-toggle';
+import { UpdateBanner } from '@/components/shell/update-banner';
 import { WorkspacePane } from '@/components/shell/workspace-pane';
 import { useFileDropGuard } from '@/hooks/use-file-drop-guard';
 import { FRESH, usePaneState } from '@/hooks/use-pane-state';
@@ -15,6 +16,7 @@ import { useWindowButtonsHover } from '@/hooks/use-window-buttons-hover';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { errorText, ide } from '@/lib/ide';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 // * The sidebar is either this wide or folded away; only the edge button changes it.
 const SIDEBAR_OPEN_WIDTH = 256;
@@ -24,6 +26,7 @@ export default function App() {
     const workspace = useWorkspace();
     const { paneStates, patchPane } = usePaneState();
     const [terminalOpen, setTerminalOpen] = useState(false);
+    const [backgroundOpen, setBackgroundOpen] = useState(false);
 
     useWindowButtonsHover();
     useFileDropGuard();
@@ -79,6 +82,27 @@ export default function App() {
             .catch((caught) => console.error(errorText(caught)));
 
     const showPanel = selected && activePane !== null;
+    // * Full file: the chat is folded away and the editor is shown; the sidebar then floats over the editor instead of pushing it.
+    const sidebarOverlay =
+        activeState.chatCollapsed && activeState.editorVisible;
+    const sidebarOverlayOpen = sidebarOverlay && !sidebarCollapsed;
+
+    // * Escape folds the floating sidebar.
+    useEffect(() => {
+        if (!sidebarOverlayOpen) {
+            return;
+        }
+
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                sidebarWidth.setTo(1);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+
+        return () => window.removeEventListener('keydown', onKey);
+    }, [sidebarOverlayOpen, sidebarWidth]);
 
     if (auth.statuses === null || !canChat(auth.statuses)) {
         return (
@@ -104,12 +128,37 @@ export default function App() {
             <div className="flex min-h-0 flex-1 overflow-clip">
                 {/* * The sidebar stays mounted at the width the user dragged it to; `inert` keeps the folded one out of focus. */}
                 <div
-                    style={{ width: sidebarCollapsed ? 0 : SIDEBAR_OPEN_WIDTH }}
+                    style={{
+                        width:
+                            sidebarCollapsed || sidebarOverlay
+                                ? 0
+                                : SIDEBAR_OPEN_WIDTH,
+                    }}
                     className="group relative flex shrink-0"
                 >
+                    {/* * Click outside the floating sidebar closes it. */}
+                    {sidebarOverlayOpen && (
+                        <div
+                            aria-hidden="true"
+                            data-testid="sidebar-backdrop"
+                            className="fixed inset-0 z-20"
+                            onClick={toggleSidebar}
+                        />
+                    )}
                     <div
                         inert={sidebarCollapsed}
-                        className="flex w-full overflow-hidden"
+                        style={
+                            sidebarOverlay
+                                ? { width: SIDEBAR_OPEN_WIDTH }
+                                : undefined
+                        }
+                        className={cn(
+                            'flex overflow-hidden',
+                            sidebarOverlay
+                                ? 'absolute inset-y-0 left-0 z-30 border-r bg-background shadow-lg'
+                                : 'w-full',
+                            sidebarOverlay && sidebarCollapsed && 'hidden',
+                        )}
                     >
                         <Sidebar
                             projects={projects}
@@ -133,7 +182,10 @@ export default function App() {
                             onOpenConversation={(id) =>
                                 // * Picking a chat opens the chat pane too, even when a file had folded it away.
                                 patchPane(activeKey, {
-                                    picked: id,
+                                    picked: {
+                                        id,
+                                        n: (activeState.picked?.n ?? 0) + 1,
+                                    },
                                     chatCollapsed: false,
                                 })
                             }
@@ -166,7 +218,7 @@ export default function App() {
                             }
                             onOpenSettings={setSettingsTab}
                             onOpenUsage={() => setUsageOpen(true)}
-                            onConnectPhone={() => setPhoneOpen(true)}
+                            toggle={sidebarToggle}
                         />
                     </div>
                 </div>
@@ -202,10 +254,23 @@ export default function App() {
                                             active={pane.key === activeKey}
                                             projects={chatProjects}
                                             terminalOpen={terminalOpen}
+                                            backgroundOpen={backgroundOpen}
+                                            phoneOpen={phoneOpen}
                                             sidebarCollapsed={sidebarCollapsed}
                                             sidebarToggle={sidebarToggle}
                                             onToggleTerminal={() =>
                                                 setTerminalOpen((open) => !open)
+                                            }
+                                            onToggleBackground={() =>
+                                                setBackgroundOpen(
+                                                    (open) => !open,
+                                                )
+                                            }
+                                            onOpenSettings={() =>
+                                                setSettingsTab('advanced')
+                                            }
+                                            onOpenPhone={() =>
+                                                setPhoneOpen(true)
                                             }
                                             onOpenInVscode={() =>
                                                 void openInVscode()
@@ -246,6 +311,7 @@ export default function App() {
                     onPhoneClose={() => setPhoneOpen(false)}
                 />
             </div>
+            <UpdateBanner />
         </div>
     );
 }

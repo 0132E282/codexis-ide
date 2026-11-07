@@ -1,8 +1,10 @@
 //! Several accounts per AI CLI. Each extra account is a profile: a folder of its own inside Rynox's data folder, given to the CLI through `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, so its login never touches `~/.claude` or `~/.codex`.
 //! Profile `0` is the CLI's own default login and is always there; one profile per CLI is the active one that chats and statistics use.
 
-use crate::db;
+use crate::cli::CliKind;
+use crate::{db, migrations, sql, validation};
 use rusqlite::{params, Connection, OptionalExtension};
+use sea_query::{Alias, Condition, Expr, ExprTrait, Func, Query, Value};
 use serde::Serialize;
 use std::fmt;
 use std::fs;
@@ -15,12 +17,6 @@ pub const DEFAULT_PROFILE: i64 = 0;
 const DEFAULT_NAME: &str = "Mặc định";
 const MAX_NAME_CHARS: usize = 40;
 const MAX_PER_CLI: i64 = 10;
-/// CLI name and the environment variable that points it at a profile folder.
-const CLIS: [(&str, &str); 3] = [
-    ("claude", "CLAUDE_CONFIG_DIR"),
-    ("codex", "CODEX_HOME"),
-    ("github", "GH_CONFIG_DIR"),
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProfileError {
@@ -34,10 +30,10 @@ impl ProfileError {
     /// Fixed user-facing text.
     pub fn message(self) -> &'static str {
         match self {
-            Self::Invalid => "Tên hoặc loại tài khoản không hợp lệ.",
-            Self::TooMany => "Đã đủ số tài khoản tối đa cho CLI này.",
-            Self::NotFound => "Không tìm thấy tài khoản.",
-            Self::Failed => "Không xử lý được tài khoản.",
+            Self::Invalid => "profiles.invalid",
+            Self::TooMany => "profiles.too_many",
+            Self::NotFound => "profiles.not_found",
+            Self::Failed => "profiles.failed",
         }
     }
 }
@@ -65,17 +61,7 @@ pub struct ProfileStore {
 
 impl ProfileStore {
     fn new(connection: Connection, root: PathBuf) -> Result<Self, rusqlite::Error> {
-        connection.execute_batch(
-            "CREATE TABLE IF NOT EXISTS profiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cli TEXT NOT NULL,
-                name TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS active_profiles (
-                cli TEXT PRIMARY KEY,
-                profile_id INTEGER NOT NULL
-            );",
-        )?;
+        connection.execute_batch(migrations::CREATE_PROFILES_TABLES)?;
 
         Ok(Self {
             connection: Mutex::new(connection),
@@ -84,9 +70,8 @@ impl ProfileStore {
     }
 
     fn variable(cli: &str) -> Result<&'static str, ProfileError> {
-        CLIS.iter()
-            .find(|(name, _)| *name == cli)
-            .map(|(_, variable)| *variable)
+        CliKind::parse(cli)
+            .map(CliKind::config_variable)
             .ok_or(ProfileError::Invalid)
     }
 
@@ -125,19 +110,18 @@ impl ProfileStore {
     pub fn list(&self) -> Result<Vec<Profile>, ProfileError> {
         let mut profiles = Vec::new();
 
-        for (cli, _) in CLIS {
+        for kind in CliKind::ALL {
+            let cli = kind.name();
             let active = self.active_id(cli);
-            let connection = self.lock()?;
-            let mut statement = connection
-                .prepare("SELECT id, name FROM profiles WHERE cli = ?1 ORDER BY id")
-                .map_err(|_| ProfileError::Failed)?;
-            let rows = statement
-                .query_map([cli], |row| {
-                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-                })
-                .map_err(|_| ProfileError::Failed)?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(|_| ProfileError::Failed)?;
+            let rows = sql::list_ordered(
+                &*self.lock()?,
+                "profiles",
+                &["id", "name"],
+                Condition::all().add(same("cli", cli)),
+                "id",
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .map_err(|_| ProfileError::Failed)?;
 
             profiles.push(Profile {
                 id: DEFAULT_PROFILE,
@@ -165,18 +149,21 @@ impl ProfileStore {
 
         let name = name.trim();
 
-        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+        if name.chars().count() > MAX_NAME_CHARS || validation::display_name(name).is_err() {
             return Err(ProfileError::Invalid);
         }
 
         let connection = self.lock()?;
-        let count: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM profiles WHERE cli = ?1",
-                [cli],
-                |row| row.get(0),
-            )
-            .map_err(|_| ProfileError::Failed)?;
+        let count = sql::query_first(
+            &connection,
+            Query::select()
+                .expr(Func::count(Expr::cust("*")))
+                .from(Alias::new("profiles"))
+                .and_where(same("cli", cli)),
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|_| ProfileError::Failed)?
+        .unwrap_or_default();
 
         if count >= MAX_PER_CLI {
             return Err(ProfileError::TooMany);
@@ -192,7 +179,11 @@ impl ProfileStore {
         let id = connection.last_insert_rowid();
 
         if create_private_folder(&self.folder(cli, id)).is_err() {
-            let _ = connection.execute("DELETE FROM profiles WHERE id = ?1", [id]);
+            let _ = sql::delete_where(
+                &connection,
+                "profiles",
+                Condition::all().add(same("id", id)),
+            );
 
             return Err(ProfileError::Failed);
         }
@@ -212,23 +203,25 @@ impl ProfileStore {
         }
 
         let connection = self.lock()?;
-        let removed = connection
-            .execute(
-                "DELETE FROM profiles WHERE id = ?1 AND cli = ?2",
-                params![id, cli],
-            )
-            .map_err(|_| ProfileError::Failed)?;
+        let removed = sql::delete_where(
+            &connection,
+            "profiles",
+            Condition::all().add(same("id", id)).add(same("cli", cli)),
+        )
+        .map_err(|_| ProfileError::Failed)?;
 
         if removed == 0 {
             return Err(ProfileError::NotFound);
         }
 
-        connection
-            .execute(
-                "DELETE FROM active_profiles WHERE cli = ?1 AND profile_id = ?2",
-                params![cli, id],
-            )
-            .map_err(|_| ProfileError::Failed)?;
+        sql::delete_where(
+            &connection,
+            "active_profiles",
+            Condition::all()
+                .add(same("cli", cli))
+                .add(same("profile_id", id)),
+        )
+        .map_err(|_| ProfileError::Failed)?;
         // Best effort: the folder is Rynox's own and sits exactly at `<root>/<cli>-<id>`.
         let _ = fs::remove_dir_all(self.folder(cli, id));
 
@@ -244,17 +237,22 @@ impl ProfileStore {
 
         let name = name.trim();
 
-        if id == DEFAULT_PROFILE || name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+        if id == DEFAULT_PROFILE
+            || name.chars().count() > MAX_NAME_CHARS
+            || validation::display_name(name).is_err()
+        {
             return Err(ProfileError::Invalid);
         }
 
-        let changed = self
-            .lock()?
-            .execute(
-                "UPDATE profiles SET name = ?1 WHERE id = ?2 AND cli = ?3",
-                params![name, id, cli],
-            )
-            .map_err(|_| ProfileError::Failed)?;
+        let changed = sql::execute(
+            &*self.lock()?,
+            Query::update()
+                .table(Alias::new("profiles"))
+                .value(Alias::new("name"), name)
+                .and_where(same("id", id))
+                .and_where(same("cli", cli)),
+        )
+        .map_err(|_| ProfileError::Failed)?;
 
         if changed == 0 {
             return Err(ProfileError::NotFound);
@@ -271,13 +269,13 @@ impl ProfileStore {
         Self::variable(cli)?;
         self.environment(cli, id)?;
 
-        self.lock()?
-            .execute(
-                "INSERT INTO active_profiles (cli, profile_id) VALUES (?1, ?2)
-                 ON CONFLICT(cli) DO UPDATE SET profile_id = excluded.profile_id",
-                params![cli, id],
-            )
-            .map_err(|_| ProfileError::Failed)?;
+        sql::upsert(
+            &*self.lock()?,
+            "active_profiles",
+            &["cli"],
+            vec![("cli", cli.into()), ("profile_id", id.into())],
+        )
+        .map_err(|_| ProfileError::Failed)?;
 
         Ok(())
     }
@@ -297,15 +295,16 @@ impl ProfileStore {
             return Ok(Vec::new());
         }
 
-        let exists: Option<i64> = self
-            .lock()?
-            .query_row(
-                "SELECT id FROM profiles WHERE id = ?1 AND cli = ?2",
-                params![id, cli],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|_| ProfileError::Failed)?;
+        let exists = sql::query_first(
+            &*self.lock()?,
+            Query::select()
+                .column(Alias::new("id"))
+                .from(Alias::new("profiles"))
+                .and_where(same("id", id))
+                .and_where(same("cli", cli)),
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|_| ProfileError::Failed)?;
 
         exists.ok_or(ProfileError::NotFound)?;
 
@@ -317,6 +316,11 @@ impl ProfileStore {
         self.environment(cli, self.active_id(cli))
             .unwrap_or_default()
     }
+}
+
+/// `column = value` on a fixed column name.
+fn same(column: &str, value: impl Into<Value>) -> Expr {
+    Expr::col(Alias::new(column)).eq(value)
 }
 
 fn create_private_folder(path: &Path) -> std::io::Result<()> {
@@ -401,159 +405,5 @@ pub fn profile_select(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn store() -> (tempfile::TempDir, ProfileStore) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = ProfileStore::new(db::in_memory(), dir.path().join("profiles")).unwrap();
-
-        (dir, store)
-    }
-
-    fn names(store: &ProfileStore, cli: &str) -> Vec<String> {
-        store
-            .list()
-            .unwrap()
-            .into_iter()
-            .filter(|profile| profile.cli == cli)
-            .map(|profile| profile.name)
-            .collect()
-    }
-
-    #[test]
-    fn default_profile_is_always_first_and_active() {
-        let (_dir, store) = store();
-        let list = store.list().unwrap();
-
-        assert_eq!(list.len(), 3);
-        assert!(list
-            .iter()
-            .all(|profile| profile.id == DEFAULT_PROFILE && profile.active));
-        assert!(store.active_environment("claude").is_empty());
-    }
-
-    #[test]
-    fn added_account_has_a_private_folder_and_an_environment() {
-        let (dir, store) = store();
-
-        store.add("claude", " Công việc ").unwrap();
-
-        assert_eq!(names(&store, "claude"), ["Mặc định", "Công việc"]);
-        assert_eq!(names(&store, "codex"), ["Mặc định"]);
-
-        let id = store
-            .list()
-            .unwrap()
-            .iter()
-            .find(|p| p.name == "Công việc")
-            .unwrap()
-            .id;
-        let environment = store.environment("claude", id).unwrap();
-
-        assert_eq!(environment[0].0, "CLAUDE_CONFIG_DIR");
-        assert_eq!(
-            PathBuf::from(&environment[0].1),
-            dir.path().join("profiles").join(format!("claude-{id}"))
-        );
-        assert!(PathBuf::from(&environment[0].1).is_dir());
-    }
-
-    #[test]
-    fn selecting_switches_the_environment_and_removing_goes_back() {
-        let (_dir, store) = store();
-
-        store.add("codex", "Cá nhân").unwrap();
-
-        let id = store
-            .list()
-            .unwrap()
-            .iter()
-            .find(|p| p.name == "Cá nhân")
-            .unwrap()
-            .id;
-
-        store.select("codex", id).unwrap();
-        assert_eq!(store.active_id("codex"), id);
-        assert_eq!(store.active_environment("codex")[0].0, "CODEX_HOME");
-
-        let folder = PathBuf::from(&store.active_environment("codex")[0].1);
-
-        store.remove("codex", id).unwrap();
-        assert_eq!(store.active_id("codex"), DEFAULT_PROFILE);
-        assert!(store.active_environment("codex").is_empty());
-        assert!(!folder.exists());
-    }
-
-    #[test]
-    fn an_account_can_be_renamed_but_not_the_default() {
-        let (_dir, store) = store();
-
-        store.add("claude", "Tài khoản 2").unwrap();
-
-        let id = store
-            .list()
-            .unwrap()
-            .iter()
-            .find(|p| p.name == "Tài khoản 2")
-            .unwrap()
-            .id;
-
-        store.rename("claude", id, " Công việc ").unwrap();
-        assert_eq!(names(&store, "claude"), ["Mặc định", "Công việc"]);
-        assert_eq!(
-            store.rename("claude", DEFAULT_PROFILE, "x"),
-            Err(ProfileError::Invalid)
-        );
-        assert_eq!(store.rename("claude", id, "  "), Err(ProfileError::Invalid));
-        assert_eq!(store.rename("codex", id, "x"), Err(ProfileError::NotFound));
-    }
-
-    #[test]
-    fn bad_requests_are_refused() {
-        let (_dir, store) = store();
-
-        assert_eq!(store.add("gemini", "x"), Err(ProfileError::Invalid));
-        assert_eq!(store.add("claude", "  "), Err(ProfileError::Invalid));
-        assert_eq!(
-            store.add("claude", &"x".repeat(41)),
-            Err(ProfileError::Invalid)
-        );
-        assert_eq!(
-            store.remove("claude", DEFAULT_PROFILE),
-            Err(ProfileError::Invalid)
-        );
-        assert_eq!(store.remove("claude", 99), Err(ProfileError::NotFound));
-        assert_eq!(store.select("claude", 99), Err(ProfileError::NotFound));
-        assert!(store.environment("claude", 99).is_err());
-    }
-
-    #[test]
-    fn an_id_of_another_cli_is_not_found() {
-        let (_dir, store) = store();
-
-        store.add("claude", "A").unwrap();
-
-        let id = store
-            .list()
-            .unwrap()
-            .iter()
-            .find(|p| p.name == "A")
-            .unwrap()
-            .id;
-
-        assert_eq!(store.select("codex", id), Err(ProfileError::NotFound));
-    }
-
-    #[test]
-    fn number_of_accounts_is_limited() {
-        let (_dir, store) = store();
-
-        for index in 0..MAX_PER_CLI {
-            store.add("claude", &format!("A{index}")).unwrap();
-        }
-
-        assert_eq!(store.add("claude", "one more"), Err(ProfileError::TooMany));
-        store.add("codex", "other cli").unwrap();
-    }
-}
+#[path = "../tests/unit/profiles.rs"]
+mod tests;

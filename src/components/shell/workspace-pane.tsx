@@ -1,11 +1,32 @@
-import { Code2, MessageSquare, Terminal } from 'lucide-react';
+import {
+    ClipboardList,
+    Code2,
+    ListChecks,
+    MessageSquare,
+    MessagesSquare,
+    SquareMenu,
+    Terminal,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { LocalBranchPopover } from '@/components/ai-chat/branch-popover';
 import { CodeViewer } from '@/components/ai-chat/code-viewer';
 import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
 import { ChatPanel } from '@/components/shell/chat-panel';
+import { useSideChat } from '@/components/shell/chat/use-side-chat';
+import { BackgroundTasksPane } from '@/components/shell/background-tasks-pane';
+import { DockLayout } from '@/components/shell/dock-layout';
+import type { DockPanel } from '@/components/shell/dock-layout';
+import { PanelMenu } from '@/components/shell/panel-menu';
+import { PanelsMenu } from '@/components/shell/panels-menu';
+import { PlanDock } from '@/components/shell/plan-dock';
+import type { PlanData } from '@/components/shell/plan-pane';
+import { RailPopup } from '@/components/shell/rail-popup';
+import { SessionRail } from '@/components/shell/session-rail';
+import { SideChatDock } from '@/components/shell/side-chat-dock';
+import type { ContextUsage } from '@/components/shell/context-panel';
 import { Button } from '@/components/ui/button';
 import type { Pane, PaneState } from '@/hooks/use-pane-state';
+import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -39,9 +60,12 @@ export function WorkspacePane({
     active,
     projects,
     terminalOpen,
+    backgroundOpen,
     sidebarCollapsed,
     sidebarToggle,
     onToggleTerminal,
+    onToggleBackground,
+    onOpenSettings,
     onOpenInVscode,
     onPatch,
     onRefreshConversations,
@@ -52,113 +76,378 @@ export function WorkspacePane({
     active: boolean;
     projects: { root: string; name: string }[];
     terminalOpen: boolean;
+    backgroundOpen: boolean;
+    /** The phone-pairing dialog is open (the rail's Remote Control switch follows it). */
+    phoneOpen: boolean;
     sidebarCollapsed: boolean;
     sidebarToggle: ReactNode;
     onToggleTerminal: () => void;
+    onToggleBackground: () => void;
+    onOpenSettings: () => void;
+    onOpenPhone: () => void;
     onOpenInVscode: () => void;
     onPatch: (key: string, change: Partial<PaneState>) => void;
     onRefreshConversations: (root: string) => void;
 }) {
+    // * Kept here, not in the pane state: it follows the pane (which stays mounted) and nothing else needs it.
+    const [sideChatOpen, setSideChatOpen] = useState(false);
+    const sideChat = useSideChat(pane.root);
+    const sideChatPlacement = usePanelPlacement('side-chat', 'bottom');
+    const planPlacement = usePanelPlacement('plan', 'right');
+    const backgroundPlacement = usePanelPlacement('background', 'bottom');
+    // * The session rail: open or not, the context usage the chat reports, a counter bumped when a turn was saved (the rail reads files, branch and pull request again) and the file the rail asked the viewer to open.
+    const [railOpen, setRailOpen] = useState(false);
+    // * Left of the editor moves the whole file area (tree and editor, with the Multichat under them) in front of the main chat.
+    const treePlacement = usePanelPlacement('file-tree', 'right');
+    const [railContext, setRailContext] = useState<ContextUsage | null>(null);
+    const [railRefresh, setRailRefresh] = useState(0);
+    const [openRequest, setOpenRequest] = useState<{
+        repo: string;
+        path: string;
+        id: number;
+    } | null>(null);
+    const toggleRail = () => setRailOpen((open) => !open);
+    // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
+    const sideChatAlone =
+        sideChatOpen && !state.editorVisible && state.chatCollapsed;
+    const toggleSideChat = () => setSideChatOpen((open) => !open);
+    // * The plan of the open conversation (from the chat), and whether the Plan pane is open; a plan that arrives while it is closed leaves a dot on its button.
+    const [plan, setPlan] = useState<PlanData | null>(null);
+    const [planOpen, setPlanOpen] = useState(false);
+    const [planUnseen, setPlanUnseen] = useState(false);
+    const togglePlan = () => {
+        setPlanOpen((open) => !open);
+        setPlanUnseen(false);
+    };
+    const changePlan = (next: PlanData | null) => {
+        setPlan(next);
+        setPlanUnseen(next !== null && !planOpen);
+    };
+
+    // * Cmd/Ctrl+; opens and closes the side chat of the open project.
+    useEffect(() => {
+        if (!active) {
+            return;
+        }
+
+        const onKey = (event: KeyboardEvent) => {
+            if (
+                (event.metaKey || event.ctrlKey) &&
+                !event.shiftKey &&
+                !event.altKey &&
+                event.key === ';'
+            ) {
+                event.preventDefault();
+                setSideChatOpen((open) => !open);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+
+        return () => window.removeEventListener('keydown', onKey);
+    }, [active]);
+
+    const placementMenu = (
+        placement: ReturnType<typeof usePanelPlacement>,
+        floatable = false,
+    ) => (
+        <PanelMenu
+            placement={placement.placement}
+            dockedPlacement={placement.dockedPlacement}
+            floatable={floatable}
+            onPlacementChange={placement.setPlacement}
+        />
+    );
+
+    // * One menu for the three dock panels; every row ticks with the real state and shares the toolbar toggles.
+    const panelsMenu = (
+        <PanelsMenu
+            unseen={planUnseen}
+            items={[
+                {
+                    id: 'side-chat',
+                    icon: MessagesSquare,
+                    label: t('side_chat.title'),
+                    shortcut: '\u2318;',
+                    open: sideChatOpen,
+                    onToggle: toggleSideChat,
+                },
+                {
+                    id: 'background',
+                    icon: ListChecks,
+                    label: t('background_tasks.title'),
+                    open: backgroundOpen,
+                    onToggle: onToggleBackground,
+                },
+                {
+                    id: 'plan',
+                    icon: ClipboardList,
+                    label: t('plan_pane.title'),
+                    open: planOpen,
+                    onToggle: togglePlan,
+                },
+            ]}
+        />
+    );
+
+    // * The session rail is a popup over the main chat, above the row under the message box.
+    const railPopup =
+        active && railOpen ? (
+            <RailPopup onClose={() => setRailOpen(false)}>
+                <SessionRail
+                    root={pane.root}
+                    projectName={pane.name}
+                    conversation={state.conversation}
+                    context={railContext}
+                    refreshKey={railRefresh}
+                    placementMenu={null}
+                    onOpenSettings={onOpenSettings}
+                    onOpenFile={(path) =>
+                        setOpenRequest((current) => ({
+                            repo: `local:${pane.root}`,
+                            path,
+                            id: (current?.id ?? 0) + 1,
+                        }))
+                    }
+                    onClose={() => setRailOpen(false)}
+                />
+            </RailPopup>
+        ) : null;
+
+    const dockPanels: DockPanel[] = [
+        {
+            id: 'side-chat',
+            // * Alone: the side chat takes the whole area, whatever edge it was set to.
+            placement: sideChatAlone ? 'fill' : sideChatPlacement.placement,
+            open: sideChatOpen,
+            // * Default: under the file area (editor and tree), about 40% of the window height, never under the main chat.
+            underTrailing: true,
+            size: Math.round(window.innerHeight * 0.4),
+            content: (
+                <SideChatDock
+                    chat={sideChat}
+                    projectName={pane.name}
+                    open={sideChatOpen}
+                    placementMenu={placementMenu(sideChatPlacement, true)}
+                    floating={sideChatPlacement.placement === 'float'}
+                    onFloat={() => sideChatPlacement.setPlacement('float')}
+                    onDock={() =>
+                        sideChatPlacement.setPlacement(
+                            sideChatPlacement.dockedPlacement,
+                        )
+                    }
+                    alone={sideChatAlone}
+                    onClose={() => setSideChatOpen(false)}
+                    onOpenChat={
+                        sideChatAlone
+                            ? () => onPatch(pane.key, { chatCollapsed: false })
+                            : undefined
+                    }
+                />
+            ),
+        },
+        {
+            id: 'background',
+            placement: backgroundPlacement.placement,
+            // * Only the open project shows it: its tasks follow that project's folder.
+            open: active && backgroundOpen,
+            size: 240,
+            content: active && backgroundOpen && (
+                <BackgroundTasksPane
+                    root={pane.root}
+                    placementMenu={placementMenu(backgroundPlacement)}
+                    onClose={onToggleBackground}
+                    onOpenSubagent={(id) =>
+                        onPatch(pane.key, { viewSubagent: id })
+                    }
+                />
+            ),
+        },
+        {
+            id: 'plan',
+            placement: planPlacement.placement,
+            open: planOpen,
+            size: 352,
+            content: (
+                <PlanDock
+                    plan={plan}
+                    open={planOpen}
+                    placementMenu={placementMenu(planPlacement)}
+                    onClose={() => setPlanOpen(false)}
+                />
+            ),
+        },
+    ];
+
     return (
-        <>
-            <ChatPanel
-                root={pane.root}
-                acceptsRemote={active}
-                projects={projects}
-                fill={!state.editorVisible}
-                headerActions={
-                    <>
-                        <LocalBranchPopover root={pane.root} />
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('common.open_in_vs_code')}
-                            title={t('common.open_in_vs_code')}
-                            onClick={onOpenInVscode}
-                            className="text-muted-foreground"
-                        >
-                            <Code2 aria-hidden="true" className="size-5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Terminal"
-                            aria-pressed={terminalOpen}
-                            onClick={onToggleTerminal}
-                            className={cn(
-                                'text-muted-foreground',
-                                terminalOpen &&
-                                    'bg-accent text-accent-foreground',
-                            )}
-                        >
-                            <Terminal aria-hidden="true" className="size-5" />
-                        </Button>
-                        {/* * The sidebar toggle ends this row, on the right. */}
-                        {sidebarToggle}
-                    </>
+        <div className="relative flex min-h-0 min-w-0 flex-1">
+            <DockLayout
+                panels={dockPanels}
+                trailingGrows={state.editorVisible}
+                trailingFirst={treePlacement.placement === 'left'}
+                trailing={
+                    <CodeViewer
+                        chatCollapsed={state.chatCollapsed}
+                        treePlacement={treePlacement}
+                        tabsStart={
+                            state.chatCollapsed && sidebarCollapsed
+                                ? sidebarToggle
+                                : undefined
+                        }
+                        tabsEnd={
+                            state.chatCollapsed ? (
+                                <>
+                                    {panelsMenu}
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={t(
+                                            'workspace_pane.open_chat_panel',
+                                        )}
+                                        title={t(
+                                            'workspace_pane.open_chat_panel',
+                                        )}
+                                        onClick={() =>
+                                            onPatch(pane.key, {
+                                                chatCollapsed: false,
+                                            })
+                                        }
+                                        className="text-muted-foreground"
+                                    >
+                                        <MessageSquare
+                                            aria-hidden="true"
+                                            className="size-5"
+                                        />
+                                    </Button>
+                                </>
+                            ) : undefined
+                        }
+                        onAttachFile={(path) =>
+                            onPatch(pane.key, {
+                                attachFile: {
+                                    path,
+                                    n: (state.attachFile?.n ?? 0) + 1,
+                                },
+                            })
+                        }
+                        openRequest={openRequest}
+                        repo={`local:${pane.root}`}
+                        repos={[`local:${pane.root}`]}
+                        onViewRepo={noViewerChange}
+                        changes={[]}
+                        assistant={{ name: 'Rynox' }}
+                        onInlineAsk={askAssistant(pane.root)}
+                        onActiveFile={(file) =>
+                            onPatch(pane.key, { activeFile: file })
+                        }
+                        onEditorVisible={(visible) =>
+                            onPatch(pane.key, { editorVisible: visible })
+                        }
+                    />
                 }
-                onTooNarrow={() => onPatch(pane.key, { chatCollapsed: true })}
-                attachFile={state.attachFile}
-                viewSubagent={state.viewSubagent}
-                onLeaveSubagent={() =>
-                    onPatch(pane.key, { viewSubagent: null })
-                }
-                collapsed={state.chatCollapsed && state.editorVisible}
-                newChat={state.newChat}
-                openConversation={state.picked}
-                onConversation={(id) => {
-                    onPatch(pane.key, { conversation: id });
-                    onRefreshConversations(pane.root);
-                }}
-                onChanged={() => onRefreshConversations(pane.root)}
-                onSubagents={(subagents) => onPatch(pane.key, { subagents })}
-            />
-            <CodeViewer
-                chatCollapsed={state.chatCollapsed}
-                tabsEnd={
-                    state.chatCollapsed ? (
+            >
+                <ChatPanel
+                    root={pane.root}
+                    acceptsRemote={active}
+                    projects={projects}
+                    fill={!state.editorVisible}
+                    headerStart={sidebarCollapsed ? sidebarToggle : null}
+                    headerActions={
                         <>
-                            {sidebarCollapsed && sidebarToggle}
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
-                                aria-label={t('workspace_pane.open_chat_panel')}
-                                title={t('workspace_pane.open_chat_panel')}
-                                onClick={() =>
-                                    onPatch(pane.key, { chatCollapsed: false })
-                                }
+                                aria-label={t('common.open_in_vs_code')}
+                                title={t('common.open_in_vs_code')}
+                                onClick={onOpenInVscode}
                                 className="text-muted-foreground"
                             >
-                                <MessageSquare
+                                <Code2 aria-hidden="true" className="size-5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Terminal"
+                                aria-pressed={terminalOpen}
+                                onClick={onToggleTerminal}
+                                className={cn(
+                                    'text-muted-foreground',
+                                    terminalOpen &&
+                                        'bg-accent text-accent-foreground',
+                                )}
+                            >
+                                <Terminal
                                     aria-hidden="true"
                                     className="size-5"
                                 />
                             </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={t(
+                                    railOpen
+                                        ? 'session_rail.hide'
+                                        : 'session_rail.show',
+                                )}
+                                title={t(
+                                    railOpen
+                                        ? 'session_rail.hide'
+                                        : 'session_rail.show',
+                                )}
+                                aria-expanded={railOpen}
+                                aria-haspopup="dialog"
+                                data-rail-toggle=""
+                                onClick={toggleRail}
+                                className={cn(
+                                    'text-muted-foreground',
+                                    railOpen &&
+                                        'bg-accent text-accent-foreground',
+                                )}
+                            >
+                                <SquareMenu
+                                    aria-hidden="true"
+                                    className="size-5"
+                                />
+                            </Button>
+                            {panelsMenu}
                         </>
-                    ) : undefined
-                }
-                onAttachFile={(path) =>
-                    onPatch(pane.key, {
-                        attachFile: {
-                            path,
-                            n: (state.attachFile?.n ?? 0) + 1,
-                        },
-                    })
-                }
-                repo={`local:${pane.root}`}
-                repos={[`local:${pane.root}`]}
-                onViewRepo={noViewerChange}
-                changes={[]}
-                assistant={{ name: 'Rynox' }}
-                onInlineAsk={askAssistant(pane.root)}
-                onActiveFile={(file) => onPatch(pane.key, { activeFile: file })}
-                onEditorVisible={(visible) =>
-                    onPatch(pane.key, { editorVisible: visible })
-                }
-            />
-        </>
+                    }
+                    onTooNarrow={() =>
+                        onPatch(pane.key, { chatCollapsed: true })
+                    }
+                    attachFile={state.attachFile}
+                    viewSubagent={state.viewSubagent}
+                    onLeaveSubagent={() =>
+                        onPatch(pane.key, { viewSubagent: null })
+                    }
+                    popup={railPopup}
+                    railOpen={railOpen}
+                    onToggleRail={toggleRail}
+                    collapsed={
+                        state.chatCollapsed &&
+                        (state.editorVisible || sideChatOpen)
+                    }
+                    newChat={state.newChat}
+                    openConversation={state.picked}
+                    onConversation={(id) => {
+                        onPatch(pane.key, { conversation: id });
+                        onRefreshConversations(pane.root);
+                    }}
+                    onChanged={() => {
+                        onRefreshConversations(pane.root);
+                        setRailRefresh((count) => count + 1);
+                    }}
+                    onContext={setRailContext}
+                    onSubagents={(subagents) =>
+                        onPatch(pane.key, { subagents })
+                    }
+                    onPlan={changePlan}
+                />
+            </DockLayout>
+        </div>
     );
 }

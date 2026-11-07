@@ -2,15 +2,21 @@ import {
     ChartColumn,
     EllipsisVertical,
     Folder,
+    Github,
     FolderOpen,
     Plus,
     Settings,
-    Smartphone,
     Trash2,
 } from 'lucide-react';
-import { Fragment, lazy, Suspense, useEffect, useState } from 'react';
+import {
+    Fragment,
+    lazy,
+    Suspense,
+    useEffect,
+    useState,
+    type ReactNode,
+} from 'react';
 import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
-import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -19,7 +25,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
-import { Input } from '@/components/ui/input';
+import Field from '@/components/form/field';
+import { useAuthStatus } from '@/hooks/use-auth-status';
 import type { ChatConversation, Project, Subagent } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -38,6 +45,32 @@ const plain = (text: string) =>
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/đ/g, 'd')
         .toLowerCase();
+
+/** The GitHub avatar of the signed-in account; the GitHub mark while the account is unknown or the picture cannot be loaded. */
+function GithubAvatar({ account }: { account: string | null }) {
+    const [failed, setFailed] = useState(false);
+
+    if (account === null || failed) {
+        return (
+            <span
+                aria-hidden="true"
+                className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
+            >
+                <Github className="size-4" />
+            </span>
+        );
+    }
+
+    return (
+        <img
+            src={`https://github.com/${encodeURIComponent(account)}.png?size=64`}
+            alt=""
+            aria-hidden="true"
+            onError={() => setFailed(true)}
+            className="size-7 shrink-0 rounded-full object-cover"
+        />
+    );
+}
 
 /** Left column: brand, the saved projects (or the start-up folder while there are none) and the account footer. */
 export function Sidebar({
@@ -59,7 +92,7 @@ export function Sidebar({
     onNewChat,
     onOpenSettings,
     onOpenUsage,
-    onConnectPhone,
+    toggle,
 }: {
     projects: Project[];
     /** Saved project that is the open workspace, if any. */
@@ -88,10 +121,12 @@ export function Sidebar({
     /** Opens the chat settings on `tab`. */
     onOpenSettings: (tab: SettingsTab) => void;
     onOpenUsage: () => void;
-    /** Opens the dialog that pairs the phone app. */
-    onConnectPhone: () => void;
+    /** The button that folds the sidebar away; it ends up at the left edge of the sidebar header. */
+    toggle?: ReactNode;
 }) {
     const [query, setQuery] = useState('');
+    const { statuses } = useAuthStatus(false);
+    const github = statuses?.find((status) => status.provider === 'github');
 
     useEffect(() => {
         const timer = window.setTimeout(
@@ -122,10 +157,9 @@ export function Sidebar({
             aria-label={t('sidebar.sidebar')}
             className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
-            {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the logo sits at the left edge. */}
-            <div className="flex h-12 shrink-0 items-center gap-2 pl-4 select-none">
-                <img src={logo} alt="" className="size-7" />
-                <span className="text-lg font-semibold">Codexis</span>
+            {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the sidebar toggle sits at the left edge. */}
+            <div className="flex h-12 shrink-0 items-center pl-3 select-none">
+                {toggle}
             </div>
             <div className="flex items-center justify-between px-3 pb-2 text-sm">
                 <span className="text-muted-foreground">
@@ -138,7 +172,9 @@ export function Sidebar({
                 </Suspense>
             </div>
             <div className="px-2 pb-2">
-                <Input
+                <Field
+                    name="sidebar-project-search"
+                    autoComplete="off"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -293,7 +329,7 @@ export function Sidebar({
                                                         conversation.id,
                                                     )
                                                 }
-                                                className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-50 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                                                className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
                                             >
                                                 <Trash2 aria-hidden="true" />
                                             </Button>
@@ -354,18 +390,17 @@ export function Sidebar({
                 })}
             </nav>
             <div className="flex items-center gap-2 border-t px-3 py-2.5">
-                <AssistantAvatar />
-                <div className="min-w-0 flex-1 leading-tight">
-                    <p className="truncate text-sm">Rynox</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                        {t('sidebar.ai_assistant_not_connected')}
-                    </p>
-                </div>
-                <span
-                    role="img"
-                    aria-label={t('sidebar.ai_assistant_not_connected2')}
-                    className="size-2 shrink-0 rounded-full bg-muted-foreground/60"
-                />
+                {github?.loggedIn ? (
+                    // * Signed in with GitHub: the footer shows the account's GitHub avatar.
+                    <GithubAvatar account={github.account} />
+                ) : (
+                    <AssistantAvatar />
+                )}
+                <p className="min-w-0 flex-1 truncate text-sm">
+                    {github?.loggedIn
+                        ? (github.account ?? t('accounts.signed_in'))
+                        : 'Rynox'}
+                </p>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
@@ -379,6 +414,24 @@ export function Sidebar({
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" side="top">
+                        {github?.loggedIn ? (
+                            <DropdownMenuItem disabled>
+                                <Github aria-hidden="true" />
+                                {t('sidebar.github_signed_in', {
+                                    account:
+                                        github.account ??
+                                        t('accounts.signed_in'),
+                                })}
+                            </DropdownMenuItem>
+                        ) : (
+                            // * The sign-in itself is the "Kết nối" tab: GitHub's own `gh` login, which shows the one-time code there.
+                            <DropdownMenuItem
+                                onSelect={() => onOpenSettings('connect')}
+                            >
+                                <Github aria-hidden="true" />
+                                {t('sidebar.sign_in_with_github')}
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                             onSelect={() => onOpenSettings('character')}
                         >
@@ -388,10 +441,6 @@ export function Sidebar({
                         <DropdownMenuItem onSelect={onOpenUsage}>
                             <ChartColumn aria-hidden="true" />
                             {t('sidebar.statistics')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onConnectPhone}>
-                            <Smartphone aria-hidden="true" />
-                            {t('common.connect_phone')}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

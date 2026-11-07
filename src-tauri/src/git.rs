@@ -66,11 +66,9 @@ impl GitError {
     pub fn message(self) -> &'static str {
         match self {
             Self::Workspace(error) => error.message(),
-            Self::NothingToCommit => "Không có thay đổi nào để commit.",
-            Self::CommitFailed => "Không commit được. Kiểm tra tên và email git của bạn.",
-            Self::WorktreeFailed => {
-                "Không tạo được worktree. Dự án cần là kho git đã có ít nhất một commit."
-            }
+            Self::NothingToCommit => "git.nothing_to_commit",
+            Self::CommitFailed => "git.commit_failed",
+            Self::WorktreeFailed => "git.worktree_failed",
         }
     }
 }
@@ -103,6 +101,8 @@ fn run(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
         .args(args)
         .current_dir(dir)
         .env("GIT_TERMINAL_PROMPT", "0")
+        // * File names are data: `*`, `[a]` or `:(top)x` must never act as pathspec magic.
+        .env("GIT_LITERAL_PATHSPECS", "1")
         .output()
         .ok()?;
 
@@ -283,121 +283,221 @@ fn git_changes(dir: &Path, prefix: &str, submodules: &[String]) -> Option<Vec<Ch
     Some(files)
 }
 
-/// Files that differ from `HEAD`, sorted by path; None when the project is not a git folder.
-pub fn changes(workspace: &Workspace) -> Option<Vec<Change>> {
-    let root = workspace.root();
-    let mut files = git_changes(root, "", &submodules(root))?;
-
-    files.sort_by(|a, b| a.path.cmp(&b.path));
-
-    Some(files)
+/// Facade over the `git` command for one workspace.
+pub struct GitRepo<'a> {
+    workspace: &'a Workspace,
 }
 
-/// The file as `HEAD` has it; None for a file that is not in it. Same guards as reading the file.
-pub fn head_content(workspace: &Workspace, path: &str) -> Result<Option<String>, WorkspaceError> {
-    let relative = workspace.allowed_relative(path)?;
-    let (dir, inner) = repo_of(workspace.root(), &relative);
-
-    let Some(bytes) = run(&dir, &["show", &format!("HEAD:./{inner}")]) else {
-        return Ok(None);
-    };
-
-    if u64::try_from(bytes.len()).map_or(true, |size| size > workspace::MAX_READ_BYTES) {
-        return Err(WorkspaceError::TooLarge);
+impl<'a> GitRepo<'a> {
+    pub fn new(workspace: &'a Workspace) -> Self {
+        Self { workspace }
     }
 
-    if bytes.contains(&0) {
-        return Err(WorkspaceError::NotText);
+    /// Files that differ from `HEAD`, sorted by path; None when the project is not a git folder.
+    pub fn changes(&self) -> Option<Vec<Change>> {
+        let root = self.workspace.root();
+        let mut files = git_changes(root, "", &submodules(root))?;
+
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+
+        Some(files)
     }
 
-    String::from_utf8(bytes)
-        .map(Some)
-        .map_err(|_| WorkspaceError::NotText)
-}
+    /// The file as `HEAD` has it; None for a file that is not in it. Same guards as reading the file.
+    pub fn head_content(&self, path: &str) -> Result<Option<String>, WorkspaceError> {
+        let relative = self.workspace.allowed_relative(path)?;
+        let (dir, inner) = repo_of(self.workspace.root(), &relative);
 
-/// Puts a file back as `HEAD` has it; a new file (not in `HEAD`) is removed.
-pub fn discard(workspace: &Workspace, path: &str) -> Result<(), WorkspaceError> {
-    match head_content(workspace, path)? {
-        Some(head) => {
-            let current = workspace.current_hash(path)?;
+        let object = format!("HEAD:./{inner}");
 
-            workspace.write(path, &head, current.as_deref()).map(|_| ())
+        // * Ask for the blob size first so a huge file is never loaded into memory.
+        let Some(size) = run(&dir, &["cat-file", "-s", &object]) else {
+            return Ok(None);
+        };
+
+        if text(&size)
+            .trim()
+            .parse::<u64>()
+            .map_or(true, |size| size > workspace::MAX_READ_BYTES)
+        {
+            return Err(WorkspaceError::TooLarge);
         }
-        None => workspace.delete(path),
+
+        let Some(bytes) = run(&dir, &["show", &object]) else {
+            return Ok(None);
+        };
+
+        if u64::try_from(bytes.len()).map_or(true, |size| size > workspace::MAX_READ_BYTES) {
+            return Err(WorkspaceError::TooLarge);
+        }
+
+        if bytes.contains(&0) {
+            return Err(WorkspaceError::NotText);
+        }
+
+        String::from_utf8(bytes)
+            .map(Some)
+            .map_err(|_| WorkspaceError::NotText)
+    }
+
+    /// Puts a file back as `HEAD` has it; a new file (not in `HEAD`) is removed.
+    pub fn discard(&self, path: &str) -> Result<(), WorkspaceError> {
+        match self.head_content(path)? {
+            Some(head) => {
+                let current = self.workspace.current_hash(path)?;
+
+                self.workspace
+                    .write(path, &head, current.as_deref())
+                    .map(|_| ())
+            }
+            None => self.workspace.delete(path),
+        }
+    }
+
+    /// Paths of the main repo's changed files (a submodule's files are shown but committed with its own repo).
+    fn own_paths(&self) -> Result<Vec<String>, GitError> {
+        let paths: Vec<String> = self
+            .changes()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|file| file.repo.is_none())
+            .map(|file| file.path)
+            .collect();
+
+        if paths.is_empty() {
+            Err(GitError::NothingToCommit)
+        } else {
+            Ok(paths)
+        }
+    }
+
+    /// Longest diff handed to the AI for a commit message, in characters.
+    const DIFF_LIMIT: usize = 12_000;
+
+    /// The diff of the files the change list shows (cut at `DIFF_LIMIT`), with their names first so new files count too.
+    pub fn diff_text(&self) -> Result<String, GitError> {
+        let paths = self.own_paths()?;
+        let mut args = vec!["diff", "HEAD", "--"];
+
+        args.extend(paths.iter().map(String::as_str));
+
+        let diff = run(self.workspace.root(), &args)
+            .map(|out| text(&out).into_owned())
+            .unwrap_or_default();
+        let mut out = format!("Changed files:\n{}\n\n{diff}", paths.join("\n"));
+
+        if let Some((index, _)) = out.char_indices().nth(Self::DIFF_LIMIT) {
+            out.truncate(index);
+        }
+
+        Ok(out)
+    }
+
+    /// Commits what the change list shows, never other staged files; nothing is pushed.
+    pub fn commit(&self, message: &str) -> Result<Committed, GitError> {
+        let paths = self.own_paths()?;
+        let root = self.workspace.root();
+        let mut add = vec!["add", "--"];
+        let mut commit = vec!["commit", "-m", message, "--"];
+
+        add.extend(paths.iter().map(String::as_str));
+        commit.extend(paths.iter().map(String::as_str));
+
+        run(root, &add).ok_or(GitError::CommitFailed)?;
+        run(root, &commit).ok_or(GitError::CommitFailed)?;
+
+        let hash = run(root, &["rev-parse", "--short", "HEAD"])
+            .map(|out| text(&out).trim().to_string())
+            .unwrap_or_default();
+
+        Ok(Committed {
+            hash,
+            files: paths.len(),
+        })
+    }
+
+    /// The URL of the `origin` remote; None when there is none.
+    pub fn origin_url(&self) -> Option<String> {
+        let output = run(self.workspace.root(), &["remote", "get-url", "origin"])?;
+
+        Some(text(&output).trim().to_string()).filter(|url| !url.is_empty())
+    }
+
+    /// Local branches and worktrees (a worktree shows its folder name, never its full path).
+    pub fn branches(&self) -> Branches {
+        let root = self.workspace.root();
+        let Some(list) = run(root, &["branch", "--format=%(HEAD)|%(refname:short)"]) else {
+            return Branches {
+                git: false,
+                current: None,
+                branches: Vec::new(),
+                worktrees: Vec::new(),
+            };
+        };
+
+        let mut current = None;
+        let mut names = Vec::new();
+
+        for line in text(&list).lines() {
+            let (head, name) = line.split_once('|').unwrap_or(("", ""));
+
+            if name.is_empty() || name.starts_with('(') {
+                continue;
+            }
+
+            names.push(name.to_string());
+
+            if head == "*" {
+                current = Some(name.to_string());
+            }
+        }
+
+        let mut worktrees = Vec::new();
+
+        if let Some(out) = run(root, &["worktree", "list", "--porcelain"]) {
+            for block in text(&out).split("\n\n") {
+                let path = block.lines().find_map(|l| l.strip_prefix("worktree "));
+                let branch = block
+                    .lines()
+                    .find_map(|l| l.strip_prefix("branch refs/heads/"))
+                    .map(str::to_string);
+
+                if let Some(path) = path {
+                    let path = Path::new(path);
+
+                    worktrees.push(Worktree {
+                        name: path
+                            .file_name()
+                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+                        branch,
+                        current: fs::canonicalize(path).is_ok_and(|real| real == root),
+                    });
+                }
+            }
+        }
+
+        Branches {
+            git: true,
+            current,
+            branches: names,
+            worktrees,
+        }
     }
 }
 
-/// Paths of the main repo's changed files (a submodule's files are shown but committed with its own repo).
-fn own_paths(workspace: &Workspace) -> Result<Vec<String>, GitError> {
-    let paths: Vec<String> = changes(workspace)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|file| file.repo.is_none())
-        .map(|file| file.path)
-        .collect();
-
-    if paths.is_empty() {
-        Err(GitError::NothingToCommit)
-    } else {
-        Ok(paths)
-    }
-}
-
-/// Longest diff handed to the AI for a commit message, in characters.
-const DIFF_LIMIT: usize = 12_000;
-
-/// The diff of the files the change list shows (cut at `DIFF_LIMIT`), with their names first so new files count too.
-pub fn diff_text(workspace: &Workspace) -> Result<String, GitError> {
-    let paths = own_paths(workspace)?;
-    let mut args = vec!["diff", "HEAD", "--"];
-
-    args.extend(paths.iter().map(String::as_str));
-
-    let diff = run(workspace.root(), &args)
-        .map(|out| text(&out).into_owned())
-        .unwrap_or_default();
-    let mut out = format!("Changed files:\n{}\n\n{diff}", paths.join("\n"));
-
-    if let Some((index, _)) = out.char_indices().nth(DIFF_LIMIT) {
-        out.truncate(index);
-    }
-
-    Ok(out)
-}
-
-/// Commits what the change list shows, never other staged files; nothing is pushed.
-pub fn commit(workspace: &Workspace, message: &str) -> Result<Committed, GitError> {
-    let paths = own_paths(workspace)?;
-    let root = workspace.root();
-    let mut add = vec!["add", "--"];
-    let mut commit = vec!["commit", "-m", message, "--"];
-
-    add.extend(paths.iter().map(String::as_str));
-    commit.extend(paths.iter().map(String::as_str));
-
-    run(root, &add).ok_or(GitError::CommitFailed)?;
-    run(root, &commit).ok_or(GitError::CommitFailed)?;
-
-    let hash = run(root, &["rev-parse", "--short", "HEAD"])
-        .map(|out| text(&out).trim().to_string())
-        .unwrap_or_default();
-
-    Ok(Committed {
-        hash,
-        files: paths.len(),
-    })
+/// Worktree names are 1–64 letters, digits or dashes, so a name never leaves `base`.
+fn valid_worktree_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
 /// Folder to run an AI turn in on its own branch: a git worktree `name` under `base` (made on the first call, reused after), on branch `codexis/<name>`.
 /// `root` may be a folder inside the repository: the same folder inside the worktree is returned.
 pub fn ensure_worktree(root: &Path, base: &Path, name: &str) -> Result<PathBuf, GitError> {
-    let valid = !name.is_empty()
-        && name.len() <= 64
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-');
-
-    if !valid {
+    if !valid_worktree_name(name) {
         return Err(GitError::WorktreeFailed);
     }
 
@@ -432,290 +532,6 @@ pub fn ensure_worktree(root: &Path, base: &Path, name: &str) -> Result<PathBuf, 
     Ok(folder.join(inside))
 }
 
-/// Local branches and worktrees (a worktree shows its folder name, never its full path).
-pub fn branches(workspace: &Workspace) -> Branches {
-    let root = workspace.root();
-    let Some(list) = run(root, &["branch", "--format=%(HEAD)|%(refname:short)"]) else {
-        return Branches {
-            git: false,
-            current: None,
-            branches: Vec::new(),
-            worktrees: Vec::new(),
-        };
-    };
-
-    let mut current = None;
-    let mut names = Vec::new();
-
-    for line in text(&list).lines() {
-        let (head, name) = line.split_once('|').unwrap_or(("", ""));
-
-        if name.is_empty() || name.starts_with('(') {
-            continue;
-        }
-
-        names.push(name.to_string());
-
-        if head == "*" {
-            current = Some(name.to_string());
-        }
-    }
-
-    let mut worktrees = Vec::new();
-
-    if let Some(out) = run(root, &["worktree", "list", "--porcelain"]) {
-        for block in text(&out).split("\n\n") {
-            let path = block.lines().find_map(|l| l.strip_prefix("worktree "));
-            let branch = block
-                .lines()
-                .find_map(|l| l.strip_prefix("branch refs/heads/"))
-                .map(str::to_string);
-
-            if let Some(path) = path {
-                let path = Path::new(path);
-
-                worktrees.push(Worktree {
-                    name: path
-                        .file_name()
-                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
-                    branch,
-                    current: fs::canonicalize(path).is_ok_and(|real| real == root),
-                });
-            }
-        }
-    }
-
-    Branches {
-        git: true,
-        current,
-        branches: names,
-        worktrees,
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    fn git(dir: &Path, args: &[&str]) {
-        let status = Command::new("git")
-            .args([
-                "-c",
-                "user.name=t",
-                "-c",
-                "user.email=t@t",
-                "-c",
-                "protocol.file.allow=always",
-            ])
-            .args(args)
-            .current_dir(dir)
-            .output()
-            .expect("git runs");
-
-        assert!(
-            status.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&status.stderr)
-        );
-    }
-
-    fn repo() -> TempDir {
-        let dir = TempDir::new().unwrap();
-
-        git(dir.path(), &["init", "-q", "-b", "main"]);
-        fs::write(dir.path().join("a.txt"), "one\n").unwrap();
-        git(dir.path(), &["add", "."]);
-        git(dir.path(), &["commit", "-q", "-m", "first"]);
-
-        dir
-    }
-
-    #[test]
-    fn worktree_is_made_once_and_keeps_the_subfolder() {
-        let dir = repo();
-        let inner = dir.path().join("app");
-
-        fs::create_dir(&inner).unwrap();
-        fs::write(inner.join("b.txt"), "x\n").unwrap();
-        git(dir.path(), &["add", "."]);
-        git(dir.path(), &["commit", "-q", "-m", "second"]);
-
-        let base = TempDir::new().unwrap();
-        let first = ensure_worktree(&inner, base.path(), "c1").unwrap();
-
-        assert!(first.join("b.txt").is_file());
-        assert!(first.ends_with("c1/app"));
-        assert_eq!(ensure_worktree(&inner, base.path(), "c1").unwrap(), first);
-        assert_eq!(
-            ensure_worktree(&inner, base.path(), "../x"),
-            Err(GitError::WorktreeFailed)
-        );
-    }
-
-    #[test]
-    fn second_worktree_name_works_and_a_non_git_folder_fails() {
-        let dir = repo();
-        let base = TempDir::new().unwrap();
-        let first = ensure_worktree(dir.path(), base.path(), "c1").unwrap();
-        let second = ensure_worktree(dir.path(), base.path(), "c2").unwrap();
-
-        assert_ne!(first, second);
-        assert!(second.join("a.txt").is_file());
-
-        let plain = TempDir::new().unwrap();
-
-        assert_eq!(
-            ensure_worktree(plain.path(), base.path(), "c3"),
-            Err(GitError::WorktreeFailed)
-        );
-    }
-
-    #[test]
-    fn workspace_inside_a_larger_repository_sees_only_its_own_files() {
-        let dir = repo();
-        let inner = dir.path().join("app");
-
-        fs::create_dir(&inner).unwrap();
-        fs::write(inner.join("b.txt"), "one\n").unwrap();
-        git(dir.path(), &["add", "."]);
-        git(dir.path(), &["commit", "-q", "-m", "second"]);
-
-        fs::write(inner.join("b.txt"), "one\ntwo\n").unwrap();
-        fs::write(inner.join("new.txt"), "x\n").unwrap();
-        fs::write(dir.path().join("a.txt"), "outside\n").unwrap();
-
-        let ws = Workspace::open(&inner).unwrap();
-        let files = changes(&ws).unwrap();
-        let paths: Vec<&str> = files.iter().map(|file| file.path.as_str()).collect();
-
-        assert_eq!(paths, ["b.txt", "new.txt"]);
-        assert_eq!(files[0].added, Some(1));
-        assert_eq!(
-            head_content(&ws, "b.txt").unwrap().as_deref(),
-            Some("one\n")
-        );
-    }
-
-    #[test]
-    fn changes_head_and_discard() {
-        let dir = repo();
-        let ws = Workspace::open(dir.path()).unwrap();
-
-        fs::write(dir.path().join("a.txt"), "one\ntwo\n").unwrap();
-        fs::write(dir.path().join("new.txt"), "x\ny\n").unwrap();
-        fs::write(dir.path().join(".env"), "SECRET=1").unwrap();
-
-        let files = changes(&ws).unwrap();
-
-        assert_eq!(files.len(), 2, "the .env file stays hidden");
-        assert_eq!(
-            (files[0].path.as_str(), files[0].status, files[0].added),
-            ("a.txt", ChangeStatus::Modified, Some(1))
-        );
-        assert_eq!(
-            (files[1].path.as_str(), files[1].status, files[1].added),
-            ("new.txt", ChangeStatus::Added, Some(2))
-        );
-        assert_eq!(
-            head_content(&ws, "a.txt").unwrap().as_deref(),
-            Some("one\n")
-        );
-        assert_eq!(head_content(&ws, "new.txt").unwrap(), None);
-
-        discard(&ws, "a.txt").unwrap();
-        discard(&ws, "new.txt").unwrap();
-
-        assert_eq!(
-            fs::read_to_string(dir.path().join("a.txt")).unwrap(),
-            "one\n"
-        );
-        assert!(!dir.path().join("new.txt").exists());
-    }
-
-    #[test]
-    fn submodule_changes() {
-        let inner = TempDir::new().unwrap();
-
-        git(inner.path(), &["init", "-q", "-b", "main"]);
-        fs::write(inner.path().join("b.txt"), "b\n").unwrap();
-        git(inner.path(), &["add", "."]);
-        git(inner.path(), &["commit", "-q", "-m", "inner"]);
-
-        let outer = repo();
-
-        git(
-            outer.path(),
-            &[
-                "submodule",
-                "add",
-                "-q",
-                inner.path().to_str().unwrap(),
-                "sub",
-            ],
-        );
-        git(outer.path(), &["commit", "-q", "-m", "add sub"]);
-        fs::write(outer.path().join("sub/b.txt"), "b\nb2\n").unwrap();
-
-        let ws = Workspace::open(outer.path()).unwrap();
-        let files = changes(&ws).unwrap();
-
-        assert_eq!(files.len(), 1);
-        assert_eq!(files[0].path, "sub/b.txt");
-        assert_eq!(files[0].repo.as_deref(), Some("sub"));
-        assert_eq!(
-            head_content(&ws, "sub/b.txt").unwrap().as_deref(),
-            Some("b\n")
-        );
-    }
-
-    #[test]
-    fn commit_own_files_only() {
-        let inner = TempDir::new().unwrap();
-
-        git(inner.path(), &["init", "-q", "-b", "main"]);
-        fs::write(inner.path().join("b.txt"), "b\n").unwrap();
-        git(inner.path(), &["add", "."]);
-        git(inner.path(), &["commit", "-q", "-m", "inner"]);
-
-        let outer = repo();
-
-        git(
-            outer.path(),
-            &[
-                "submodule",
-                "add",
-                "-q",
-                inner.path().to_str().unwrap(),
-                "sub",
-            ],
-        );
-        git(outer.path(), &["commit", "-q", "-m", "add sub"]);
-        fs::write(outer.path().join("sub/b.txt"), "changed\n").unwrap();
-        fs::write(outer.path().join("a.txt"), "own\n").unwrap();
-
-        let ws = Workspace::open(outer.path()).unwrap();
-        let done = commit(&ws, "own change").unwrap();
-
-        assert_eq!(done.files, 1);
-        assert!(!done.hash.is_empty());
-
-        let left = changes(&ws).unwrap();
-
-        assert_eq!(left.len(), 1, "the submodule file is still uncommitted");
-        assert_eq!(left[0].repo.as_deref(), Some("sub"));
-        assert_eq!(commit(&ws, "again").unwrap_err(), GitError::NothingToCommit);
-    }
-
-    #[test]
-    fn branches_list() {
-        let dir = repo();
-        let ws = Workspace::open(dir.path()).unwrap();
-        let info = branches(&ws);
-
-        assert!(info.git);
-        assert_eq!(info.current.as_deref(), Some("main"));
-        assert_eq!(info.worktrees.len(), 1);
-        assert!(info.worktrees[0].current);
-    }
-}
+#[path = "../tests/unit/git.rs"]
+mod tests;

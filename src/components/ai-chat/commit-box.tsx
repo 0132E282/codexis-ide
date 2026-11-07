@@ -15,6 +15,10 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { api } from '@/lib/api';
 import { requestErrorMessage } from '@/lib/ai-error';
 import { t } from '@/lib/i18n';
+import {
+    COMMIT_MESSAGE_MAX_LENGTH,
+    COMMIT_TITLE_MAX_LENGTH,
+} from '@/lib/limits';
 
 type MessageForm = { title: string; description: string; base: string };
 
@@ -229,13 +233,14 @@ function MessagePopup({
                 <Field
                     name="title"
                     placeholder={t('commit_box.title')}
-                    maxLength={100}
+                    maxLength={COMMIT_TITLE_MAX_LENGTH}
                     autoComplete="off"
                     required
                 />
                 <Field
                     name="description"
                     ui="textarea"
+                    maxLength={COMMIT_MESSAGE_MAX_LENGTH}
                     placeholder={t('commit_box.description_optional')}
                     autoComplete="off"
                 />

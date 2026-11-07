@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/invoke';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { t } from '@/lib/i18n';
@@ -18,6 +18,8 @@ export type AgentCli = 'claude' | 'codex';
 /** One step of a turn that is shown live: the AI's words, or a tool call with its result. */
 export type Step =
     | { kind: 'text'; text: string }
+    /** In a turn relayed between AIs: the AI whose steps follow. */
+    | { kind: 'speaker'; cli: AgentCli }
     | {
           kind: 'tool';
           id: string;
@@ -181,6 +183,9 @@ export const ide = {
             conversation: conversation ?? null,
             root,
         }),
+    /** The plan the AI wrote in a CLI session of the project: JSON of `{todos, markdown}`, or null when there is none. */
+    planLoad: (session: string, root?: string) =>
+        invoke<string | null>('plan_load', { session, root }),
     chatList: (root?: string) =>
         invoke<ChatConversation[]>('chat_list', { root }),
     /** Starts a new conversation (the previous ones stay in the list) and resolves to its id. */
@@ -218,6 +223,10 @@ export type AgentEvent = {
         | 'subagent'
         | 'subagentdone'
         | 'permission'
+        | 'context'
+        | 'plan'
+        | 'background'
+        | 'speaker'
         | 'error'
         | 'done';
     text: string;

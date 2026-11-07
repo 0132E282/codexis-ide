@@ -120,9 +120,21 @@ export const shellMainEnglish: Record<string, string> = {
     'sidebar.remove_from_list_the': 'Remove from list (the folder is kept)',
     'sidebar.remove_project_name_from': 'Remove project {name} from the list',
     'sidebar.sidebar': 'Sidebar',
+    'sidebar.github_signed_in': 'GitHub: {account}',
+    'sidebar.sign_in_with_github': 'Sign in with GitHub',
     'sidebar.statistics': 'Statistics',
     'sidebar_toggle.collapse_sidebar': 'Collapse sidebar',
     'sidebar_toggle.open_sidebar': 'Open sidebar',
+    'changed_files.title': 'Edited {count} files on this machine ({project})',
+    'changed_files.modified': 'Edited',
+    'changed_files.created': 'Created',
+    'changed_files.deleted': 'Deleted',
+    'changed_files.applied': 'applied',
+    'changed_files.reverted': 'reverted',
+    'changed_files.review': 'Review changes',
+    'changed_files.discard_all':
+        'Discard the changes to {count} files? This cannot be undone.',
+    'changed_files.discarded': 'Changes discarded',
     'turn_steps.edited_count_files': 'Edited {count} files',
     'turn_steps.working': 'Working…',
     'usage_dialog.24_hours': '24 hours',
@@ -140,4 +152,41 @@ export const shellMainEnglish: Record<string, string> = {
     'usage_dialog.which_clis_are_in':
         'Which CLIs are in use and which stopped because of their limit.',
     'workspace_pane.open_chat_panel': 'Open chat panel',
+    'errors.vscode.not_installed':
+        "Could not open VS Code. Install VS Code and run “Shell Command: Install 'code' command in PATH”.",
+    'errors.remote.pairing_code_failed': 'Could not create the pairing code.',
+    'errors.remote.port_failed': 'Could not open the connection port.',
+    'errors.workspace.unknown_root':
+        'The root folder is not in the allowed list.',
+    'errors.workspace.bad_path': 'The path is not valid.',
+    'errors.workspace.denied':
+        'This file is blocked because it may hold secrets or belongs to a system folder.',
+    'errors.workspace.not_found': 'File not found.',
+    'errors.workspace.not_text':
+        'This file cannot be read (it is not small UTF-8 text).',
+    'errors.workspace.too_large': 'The content is too large.',
+    'errors.workspace.conflict':
+        'The file changed since it was proposed. Ask the AI to propose again.',
+    'errors.workspace.write_failed': 'Could not write the file.',
+    'errors.projects.invalid_name': 'The project name is not valid.',
+    'errors.projects.too_many':
+        'The project has too many items or the project limit is reached.',
+    'errors.projects.invalid_folder':
+        'The folder does not exist or is not valid.',
+    'errors.projects.invalid_env': 'The environment variable is not valid.',
+    'errors.projects.not_found': 'Project not found.',
+    'errors.projects.no_folder': 'The project has no folder to open.',
+    'errors.projects.save_failed': 'Could not save the project list.',
+    'errors.files.tree_failed': 'Could not read the folder tree.',
+    'errors.files.format_failed': 'Could not format the file.',
+    'errors.git.nothing_to_commit': 'There are no changes to commit.',
+    'errors.git.commit_failed':
+        'Could not commit. Check your git name and email.',
+    'errors.git.worktree_failed':
+        'Could not create the worktree. The project must be a git repository with at least one commit.',
+    'errors.git.changes_failed': 'Could not read the changes.',
+    'errors.git.branches_failed': 'Could not read the branches.',
+    'errors.git.head_failed': 'Could not read the committed version.',
+    'errors.git.restore_failed': 'Could not restore the file.',
+    'errors.git.ai_message_failed': 'The AI could not write the message.',
 };

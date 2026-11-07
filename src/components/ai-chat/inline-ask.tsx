@@ -11,6 +11,7 @@ import { WorkSteps } from '@/components/ai-chat/work-steps';
 import type { AiChatActivityStep } from '@/types';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { INLINE_QUESTION_MAX_LENGTH } from '@/lib/limits';
 
 export type InlineAnswer = {
     answer: string;
@@ -393,6 +394,7 @@ export function InlineAsk({
                     <Field
                         name="question"
                         ui="textarea"
+                        maxLength={INLINE_QUESTION_MAX_LENGTH}
                         autoComplete="off"
                         placeholder={t('inline_ask.ask_ai_about_this')}
                         onPaste={(

@@ -1,4 +1,10 @@
-import { ChevronDown, Laptop, ShieldCheck, Users } from 'lucide-react';
+import {
+    ChevronDown,
+    Laptop,
+    SquareMenu,
+    ShieldCheck,
+    Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { MODES } from '@/components/shell/chat/cli-options';
 import { Button } from '@/components/ui/button';
@@ -10,9 +16,11 @@ import {
     DropdownMenuItem,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuShortcut,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import Field from '@/components/form/field';
+import { useConfirm } from '@/hooks/use-confirm';
 import type { AgentCli } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 
@@ -30,6 +38,8 @@ export function ProjectRow({
     onModeChange,
     agentTeam,
     onAgentTeamChange,
+    railOpen,
+    onToggleRail,
 }: {
     busy: boolean;
     /** Name of the project this chat belongs to. */
@@ -47,11 +57,37 @@ export function ProjectRow({
     onModeChange: (mode: string) => void;
     agentTeam: boolean;
     onAgentTeamChange: (on: boolean) => void;
+    /** The session rail popup is open (the button at the end of the row follows it). */
+    railOpen?: boolean;
+    /** Opens or closes the session rail popup; no button when absent. */
+    onToggleRail?: () => void;
 }) {
     const modeLabel = t(
         MODES.find((option) => option.value === mode)?.label ?? mode,
     );
     const [projectSearch, setProjectSearch] = useState('');
+    const { confirm, dialog } = useConfirm();
+    const [modeMenuOpen, setModeMenuOpen] = useState(false);
+
+    // * A mode that accepts every permission is used only after the person confirms, every time it is picked.
+    const chooseMode = async (next: string) => {
+        if (next === mode) {
+            return;
+        }
+
+        if (
+            MODES.find((option) => option.value === next)?.dangerous === true &&
+            !(await confirm({
+                title: t('project_row.bypass_title'),
+                description: t('project_row.bypass_description'),
+                action: t('project_row.bypass_action'),
+            }))
+        ) {
+            return;
+        }
+
+        onModeChange(next);
+    };
 
     return (
         <div className="mt-1 flex flex-wrap items-center px-2 text-sm">
@@ -82,7 +118,9 @@ export function ProjectRow({
                     onCloseAutoFocus={() => setProjectSearch('')}
                 >
                     <div className="p-1">
-                        <Input
+                        <Field
+                            name="project-row-search"
+                            autoComplete="off"
                             value={projectSearch}
                             onChange={(event) =>
                                 setProjectSearch(event.target.value)
@@ -139,7 +177,10 @@ export function ProjectRow({
             </label>
             {cli === 'claude' && (
                 <>
-                    <DropdownMenu>
+                    <DropdownMenu
+                        open={modeMenuOpen}
+                        onOpenChange={setModeMenuOpen}
+                    >
                         <DropdownMenuTrigger asChild>
                             <Button
                                 type="button"
@@ -154,18 +195,48 @@ export function ProjectRow({
                                 <ChevronDown aria-hidden="true" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
+                        <DropdownMenuContent
+                            align="start"
+                            onKeyDown={(event) => {
+                                // * The number on each row picks it.
+                                const picked = MODES[Number(event.key) - 1];
+
+                                if (picked !== undefined) {
+                                    event.preventDefault();
+                                    // * The menu closes first, so the confirmation is not drawn over an open menu.
+                                    setModeMenuOpen(false);
+                                    void chooseMode(picked.value);
+                                }
+                            }}
+                        >
                             <DropdownMenuRadioGroup
                                 value={mode}
-                                onValueChange={onModeChange}
+                                onValueChange={(next) => void chooseMode(next)}
                             >
-                                {MODES.map((option) => (
+                                {MODES.map((option, index) => (
                                     <DropdownMenuRadioItem
                                         key={option.value}
                                         value={option.value}
                                         title={t(option.hint)}
                                     >
-                                        {t(option.label)}
+                                        <span className="flex flex-col">
+                                            <span className="flex items-center gap-2">
+                                                {t(option.label)}
+                                                {option.recommended && (
+                                                    <span className="rounded-full border px-1.5 text-xs text-muted-foreground">
+                                                        {t(
+                                                            'cli_options.recommended',
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {t(option.hint)}
+                                            </span>
+                                        </span>
+                                        <DropdownMenuShortcut>
+                                            {index + 1}
+                                        </DropdownMenuShortcut>
                                     </DropdownMenuRadioItem>
                                 ))}
                             </DropdownMenuRadioGroup>
@@ -186,6 +257,27 @@ export function ProjectRow({
                     </Button>
                 </>
             )}
+            {onToggleRail && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t(
+                        railOpen ? 'session_rail.hide' : 'session_rail.show',
+                    )}
+                    title={t(
+                        railOpen ? 'session_rail.hide' : 'session_rail.show',
+                    )}
+                    aria-expanded={railOpen === true}
+                    aria-haspopup="dialog"
+                    data-rail-toggle=""
+                    onClick={onToggleRail}
+                    className={`relative z-40 ml-auto text-muted-foreground ${railOpen ? 'bg-accent text-accent-foreground' : ''}`}
+                >
+                    <SquareMenu aria-hidden="true" />
+                </Button>
+            )}
+            {dialog}
         </div>
     );
 }

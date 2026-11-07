@@ -1,0 +1,113 @@
+{
+  "title": "Chế độ quyền: thêm Bypass permissions và đồng bộ menu Mode",
+  "description": "Thêm chế độ bypassPermissions (có xác nhận mỗi lần chọn), sắp xếp menu Mode theo ảnh mẫu (Auto khuyên dùng, Manual, Accept edits, Plan, Bypass), mô tả từng chế độ và phím số 1–5.",
+  "tags": ["permission", "mode", "composer", "rust", "frontend"],
+  "createdAt": "2026-11-06",
+  "status": "DA_TRIEN_KHAI_CHUA_KIEM_UI",
+  "requirements": [
+    {
+      "id": "REQ-M1",
+      "source": "Ảnh menu Mode người dùng gửi 2026-11-06",
+      "text": "Có đủ 5 chế độ: Auto, Manual, Accept edits, Plan, Bypass permissions"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-M1",
+      "requirement": "REQ-M1",
+      "text": "Backend nhận bypassPermissions; menu hiện 5 chế độ đúng thứ tự có mô tả, phím 1–5, Recommended cho Auto; chọn Bypass phải qua hộp thoại xác nhận"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-M1",
+      "title": "Backend nhận bypassPermissions và test",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
+      "requirements": ["REQ-M1"],
+      "acceptanceCriteria": ["AC-M1"],
+      "design": "architecture.md mục 6 (ma trận quyền)",
+      "inScope": "Backend nhận bypassPermissions và test",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; đổi nhãn các chế độ cũ",
+      "dependencies": [],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "MODES thêm bypassPermissions; sửa test; thêm test tham số"
+        }
+      ],
+      "approach": "Theo kế hoạch đã duyệt",
+      "test": "cargo test --lib agent:: pass (20 test)",
+      "doneWhen": "cargo test --lib agent:: pass (20 test)"
+    },
+    {
+      "id": "TASK-M2",
+      "title": "Menu Mode 5 chế độ, mô tả, phím số, xác nhận Bypass, i18n vi/en",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
+      "requirements": ["REQ-M1"],
+      "acceptanceCriteria": ["AC-M1"],
+      "design": "architecture.md mục 6 (ma trận quyền)",
+      "inScope": "Menu Mode 5 chế độ, mô tả, phím số, xác nhận Bypass, i18n vi/en",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; đổi nhãn các chế độ cũ",
+      "dependencies": [],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/chat/cli-options.ts",
+          "changes": "Thêm mục, sắp xếp, cờ recommended/dangerous"
+        },
+        {
+          "path": "src/components/shell/chat/project-row.tsx",
+          "changes": "Mô tả, phím 1–5, useConfirm cho chế độ nguy hiểm"
+        },
+        {
+          "path": "src/lib/i18n/en/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/lib/i18n/vi/shell-chat.ts",
+          "changes": "Khoá mới"
+        }
+      ],
+      "approach": "Theo kế hoạch đã duyệt",
+      "test": "eslint sạch, typecheck không lỗi ở file đã sửa; chưa kiểm UI bằng Playwright",
+      "doneWhen": "eslint sạch, typecheck không lỗi ở file đã sửa; chưa kiểm UI bằng Playwright"
+    },
+    {
+      "id": "TASK-M3",
+      "title": "Kiểm UI bằng Playwright và chạy thật chế độ Bypass",
+      "status": "PARTIAL_UI_PASS_CHUA_CHAY_THAT",
+      "priority": "P1",
+      "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
+      "requirements": ["REQ-M1"],
+      "acceptanceCriteria": ["AC-M1"],
+      "design": "architecture.md mục 6 (ma trận quyền)",
+      "inScope": "Kiểm UI bằng Playwright và chạy thật chế độ Bypass",
+      "outOfScope": "Đổi lệnh Tauri, DB, thư viện; đổi nhãn các chế độ cũ",
+      "dependencies": [],
+      "filesToChange": [
+        {
+          "path": "docs/system/architecture.md",
+          "changes": "Cập nhật mục chế độ quyền sau khi kiểm"
+        }
+      ],
+      "approach": "Theo kế hoạch đã duyệt",
+      "test": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
+      "doneWhen": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions"
+    }
+  ],
+  "risks": [
+    "Chưa chạy thật --permission-mode bypassPermissions: trình phân loại quyền của phiên này chặn lượt thử; claude --help liệt kê bypassPermissions là giá trị hợp lệ",
+    "UI đã kiểm bằng Playwright (mock Tauri): menu 5 mục, phím 1–5, ✓, Hủy giữ nguyên, xác nhận đổi nhãn thành Bỏ qua quyền; còn thiếu lượt chạy thật",
+    "Bypass cho CLI xoá file và chạy lệnh không hỏi; đã có hộp thoại xác nhận mỗi lần chọn"
+  ],
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Có cần đổi nhãn Manual/Accept edits theo ảnh mẫu (hiện giữ nhãn cũ Hỏi từng việc/Tự sửa file)?",
+      "default": "Giữ nhãn cũ"
+    }
+  ]
+}

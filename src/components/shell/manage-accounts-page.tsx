@@ -2,12 +2,8 @@ import { ArrowLeft, MoreHorizontal, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import InputField from '@/components/form/field/input-field';
+import { RowActionsMenu } from '@/components/tables/row-actions-menu';
 import {
     Dialog,
     DialogContent,
@@ -267,7 +263,8 @@ export function ManageAccountsPage({
                                                     undefined &&
                                                 profile.id !==
                                                     DEFAULT_PROFILE ? (
-                                                    <input
+                                                    <InputField
+                                                        name={`account-name-${profile.id}`}
                                                         key={`${profile.id}-${profile.name}`}
                                                         defaultValue={
                                                             profile.name
@@ -293,7 +290,7 @@ export function ManageAccountsPage({
                                                                 event.currentTarget.blur();
                                                             }
                                                         }}
-                                                        className="h-7 w-full min-w-0 rounded-md border bg-transparent px-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                        className="h-7 w-full min-w-0 px-2 text-sm font-medium"
                                                     />
                                                 ) : (
                                                     <button
@@ -472,10 +469,11 @@ export function ManageAccountsPage({
                                                     DEFAULT_PROFILE ||
                                                     (!profile.active &&
                                                         status?.loggedIn)) && (
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger
-                                                            asChild
-                                                        >
+                                                    <RowActionsMenu
+                                                        triggerLabel={t(
+                                                            'manage_accounts_page.actions',
+                                                        )}
+                                                        trigger={
                                                             <Button
                                                                 type="button"
                                                                 size="icon-sm"
@@ -490,63 +488,66 @@ export function ManageAccountsPage({
                                                             >
                                                                 <MoreHorizontal aria-hidden="true" />
                                                             </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            {!profile.active &&
-                                                                status?.loggedIn && (
-                                                                    <DropdownMenuItem
-                                                                        onSelect={() =>
-                                                                            run(
-                                                                                ideProfiles.select(
-                                                                                    cli,
-                                                                                    profile.id,
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        {t(
-                                                                            'manage_accounts_page.use',
-                                                                        )}
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                            {profile.id !==
+                                                        }
+                                                        items={[
+                                                            ...(!profile.active &&
+                                                            status?.loggedIn
+                                                                ? [
+                                                                      {
+                                                                          label: t(
+                                                                              'manage_accounts_page.use',
+                                                                          ),
+                                                                          onSelect:
+                                                                              () =>
+                                                                                  run(
+                                                                                      ideProfiles.select(
+                                                                                          cli,
+                                                                                          profile.id,
+                                                                                      ),
+                                                                                  ),
+                                                                      },
+                                                                  ]
+                                                                : []),
+                                                            ...(profile.id !==
                                                                 DEFAULT_PROFILE &&
-                                                                status?.loggedIn && (
-                                                                    <DropdownMenuItem
-                                                                        onSelect={() =>
-                                                                            run(
-                                                                                ideAuth.logout(
-                                                                                    cli,
-                                                                                    profile.id,
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        {t(
-                                                                            'common.disconnect',
-                                                                        )}
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                            {profile.id !==
-                                                                DEFAULT_PROFILE && (
-                                                                <DropdownMenuItem
-                                                                    variant="destructive"
-                                                                    onSelect={() =>
-                                                                        run(
-                                                                            ideProfiles.remove(
-                                                                                cli,
-                                                                                profile.id,
-                                                                            ),
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {t(
-                                                                        'common.delete',
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                            )}
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                            status?.loggedIn
+                                                                ? [
+                                                                      {
+                                                                          label: t(
+                                                                              'common.disconnect',
+                                                                          ),
+                                                                          onSelect:
+                                                                              () =>
+                                                                                  run(
+                                                                                      ideAuth.logout(
+                                                                                          cli,
+                                                                                          profile.id,
+                                                                                      ),
+                                                                                  ),
+                                                                      },
+                                                                  ]
+                                                                : []),
+                                                            ...(profile.id !==
+                                                            DEFAULT_PROFILE
+                                                                ? [
+                                                                      {
+                                                                          label: t(
+                                                                              'common.delete',
+                                                                          ),
+                                                                          destructive: true,
+                                                                          onSelect:
+                                                                              () =>
+                                                                                  run(
+                                                                                      ideProfiles.remove(
+                                                                                          cli,
+                                                                                          profile.id,
+                                                                                      ),
+                                                                                  ),
+                                                                      },
+                                                                  ]
+                                                                : []),
+                                                        ]}
+                                                    />
                                                 )}
                                             </div>
                                         </td>

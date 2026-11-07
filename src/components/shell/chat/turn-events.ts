@@ -1,5 +1,6 @@
-import type { Step } from '@/lib/ide';
+import type { AgentCli, Step } from '@/lib/ide';
 import type { Turn } from '@/components/shell/chat/turn';
+import type { PlanData } from '@/components/shell/plan-pane';
 
 /** A tool call the CLI started (`parent` is set when a sub-agent made it). */
 export type ToolCallEvent = {
@@ -26,6 +27,33 @@ export type SubtextEvent = { parent: string; text: string };
 /** A sub-agent that started. */
 export type SubagentEvent = { id: string; label: string };
 
+/** Context usage of the last turn, as the backend sends it (`Event::Context`, camelCase). `window` and `percent` are null when the window of the model is unknown. */
+export type ContextUsage = {
+    used: number;
+    window: number | null;
+    percent: number | null;
+    input: number;
+    cacheRead: number;
+    cacheCreation: number;
+    output: number;
+    model: string;
+};
+
+/** A plan the AI wrote, as the backend sends it (`Event::Plan`, `plan::Plan`): only the text kind is shown for now, the todos kind is ignored. */
+export type PlanEvent =
+    | { kind: 'text'; markdown: string }
+    | { kind: 'todos'; todos: PlanData['todos'] };
+
+/** The plan shown after `event`: a new plan text replaces the old one; other kinds change nothing. */
+export function withPlan(
+    plan: PlanData | null,
+    event: PlanEvent,
+): PlanData | null {
+    return event.kind === 'text'
+        ? { todos: plan?.todos ?? [], markdown: event.markdown }
+        : plan;
+}
+
 /** The payload of an agent event that carries JSON; null when it is malformed (such an event is not shown). */
 export function parsePayload<Payload>(payload: string): Payload | null {
     try {
@@ -33,6 +61,14 @@ export function parsePayload<Payload>(payload: string): Payload | null {
     } catch {
         return null;
     }
+}
+
+/** In a relayed turn another AI speaks from now on: its steps follow a label with its name. */
+export function withSpeaker(turn: Turn, cli: AgentCli): Turn {
+    return {
+        ...turn,
+        steps: [...(turn.steps ?? []), { kind: 'speaker', cli }],
+    };
 }
 
 /** A whole piece of the answer: starts a new text step. */

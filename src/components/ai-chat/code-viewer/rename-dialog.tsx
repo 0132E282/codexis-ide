@@ -1,4 +1,5 @@
 import { t } from '@/lib/i18n';
+import { ENTRY_NAME_MAX_LENGTH, hasPathSeparator } from '@/lib/limits';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,7 +10,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import Field from '@/components/form/field';
 
 /** * Asks for the new name of a file; `onRename` rejects with the reason (name taken, not allowed), shown under the box. */
 export function RenameDialog({
@@ -39,6 +40,12 @@ export function RenameDialog({
 
         if (name.trim() === '' || name.trim() === current) {
             onClose();
+
+            return;
+        }
+
+        if (hasPathSeparator(name)) {
+            setError(t('errors.validation.forbidden_char'));
 
             return;
         }
@@ -81,19 +88,24 @@ export function RenameDialog({
                     }}
                     className="space-y-3"
                 >
-                    <Input
+                    <Field
+                        name="rename-dialog-name"
                         autoFocus
                         value={name}
                         aria-label={t('rename_dialog.new_name')}
                         autoComplete="off"
+                        maxLength={ENTRY_NAME_MAX_LENGTH}
                         onFocus={(event) => {
                             // * The extension stays out of the way: the base name is what usually changes.
-                            const dot = event.target.value.lastIndexOf('.');
+                            const input = event.currentTarget;
+                            const dot = input.value.lastIndexOf('.');
 
-                            event.target.setSelectionRange(
-                                0,
-                                dot > 0 ? dot : event.target.value.length,
-                            );
+                            if (input instanceof HTMLInputElement) {
+                                input.setSelectionRange(
+                                    0,
+                                    dot > 0 ? dot : input.value.length,
+                                );
+                            }
                         }}
                         onChange={(event) => setName(event.target.value)}
                     />

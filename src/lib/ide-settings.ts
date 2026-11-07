@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/invoke';
 import { t } from '@/lib/i18n';
 
 /** Chat settings ("Cài đặt chat"): persona and advanced options. */
@@ -22,6 +22,13 @@ export type ChatSettings = {
     fallbackEnabled: boolean;
     /** CLIs in the order they are tried. */
     fallbackOrder: ('claude' | 'codex')[];
+    /** Language of the interface; empty = not chosen yet. */
+    language: '' | 'vi' | 'en';
+    /** Look of the interface; empty = follow the system. */
+    appearance: '' | 'system' | 'light' | 'dark';
+    /** Colors of the code in the editor; empty = follow the interface. */
+    codeColors:
+        '' | 'auto' | 'light' | 'dark' | 'light-colorblind' | 'dark-colorblind';
 };
 
 export const MAX_NAME_LENGTH = 60;
@@ -41,6 +48,9 @@ export const defaultChatSettings: ChatSettings = {
     codexPlan: '',
     fallbackEnabled: false,
     fallbackOrder: ['claude', 'codex'],
+    language: '',
+    appearance: '',
+    codeColors: '',
 };
 
 /** Plans each CLI can be marked with; the `value` is what is saved. */
@@ -62,6 +72,9 @@ export const ideSettings = {
     get: () => invoke<ChatSettings>('settings_get'),
     save: (settings: ChatSettings) =>
         invoke<ChatSettings>('settings_save', { settings }),
+    /** Changes some settings in the settings file, leaving every other setting as it is. */
+    update: async (changes: Partial<ChatSettings>) =>
+        ideSettings.save({ ...(await ideSettings.get()), ...changes }),
 };
 
 /** Shrinks a picked image to a small square PNG data URL that fits the saved-size limit. */

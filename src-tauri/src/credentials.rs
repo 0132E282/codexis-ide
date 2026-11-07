@@ -1,8 +1,11 @@
 //! API keys the user chose to keep in Rynox, in their own table of the IDE's SQLite file (owner-only, see `db`).
 //! A key is write-only for the UI: it is never sent back, only whether it is set and its last characters. A turn with the CLI gets it as an environment variable.
 
-use crate::db;
-use rusqlite::{params, Connection, OptionalExtension};
+use crate::sql;
+use crate::validation;
+use crate::{db, migrations};
+use rusqlite::Connection;
+use sea_query::{Alias, Condition, Expr, ExprTrait, Value};
 use serde::Serialize;
 use std::fmt;
 use std::path::Path;
@@ -12,7 +15,6 @@ use tauri::{Manager, State};
 /// Names that can be saved; each maps to the environment variable the CLI reads.
 pub const ANTHROPIC_API_KEY: &str = "anthropic_api_key";
 const NAMES: [(&str, &str); 1] = [(ANTHROPIC_API_KEY, "ANTHROPIC_API_KEY")];
-const MAX_VALUE_CHARS: usize = 500;
 const HINT_CHARS: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,9 +28,9 @@ impl CredentialError {
     /// Fixed user-facing text; never contains the key.
     pub fn message(self) -> &'static str {
         match self {
-            Self::Invalid => "Khóa không hợp lệ.",
-            Self::SaveFailed => "Không lưu được khóa.",
-            Self::LoadFailed => "Không đọc được khóa đã lưu.",
+            Self::Invalid => "credentials.invalid",
+            Self::SaveFailed => "credentials.save_failed",
+            Self::LoadFailed => "credentials.load_failed",
         }
     }
 }
@@ -55,10 +57,7 @@ pub struct CredentialStore {
 
 impl CredentialStore {
     fn new(connection: Connection) -> Result<Self, rusqlite::Error> {
-        connection.execute(
-            "CREATE TABLE IF NOT EXISTS credentials (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
-            [],
-        )?;
+        connection.execute_batch(migrations::CREATE_CREDENTIALS_TABLE)?;
 
         Ok(Self {
             connection: Mutex::new(connection),
@@ -76,28 +75,26 @@ impl CredentialStore {
     /// Saves (replaces) the key `name`; surrounding spaces are dropped.
     ///
     /// # Errors
-    /// Fails on an unknown name, an empty, overlong or multi-word value, or when it cannot be written.
+    /// Fails on an unknown name, an empty, overlong value or one with a character outside printable ASCII (space included), or when it cannot be written.
     pub fn save(&self, name: &str, value: &str) -> Result<(), CredentialError> {
         Self::known(name)?;
 
         let value = value.trim();
 
-        if value.is_empty()
-            || value.chars().count() > MAX_VALUE_CHARS
-            || value.chars().any(char::is_whitespace)
-        {
-            return Err(CredentialError::Invalid);
-        }
+        validation::api_key(value).map_err(|_| CredentialError::Invalid)?;
 
-        self.connection
+        let connection = self
+            .connection
             .lock()
-            .map_err(|_| CredentialError::SaveFailed)?
-            .execute(
-                "INSERT INTO credentials (name, value) VALUES (?1, ?2)
-                 ON CONFLICT(name) DO UPDATE SET value = excluded.value",
-                params![name, value],
-            )
             .map_err(|_| CredentialError::SaveFailed)?;
+
+        sql::upsert(
+            &connection,
+            "credentials",
+            &["name"],
+            vec![("name", Value::from(name)), ("value", Value::from(value))],
+        )
+        .map_err(|_| CredentialError::SaveFailed)?;
 
         Ok(())
     }
@@ -109,26 +106,36 @@ impl CredentialStore {
     pub fn remove(&self, name: &str) -> Result<(), CredentialError> {
         Self::known(name)?;
 
-        self.connection
+        let connection = self
+            .connection
             .lock()
-            .map_err(|_| CredentialError::SaveFailed)?
-            .execute("DELETE FROM credentials WHERE name = ?1", [name])
             .map_err(|_| CredentialError::SaveFailed)?;
+
+        sql::delete_where(
+            &connection,
+            "credentials",
+            Condition::all().add(Expr::col(Alias::new("name")).eq(name)),
+        )
+        .map_err(|_| CredentialError::SaveFailed)?;
 
         Ok(())
     }
 
     fn get(&self, name: &str) -> Result<Option<String>, CredentialError> {
-        self.connection
+        let connection = self
+            .connection
             .lock()
-            .map_err(|_| CredentialError::LoadFailed)?
-            .query_row(
-                "SELECT value FROM credentials WHERE name = ?1",
-                [name],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|_| CredentialError::LoadFailed)
+            .map_err(|_| CredentialError::LoadFailed)?;
+
+        sql::find_by_key(
+            &connection,
+            "credentials",
+            &["value"],
+            "name",
+            name,
+            |row| row.get(0),
+        )
+        .map_err(|_| CredentialError::LoadFailed)
     }
 
     /// Whether each key is set, with its last characters.
@@ -209,70 +216,5 @@ pub fn credential_remove(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn store() -> CredentialStore {
-        CredentialStore::new(db::in_memory()).expect("store")
-    }
-
-    #[test]
-    fn nothing_set_at_first() {
-        let status = store().status().unwrap();
-
-        assert_eq!(status[0].name, ANTHROPIC_API_KEY);
-        assert!(!status[0].set);
-        assert_eq!(status[0].hint, None);
-        assert!(store().environment().is_empty());
-    }
-
-    #[test]
-    fn saved_key_shows_only_its_end_and_reaches_the_environment() {
-        let store = store();
-
-        store
-            .save(ANTHROPIC_API_KEY, "  sk-ant-secret-1234  ")
-            .unwrap();
-
-        let status = store.status().unwrap();
-
-        assert!(status[0].set);
-        assert_eq!(status[0].hint.as_deref(), Some("1234"));
-        assert_eq!(
-            store.environment(),
-            vec![("ANTHROPIC_API_KEY", "sk-ant-secret-1234".to_string())]
-        );
-    }
-
-    #[test]
-    fn removed_key_is_gone() {
-        let store = store();
-
-        store.save(ANTHROPIC_API_KEY, "abcd").unwrap();
-        store.remove(ANTHROPIC_API_KEY).unwrap();
-
-        assert!(!store.status().unwrap()[0].set);
-        assert!(store.environment().is_empty());
-    }
-
-    #[test]
-    fn bad_names_and_values_are_refused() {
-        let store = store();
-
-        assert_eq!(store.save("other", "abcd"), Err(CredentialError::Invalid));
-        assert_eq!(
-            store.save(ANTHROPIC_API_KEY, "   "),
-            Err(CredentialError::Invalid)
-        );
-        assert_eq!(
-            store.save(ANTHROPIC_API_KEY, "two words"),
-            Err(CredentialError::Invalid)
-        );
-        assert_eq!(
-            store.save(ANTHROPIC_API_KEY, &"x".repeat(MAX_VALUE_CHARS + 1)),
-            Err(CredentialError::Invalid)
-        );
-        assert_eq!(store.remove("other"), Err(CredentialError::Invalid));
-        assert!(!store.status().unwrap()[0].set);
-    }
-}
+#[path = "../tests/unit/credentials.rs"]
+mod tests;

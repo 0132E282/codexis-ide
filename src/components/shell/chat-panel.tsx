@@ -7,6 +7,8 @@ import { useAttachments } from '@/components/shell/chat/use-attachments';
 import { useChatSession } from '@/components/shell/chat/use-chat-session';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { useTooNarrow } from '@/components/shell/chat/use-too-narrow';
+import type { ContextUsage } from '@/components/shell/context-panel';
+import type { PlanData } from '@/components/shell/plan-pane';
 import { Composer } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
@@ -31,7 +33,12 @@ export function ChatPanel({
     onConversation,
     onChanged,
     onSubagents,
+    onPlan,
+    onContext,
     collapsed,
+    popup,
+    railOpen,
+    onToggleRail,
     onTooNarrow,
     viewSubagent,
     onLeaveSubagent,
@@ -51,15 +58,24 @@ export function ChatPanel({
     /** Counter bumped to start a new conversation (ignored while a turn is running). */
     newChat: number;
     /** Conversation picked in the sidebar (ignored while a turn is running). */
-    openConversation: number | null;
+    openConversation: { id: number; n: number } | null;
     /** Told which conversation is open, when it is loaded or started. */
     onConversation: (id: number) => void;
     /** Told when a turn was saved, so the list can be read again. */
     onChanged: () => void;
     /** Told which sub-agents the AI has started in the running turn (empty when none). */
     onSubagents: (subagents: Subagent[]) => void;
+    /** Told the plan the AI wrote in the open conversation, when it is loaded or a turn writes a new one (null: none). */
+    onPlan: (plan: PlanData | null) => void;
+    /** Told the context usage of the open conversation whenever it changes (null: none reported yet), for the session rail. */
+    onContext?: (usage: ContextUsage | null) => void;
     /** Closed by dragging the editor columns over it: hidden, but still mounted so a running turn goes on. */
     collapsed: boolean;
+    /** Laid above the top of the message box (the session rail popup). */
+    popup?: ReactNode;
+    /** The session rail popup is open, and the toggle shown in the row under the message box. */
+    railOpen?: boolean;
+    onToggleRail?: () => void;
     /** Told when the editor columns have squeezed the chat narrower than it can be used; the app then closes it. */
     onTooNarrow: () => void;
     /** The sub-agent picked in the sidebar: the chat shows what it is doing instead of the conversation. */
@@ -103,10 +119,16 @@ export function ChatPanel({
         onConversation,
         onChanged,
         onSubagents,
+        onPlan,
         onRestoreCli: setCli,
         onReset: attachmentState.reset,
     });
-    const { turns, busy } = session;
+    const { turns, busy, context } = session;
+    const reportContext = useStableCallback((usage: ContextUsage | null) =>
+        onContext?.(usage),
+    );
+
+    useEffect(() => reportContext(context), [context, reportContext]);
 
     useTooNarrow(section, !fill && !collapsed, onTooNarrow);
 
@@ -134,8 +156,48 @@ export function ChatPanel({
         },
     });
 
+    // * The list follows the answer only while the person is at (or near) the bottom: scrolling up to read stays where it is instead of being pulled down on every new word. Sending a message goes back to the bottom.
+    const followEnd = useRef(true);
+    const turnCount = useRef(0);
+
     useEffect(() => {
-        bottom.current?.scrollIntoView({ block: 'end' });
+        const list = bottom.current?.closest<HTMLElement>('[data-chat-scroll]');
+
+        if (!list) {
+            return;
+        }
+
+        const onScroll = () => {
+            followEnd.current =
+                list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+        };
+
+        list.addEventListener('scroll', onScroll, { passive: true });
+
+        return () => list.removeEventListener('scroll', onScroll);
+    }, []);
+
+    useEffect(() => {
+        const list = bottom.current?.closest<HTMLElement>('[data-chat-scroll]');
+        const added = turns.length > turnCount.current;
+
+        turnCount.current = turns.length;
+
+        if (!list || (!followEnd.current && !added)) {
+            return;
+        }
+
+        followEnd.current = true;
+
+        // * One scroll per frame, however many words arrived; a new message glides down, the words of an answer follow without delay.
+        const frame = requestAnimationFrame(() =>
+            list.scrollTo({
+                top: list.scrollHeight,
+                behavior: added ? 'smooth' : 'auto',
+            }),
+        );
+
+        return () => cancelAnimationFrame(frame);
     }, [turns]);
 
     // * A picked file goes into the message as `@path`: both CLIs read the file from that path.
@@ -219,6 +281,7 @@ export function ChatPanel({
                 onChoose={choose}
                 onSwitchAccount={switchAccount}
                 onPermission={answerPermission}
+                projectName={projectName}
             />
             <Composer
                 project={null}
@@ -247,6 +310,9 @@ export function ChatPanel({
                 worktree={worktree}
                 onWorktreeChange={setWorktree}
                 onExtraRootsChange={setExtraRoots}
+                railOpen={railOpen}
+                onToggleRail={onToggleRail}
+                popup={popup}
             />
         </section>
     );

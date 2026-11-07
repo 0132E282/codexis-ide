@@ -6,6 +6,7 @@ import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import { api } from '@/lib/api';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import type { AiChatProposal } from '@/types';
 import { ChangesPanel } from './code-viewer/changes-panel';
 import { EditorBody } from './code-viewer/editor-body';
@@ -41,7 +42,9 @@ export function CodeViewer({
     onActiveFile,
     onEditorVisible,
     chatCollapsed = false,
+    tabsStart,
     tabsEnd,
+    treePlacement,
     onAttachFile,
     onMarkedFiles,
 }: {
@@ -74,15 +77,22 @@ export function CodeViewer({
     onEditorVisible?: (visible: boolean) => void;
     /** The chat is closed; when it opens again the columns make room for it. */
     chatCollapsed?: boolean;
+    /** Buttons pinned to the left end of the tab bar. */
+    tabsStart?: ReactNode;
     /** Buttons pinned to the right end of the tab bar. */
     tabsEnd?: ReactNode;
+    /** Left or right of the editor; the owner also moves the whole file area in front of the chat when it is left. */
+    treePlacement: ReturnType<typeof usePanelPlacement>;
     /** Double click on a file of the tree: the chat attaches it (path inside the project). */
     onAttachFile?: (path: string) => void;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
     onMarkedFiles?: (paths: string[]) => void;
 }) {
     const { copy: copyPath } = useCopyToClipboard();
-    const { fileWidth, treeWidth } = usePanelWidths(chatCollapsed);
+    const { fileWidth, treeWidth } = usePanelWidths(
+        chatCollapsed,
+        treePlacement.placement === 'left' ? 'trailing' : 'leading',
+    );
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
     // * The local repo is addressed by its full path; only the folder name is shown.
     const sourceName = localRoot
@@ -104,6 +114,7 @@ export function CodeViewer({
         toggleDir,
         revealPath,
         reload,
+        collapseAll,
     } = useFileTree({ repo, branch, localRoot, changes });
     const {
         selected,
@@ -301,9 +312,44 @@ export function CodeViewer({
           }
         : undefined;
 
+    // * File tree: the explorer column, on the right of the editor unless moved to the left.
+    const treePanel = (
+        <TreePanel
+            placement={treePlacement}
+            sourceName={sourceName}
+            treeWidth={treeWidth}
+            repo={repo}
+            repos={repos}
+            onViewRepo={onViewRepo}
+            headerActions={headerActions}
+            isLocal={localRoot !== null}
+            view={view}
+            onViewChange={setView}
+            changedFileCount={(localChanges.files ?? []).length}
+            filter={filter}
+            onFilterChange={setFilter}
+            onCollapseAll={collapseAll}
+            onReload={reload}
+            paths={paths}
+            error={error}
+            tree={tree}
+            openDirs={effectiveOpen}
+            onToggle={toggleDir}
+            selected={selected}
+            onSelect={selectInTree}
+            marked={marked}
+            onMark={markInTree}
+            onAttach={onAttachFile}
+            changed={changedActions}
+            changedDirs={changedDirs}
+            actions={fileActions}
+        />
+    );
+
     return (
         <>
             {confirmDialog}
+            {treePlacement.placement === 'left' && treePanel}
             <RenameDialog
                 path={renaming}
                 onClose={() => setRenaming(null)}
@@ -336,6 +382,7 @@ export function CodeViewer({
                         previewTab={previewTab}
                         dirtyPaths={dirtyPaths}
                         actions={fileActions}
+                        tabsStart={tabsStart}
                         tabsEnd={tabsEnd}
                         tools={
                             <EditorToolbar
@@ -414,34 +461,7 @@ export function CodeViewer({
                     </div>
                 </section>
             )}
-            {/* * File tree: the far-right column, like an editor's explorer. */}
-            <TreePanel
-                sourceName={sourceName}
-                treeWidth={treeWidth}
-                repo={repo}
-                repos={repos}
-                onViewRepo={onViewRepo}
-                headerActions={headerActions}
-                isLocal={localRoot !== null}
-                view={view}
-                onViewChange={setView}
-                changedFileCount={(localChanges.files ?? []).length}
-                filter={filter}
-                onFilterChange={setFilter}
-                paths={paths}
-                error={error}
-                tree={tree}
-                openDirs={effectiveOpen}
-                onToggle={toggleDir}
-                selected={selected}
-                onSelect={selectInTree}
-                marked={marked}
-                onMark={markInTree}
-                onAttach={onAttachFile}
-                changed={changedActions}
-                changedDirs={changedDirs}
-                actions={fileActions}
-            />
+            {treePlacement.placement !== 'left' && treePanel}
         </>
     );
 }

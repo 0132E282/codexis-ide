@@ -1,0 +1,96 @@
+[
+  {
+    "title": "Kiến trúc Codexis IDE",
+    "description": "Thiết kế tổng của hệ thống: tổng quan, kiến trúc backend Rust và frontend React, luồng chính (chat AI, điện thoại, đăng nhập, terminal, format), ERD, ranh giới an toàn; thiết kế OOP đã triển khai (trait AgentCli/AuthTool, design pattern, mô hình permission, nhóm refactor song song) và bộ sơ đồ use case, DFD, activity, state, deployment, CI/CD, security, API integration. Đọc trước khi làm việc ở backend, refactor Rust hoặc đổi cách backend và frontend giao tiếp.",
+    "tags": [
+      "system",
+      "architecture",
+      "backend",
+      "frontend",
+      "tauri",
+      "oop",
+      "design-patterns",
+      "permission",
+      "uml"
+    ],
+    "path": "docs/system/architecture.md"
+  },
+  {
+    "title": "Thiết kế cơ sở dữ liệu",
+    "description": "ERD SQLite rynox.db: bảng, chủ sở hữu theo module, chỉ mục, di trú, quyền truy cập dữ liệu. Đọc khi đổi schema hoặc store.",
+    "tags": ["system", "database", "erd", "sqlite"],
+    "path": "docs/system/database.md"
+  },
+  {
+    "title": "Design system Codexis IDE",
+    "description": "Tokens, quy tắc dùng component (Field, Radix), layout, mẫu UI, i18n, accessibility và motion của frontend. Đọc khi làm giao diện.",
+    "tags": ["design", "frontend", "tokens", "components"],
+    "path": "docs/design/DESIGN.md"
+  },
+  {
+    "title": "Danh mục component frontend",
+    "description": "Component theo thư mục ui, form/field, tables, shell, ai-chat và các hook. Đọc khi cần tái sử dụng component có sẵn.",
+    "tags": ["design", "frontend", "components"],
+    "path": "docs/design/components.md"
+  },
+  {
+    "title": "Chỗ chưa nhất quán của giao diện",
+    "description": "Danh sách input thô, bảng chưa dùng DataTable, token chưa dùng và các lệch style đã thấy; chỉ liệt kê, chưa sửa.",
+    "tags": ["design", "frontend", "audit"],
+    "path": "docs/design/inconsistencies.md"
+  },
+  {
+    "title": "Thiết kế bảng Context",
+    "description": "Hiện mức dùng ngữ cảnh của cuộc chat: nguồn usage từ CLI, Event::Context, popover, sơ đồ use case/DFD/sequence/state/component. Đọc khi làm bảng context hoặc đổi parse usage.",
+    "tags": ["system", "chat", "context", "usage"],
+    "path": "docs/system/context-panel.md"
+  },
+  {
+    "title": "Thiết kế Side chat",
+    "description": "Khung chat phụ hỏi nhanh: dùng lại agent_send với runId side-, chỉ đọc, không lưu DB, chặn rò sang điện thoại. Đọc khi làm side chat hoặc đổi cách lọc agent-event.",
+    "tags": ["system", "chat", "side-chat", "remote"],
+    "path": "docs/system/side-chat.md"
+  },
+  {
+    "title": "Thiết kế ngăn Plan",
+    "description": "Ngăn hiện kế hoạch AI đang viết: Rust tách ExitPlanMode từ control_request (chế độ plan chạy stdin stream-json), Event::Plan, todo TodoWrite/Task* hoãn theo kết quả chụp claude 2.1.319, lưu plan và logs theo tên dự án trong dữ liệu app, lệnh plan_load, ngăn trong dock phải. Đọc khi làm ngăn Plan, lưu trữ theo dự án hoặc đổi parse công cụ của agent.",
+    "tags": ["system", "chat", "plan-pane", "dock", "storage"],
+    "path": "docs/system/plan-pane.md"
+  },
+  {
+    "title": "Thiết kế ngăn Background tasks",
+    "description": "Ngăn liệt kê việc chạy nền của AI (lệnh nền, sub-agent): Event::Background, 3 lệnh Tauri, lưu tasks.json theo dự án, dock dưới cạnh Terminal. Đọc khi làm ngăn việc nền hoặc đổi cách theo dõi tiến trình của agent.",
+    "tags": ["system", "chat", "background-tasks", "dock"],
+    "path": "docs/system/background-tasks.md"
+  },
+  {
+    "title": "Thiết kế vị trí các ngăn",
+    "description": "Menu Move / Fill and arrange / Open in new window cho các ngăn dock: vị trí trái, phải, trên, dưới, chiếm cả vùng, nhớ trong localStorage. Đọc khi làm bố cục dock.",
+    "tags": ["system", "dock", "layout"],
+    "path": "docs/system/pane-placement.md"
+  },
+  {
+    "title": "Thiết kế session rail",
+    "description": "Thanh thông tin phiên: nguồn dữ liệu từng khối (Environment, Context, Connectors, Outputs, GitHub), phần không có nguồn, lệnh Tauri. Đọc khi sửa session-rail.",
+    "tags": ["system", "session-rail", "dock", "context", "github"],
+    "path": "docs/system/session-rail.md"
+  },
+  {
+    "title": "Testcase repo: session rail",
+    "description": "Testcase thủ công cấp repo cho session rail (chưa chạy).",
+    "tags": ["repo", "testcase", "session-rail"],
+    "path": "docs/repo/session-rail.md"
+  },
+  {
+    "title": "Thiết kế chuyển lượt giữa các AI",
+    "description": "Cơ chế để claude/codex nhờ nhau trong một lượt chat: quy ước khối relay, luồng hop, giới hạn (6 hop, tự gửi, lặp), cách dừng, sự kiện speaker. Đọc khi sửa relay.rs hoặc agent_send.",
+    "tags": ["system", "ai-relay", "agent", "backend"],
+    "path": "docs/system/ai-relay.md"
+  },
+  {
+    "title": "Testcase repo: chuyển lượt giữa các AI",
+    "description": "Testcase thủ công cấp repo cho relay giữa các AI (chưa chạy).",
+    "tags": ["repo", "testcase", "ai-relay"],
+    "path": "docs/repo/ai-relay.md"
+  }
+]

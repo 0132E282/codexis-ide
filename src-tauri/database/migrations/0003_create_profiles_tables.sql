@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cli TEXT NOT NULL,
+    name TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS active_profiles (
+    cli TEXT PRIMARY KEY,
+    profile_id INTEGER NOT NULL
+);

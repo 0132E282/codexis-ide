@@ -52,6 +52,7 @@ export const TurnView = memo(function TurnView({
     onChoose,
     onSwitchAccount,
     onPermission,
+    projectName,
 }: {
     turn: Turn;
     /** Sends this turn again under another account of the same AI. */
@@ -67,6 +68,7 @@ export const TurnView = memo(function TurnView({
     /** The message the user sent after this turn, which marks the option picked. */
     followUp: string | null;
     onChoose: (text: string) => void;
+    projectName: string;
 }) {
     const choices: ChoiceHandlers = useMemo(
         () => ({ interactive, answer: followUp, onChoose }),
@@ -111,6 +113,7 @@ export const TurnView = memo(function TurnView({
                     running={turn.running}
                     changed={turn.changed}
                     choices={choices}
+                    projectName={projectName}
                 />
             ) : (
                 typed !== '' && (

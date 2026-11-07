@@ -1,6 +1,8 @@
 import { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
+import { CODE_PALETTES, type CodeScheme } from '@/lib/code-palettes';
+import { getThemeState, subscribeTheme } from '@/lib/system-theme';
 
 // * Monaco (the editor engine of VS Code) is served from the app's own bundle, not a CDN. Only the base worker is wired:
 // * syntax highlighting needs no language worker, and the viewer is read-only.
@@ -20,49 +22,40 @@ const COMMON_COLORS = {
     'editorIndentGuide.activeBackground1': '#8b949e55',
 };
 
-monaco.editor.defineTheme('pm-light', {
-    base: 'vs',
-    inherit: true,
-    rules: [
-        { token: 'comment', foreground: '008000' },
-        { token: 'keyword', foreground: '0000ff' },
-        { token: 'metatag', foreground: '0000ff' },
-        { token: 'string', foreground: 'a31515' },
-        { token: 'number', foreground: '098658' },
-        { token: 'type', foreground: '267f99' },
-        { token: 'tag', foreground: '800000' },
-        { token: 'attribute.name', foreground: 'e50000' },
-        { token: 'variable', foreground: '001080' },
-        { token: 'delimiter', foreground: '000000' },
-    ],
-    colors: {
-        ...COMMON_COLORS,
-        'editorLineNumber.foreground': '#8c959f',
-        'editorLineNumber.activeForeground': '#57606a',
-    },
-});
+// * One Monaco theme per color scheme (`pm-light`, `pm-dark`, `pm-light-cb`, `pm-dark-cb`), built from the palettes the settings preview also shows.
+const THEME_NAMES: Record<CodeScheme, string> = {
+    light: 'pm-light',
+    dark: 'pm-dark',
+    'light-colorblind': 'pm-light-cb',
+    'dark-colorblind': 'pm-dark-cb',
+};
 
-monaco.editor.defineTheme('pm-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-        { token: 'comment', foreground: '6a9955' },
-        { token: 'keyword', foreground: '569cd6' },
-        { token: 'metatag', foreground: '569cd6' },
-        { token: 'string', foreground: 'ce9178' },
-        { token: 'number', foreground: 'b5cea8' },
-        { token: 'type', foreground: '4ec9b0' },
-        { token: 'tag', foreground: '569cd6' },
-        { token: 'attribute.name', foreground: '9cdcfe' },
-        { token: 'variable', foreground: '9cdcfe' },
-        { token: 'delimiter', foreground: 'd4d4d4' },
-    ],
-    colors: {
-        ...COMMON_COLORS,
-        'editorLineNumber.foreground': '#6e7681',
-        'editorLineNumber.activeForeground': '#c9d1d9',
-    },
-});
+for (const scheme of Object.keys(CODE_PALETTES) as CodeScheme[]) {
+    const palette = CODE_PALETTES[scheme];
+    const hex = (color: string) => color.slice(1);
+
+    monaco.editor.defineTheme(THEME_NAMES[scheme], {
+        base: palette.base,
+        inherit: true,
+        rules: [
+            { token: 'comment', foreground: hex(palette.comment) },
+            { token: 'keyword', foreground: hex(palette.keyword) },
+            { token: 'metatag', foreground: hex(palette.keyword) },
+            { token: 'string', foreground: hex(palette.string) },
+            { token: 'number', foreground: hex(palette.number) },
+            { token: 'type', foreground: hex(palette.type) },
+            { token: 'tag', foreground: hex(palette.tag) },
+            { token: 'attribute.name', foreground: hex(palette.attribute) },
+            { token: 'variable', foreground: hex(palette.variable) },
+            { token: 'delimiter', foreground: hex(palette.delimiter) },
+        ],
+        colors: {
+            ...COMMON_COLORS,
+            'editorLineNumber.foreground': palette.lineNumber,
+            'editorLineNumber.activeForeground': palette.activeLineNumber,
+        },
+    });
+}
 
 const LANGUAGES: Record<string, string> = {
     php: 'php',
@@ -139,10 +132,19 @@ export function languageOf(path: string): string {
 
 /** * Light/dark theme name following the page's own theme. */
 export function monacoTheme(): string {
+    const { codeColors } = getThemeState();
+
+    if (codeColors !== 'auto') {
+        return THEME_NAMES[codeColors];
+    }
+
     return document.documentElement.classList.contains('dark')
         ? 'pm-dark'
         : 'pm-light';
 }
+
+// * The look or the code colors changed (a setting, or the system switching between light and dark): every open editor takes the new colors at once.
+subscribeTheme(() => monaco.editor.setTheme(monacoTheme()));
 
 /** * Options shared by the file view and the diff view: read-only, quiet. */
 export const READ_ONLY_OPTIONS = {

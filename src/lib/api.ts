@@ -1,7 +1,8 @@
 /** * Stand-in for the web app's axios `api`: the `/ai-chat/local/*` routes the copied components call are answered by Rust commands (`invoke`).
  * Failures are real AxiosErrors carrying `{ message }`, so the components' own error handling works unchanged.
  * A route without a command yet fails the same way, with a fixed message. */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/invoke';
+import { listen } from '@tauri-apps/api/event';
 import { AxiosError } from 'axios';
 import { mediaMime, readMedia } from '@/lib/media-file';
 import { t } from '@/lib/i18n';
@@ -118,6 +119,12 @@ export const api = {
                     newName: data?.newName,
                     root: rootOf(data),
                 });
+            case '/ai-chat/local/format':
+                return call('format_code', {
+                    path: data?.path,
+                    content: data?.content,
+                    root: rootOf(data),
+                });
             case '/ai-chat/local/commit-message':
                 return call('local_commit_message', { root: rootOf(data) });
             case '/ai-chat/inline-ask':
@@ -150,4 +157,34 @@ export const api = {
     },
     delete: <T = unknown>(url: string, _config?: unknown): Reply<T> =>
         Promise.reject(unwired('DELETE', url)),
+};
+
+/** State of a background task, as the backend reports it. */
+export type BackgroundTaskState = 'running' | 'done' | 'failed' | 'stopped';
+
+/** One background task of a project: a shell command or a sub-agent (`kind`). */
+export type BackgroundTask = {
+    id: string;
+    kind: 'shell' | 'subagent';
+    label: string;
+    state: BackgroundTaskState;
+    /** Unix seconds. */
+    startedAt: number;
+    outputTail: string;
+};
+
+/** Background tasks: the Rust commands `background_list`, `background_stop`, `background_clear` (not in the backend until TASK-B04). */
+export const backgroundApi = {
+    list: (root: string) =>
+        invoke<{ tasks: BackgroundTask[] }>('background_list', { root }),
+    stop: (root: string, id: string) =>
+        invoke<void>('background_stop', { root, id }),
+    clear: (root: string) => invoke<void>('background_clear', { root }),
+    /** Listens to the `kind: "background"` agent events (the table changed); `unlisten` is returned. */
+    onChange: (handler: () => void) =>
+        listen<{ kind: string }>('agent-event', ({ payload }) => {
+            if (payload.kind === 'background') {
+                handler();
+            }
+        }),
 };

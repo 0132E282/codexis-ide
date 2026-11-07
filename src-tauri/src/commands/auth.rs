@@ -1,24 +1,19 @@
 use super::blocking;
-use crate::auth::{self, Environment, LimitUsage, Provider, ProviderStatus};
+use crate::auth::{self, ClaudeAuth, GithubAuth, GithubProfile, LimitUsage, ProviderStatus};
+use crate::cli::{CliKind, Environment};
 use crate::profiles::{self, ProfileStore};
 use tauri::{AppHandle, Manager};
 
 /// Sign-in state of the AI CLIs (under their active account) and GitHub; runs the tools' status commands off the UI thread.
 #[tauri::command]
 pub async fn auth_status(app: AppHandle) -> Result<Vec<ProviderStatus>, String> {
-    blocking(
-        "Không đọc được trạng thái đăng nhập.",
-        move || {
-            let profiles = app.state::<ProfileStore>();
+    blocking("auth.status_failed", move || {
+        let profiles = app.state::<ProfileStore>();
 
-            Ok(auth::status_all(|provider| {
-                provider
-                    .cli()
-                    .map(|cli| profiles.active_environment(cli))
-                    .unwrap_or_default()
-            }))
-        },
-    )
+        Ok(auth::status_all(|kind| {
+            profiles.active_environment(kind.name())
+        }))
+    })
     .await
 }
 
@@ -31,14 +26,22 @@ pub async fn auth_status_profile(
 ) -> Result<ProviderStatus, String> {
     let provider = parse_provider(&provider)?;
 
-    blocking(
-        "Không đọc được trạng thái đăng nhập.",
-        move || {
-            let environment = profile_environment(&app, provider, profile)?;
+    blocking("auth.status_failed", move || {
+        let environment = profile_environment(&app, provider, profile)?;
 
-            Ok(auth::status(provider, &environment))
-        },
-    )
+        Ok(provider.auth().status(&environment))
+    })
+    .await
+}
+
+/// Profile (login, display name, public email, avatar) of the GitHub account `gh` is signed in with; runs `gh` and `curl` off the UI thread.
+#[tauri::command]
+pub async fn github_profile(app: AppHandle) -> Result<GithubProfile, String> {
+    blocking("github.profile_unreadable", move || {
+        let environment = profile_environment(&app, CliKind::Github, profiles::DEFAULT_PROFILE)?;
+
+        GithubAuth.profile(&environment)
+    })
     .await
 }
 
@@ -48,10 +51,10 @@ pub async fn claude_usage_profile(
     app: AppHandle,
     profile: i64,
 ) -> Result<Option<Vec<LimitUsage>>, String> {
-    blocking("Không đọc được usage.", move || {
-        let environment = profile_environment(&app, Provider::Claude, profile)?;
+    blocking("auth.usage_failed", move || {
+        let environment = profile_environment(&app, CliKind::Claude, profile)?;
 
-        Ok(auth::claude_usage(&environment))
+        Ok(ClaudeAuth.usage(&environment))
     })
     .await
 }
@@ -65,11 +68,11 @@ pub async fn auth_login(
 ) -> Result<Option<String>, String> {
     let provider = parse_provider(&provider)?;
 
-    blocking("Không bắt đầu được đăng nhập.", move || {
+    blocking("auth.login_failed", move || {
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        auth::start_login(provider, &environment)
+        provider.auth().start_login(&environment)
     })
     .await
 }
@@ -83,30 +86,26 @@ pub async fn auth_logout(
 ) -> Result<(), String> {
     let provider = parse_provider(&provider)?;
 
-    blocking("Không ngắt được kết nối.", move || {
+    blocking("auth.logout_failed", move || {
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        auth::logout(provider, &environment)
+        provider.auth().logout(&environment)
     })
     .await
 }
 
-fn parse_provider(name: &str) -> Result<Provider, String> {
-    Provider::parse(name).ok_or_else(|| "Chưa hỗ trợ tài khoản này.".to_string())
+fn parse_provider(name: &str) -> Result<CliKind, String> {
+    CliKind::parse(name).ok_or_else(|| "auth.unsupported".to_string())
 }
 
-/// Environment of the account `profile` for `provider`.
+/// Environment of the account `profile` for `kind`.
 fn profile_environment(
     app: &AppHandle,
-    provider: Provider,
+    kind: CliKind,
     profile: i64,
 ) -> Result<Environment, String> {
-    let Some(cli) = provider.cli() else {
-        return Ok(Vec::new());
-    };
-
     app.state::<ProfileStore>()
-        .environment(cli, profile)
+        .environment(kind.name(), profile)
         .map_err(|error| error.to_string())
 }

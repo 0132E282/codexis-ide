@@ -1,0 +1,227 @@
+{
+  "title": "Lộ trình tổng: thứ tự triển khai OOP refactor và 4 tính năng mới",
+  "description": "Gộp 5 plan (OOP refactor, bảng Context, Side chat, ngăn Plan, ngăn Background tasks) thành một thứ tự làm duy nhất, chỉ ra file dùng chung (agent.rs, remote.rs, workspace-pane.tsx, dock) để không đè nhau. Không thay thế plan chi tiết, chỉ dẫn tới chúng.",
+  "tags": [
+    "roadmap",
+    "oop",
+    "context",
+    "side-chat",
+    "plan-pane",
+    "background-tasks"
+  ],
+  "createdAt": "2026-11-06",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/architecture.md",
+    "related": [
+      "docs/system/context-panel.md",
+      "docs/system/side-chat.md",
+      "docs/system/plan-pane.md",
+      "docs/system/background-tasks.md"
+    ],
+    "note": "Plan tổng chỉ sắp thứ tự; nội dung task nằm ở plan con."
+  },
+  "plans": [
+    {
+      "id": "OOP",
+      "path": "docs/plans/oop-refactor-backend-20261106.json",
+      "tasks": 13
+    },
+    {
+      "id": "CTX",
+      "path": "docs/plans/context-panel-20261106.json",
+      "tasks": 6
+    },
+    {
+      "id": "SIDE",
+      "path": "docs/plans/side-chat-20261106.json",
+      "tasks": 6
+    },
+    {
+      "id": "PLAN",
+      "path": "docs/plans/plan-pane-20261106.json",
+      "tasks": 9
+    },
+    {
+      "id": "BG",
+      "path": "docs/plans/background-tasks-20261106.json",
+      "tasks": 6
+    },
+    {
+      "id": "LAY",
+      "path": "docs/plans/pane-placement-20261106.json",
+      "tasks": 6
+    }
+  ],
+  "sharedFiles": [
+    {
+      "file": "src-tauri/src/agent.rs",
+      "usedBy": [
+        "OOP TASK-003, TASK-011",
+        "CTX TASK-C03",
+        "PLAN TASK-P03",
+        "BG TASK-B03"
+      ],
+      "rule": "Làm tuần tự; sau OOP TASK-003 thì đặt logic mới vào ClaudeAgent/CodexAgent"
+    },
+    {
+      "file": "src-tauri/src/commands/agent.rs",
+      "usedBy": ["OOP TASK-003", "PLAN TASK-P08, TASK-P09", "BG TASK-B03"],
+      "rule": "Tuần tự"
+    },
+    {
+      "file": "src-tauri/src/remote.rs",
+      "usedBy": ["OOP TASK-010", "SIDE TASK-S02"],
+      "rule": "SIDE sau OOP TASK-010 hoặc gộp"
+    },
+    {
+      "file": "src-tauri/src/lib.rs",
+      "usedBy": ["tất cả plan (pub mod, generate_handler, manage)"],
+      "rule": "Mỗi plan sửa riêng một đoạn; rebase sau mỗi plan"
+    },
+    {
+      "file": "src/components/shell/workspace-pane.tsx",
+      "usedBy": ["SIDE TASK-S04, TASK-S06", "PLAN TASK-P05"],
+      "rule": "PLAN sau SIDE TASK-S04 (cùng dock phải)"
+    },
+    {
+      "file": "src/components/shell/chat-panel.tsx",
+      "usedBy": [
+        "CTX TASK-C05",
+        "SIDE TASK-S04",
+        "PLAN TASK-P05",
+        "BG TASK-B05"
+      ],
+      "rule": "Menu ... gom mục Side chat, Plan, Background tasks: làm lần lượt"
+    },
+    {
+      "file": "src-tauri/src/project_data.rs",
+      "usedBy": ["PLAN TASK-P07 (tạo)", "BG TASK-B04 (dùng)"],
+      "rule": "BG sau PLAN TASK-P07"
+    }
+  ],
+  "phases": [
+    {
+      "id": "PH0",
+      "name": "Chốt blocker và baseline",
+      "tasks": ["OOP:TASK-000"],
+      "note": "Người dùng commit hoặc chốt thay đổi dở trong src-tauri/ và src/; chụp baseline test"
+    },
+    {
+      "id": "PH1",
+      "name": "Kiểm chứng giao thức CLI (không sửa mã sản phẩm)",
+      "tasks": [
+        "CTX:TASK-C01",
+        "SIDE:TASK-S01",
+        "PLAN:TASK-P01",
+        "BG:TASK-B01"
+      ],
+      "parallel": true,
+      "note": "Một lượt thử chung có thể chụp usage, cờ chỉ đọc, TodoWrite, Bash nền cùng lúc; chốt các giả định [chưa kiểm]"
+    },
+    {
+      "id": "PH2",
+      "name": "OOP nền chung",
+      "tasks": ["OOP:TASK-001", "OOP:TASK-002"],
+      "note": "cli.rs và permission.rs"
+    },
+    {
+      "id": "PH3",
+      "name": "OOP nhóm song song",
+      "tasks": [
+        "OOP:TASK-003",
+        "OOP:TASK-004",
+        "OOP:TASK-005",
+        "OOP:TASK-006",
+        "OOP:TASK-007",
+        "OOP:TASK-008",
+        "OOP:TASK-009",
+        "OOP:TASK-010"
+      ],
+      "parallel": true,
+      "note": "agent.rs xong ở TASK-003 mở đường cho các tính năng sửa parse_line"
+    },
+    {
+      "id": "PH4",
+      "name": "OOP dọn shim",
+      "tasks": ["OOP:TASK-011", "OOP:TASK-012"]
+    },
+    {
+      "id": "PH5",
+      "name": "Backend tính năng, tuần tự trên agent.rs",
+      "tasks": [
+        "CTX:TASK-C02",
+        "CTX:TASK-C03",
+        "PLAN:TASK-P02",
+        "PLAN:TASK-P07",
+        "PLAN:TASK-P03",
+        "PLAN:TASK-P08",
+        "PLAN:TASK-P09",
+        "BG:TASK-B02",
+        "BG:TASK-B03",
+        "BG:TASK-B04",
+        "SIDE:TASK-S02"
+      ],
+      "note": "Thứ tự CTX, PLAN, BG; SIDE TASK-S02 sau OOP TASK-010"
+    },
+    {
+      "id": "PH6",
+      "name": "Frontend tính năng",
+      "tasks": [
+        "SIDE:TASK-S03",
+        "SIDE:TASK-S04",
+        "SIDE:TASK-S06",
+        "CTX:TASK-C04",
+        "CTX:TASK-C05",
+        "PLAN:TASK-P04",
+        "PLAN:TASK-P05",
+        "BG:TASK-B05"
+      ],
+      "note": "SIDE trước (dựng dock), rồi PLAN, CTX, BG; menu ... gom chung"
+    },
+    {
+      "id": "PH7",
+      "name": "Kiểm chứng cuối và tài liệu",
+      "tasks": ["CTX:TASK-C06", "SIDE:TASK-S05", "PLAN:TASK-P06", "BG:TASK-B06"]
+    },
+    {
+      "id": "PH8",
+      "name": "Vị trí các ngăn",
+      "tasks": [
+        "LAY:TASK-L01",
+        "LAY:TASK-L02",
+        "LAY:TASK-L03",
+        "LAY:TASK-L04",
+        "LAY:TASK-L05",
+        "LAY:TASK-L06"
+      ],
+      "note": "Sau PH6 (dock Side chat, Background tasks); L05 đã hoãn (Q2)"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal",
+    "pnpm typecheck",
+    "pnpm lint"
+  ],
+  "risks": [
+    "Năm plan cùng sửa agent.rs, commands/agent.rs, lib.rs, chat-panel.tsx: đi đúng thứ tự phase, mỗi phase xong chạy kiểm chứng",
+    "Giả định về giao thức CLI sai: PH1 chốt trước mọi code",
+    "Thay đổi chưa commit của người dùng bị đè: PH0",
+    "Phạm vi lớn (40 task): có thể dừng sau từng phase, mỗi phase tự đứng được"
+  ],
+  "rollback": "Git revert theo phase khi được phép commit; PH2 đến PH4 chỉ thêm file mới và đổi nội bộ, tính năng PH5, PH6 chỉ thêm.",
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Làm toàn bộ lộ trình hay chọn một nhóm trước (OOP, hoặc từng tính năng)?",
+      "default": "PH0, PH1 trước; sau đó hỏi lại"
+    },
+    {
+      "id": "Q2",
+      "question": "Tính năng mới làm trước hay sau OOP?",
+      "default": "Sau OOP TASK-003 để tránh đè agent.rs"
+    }
+  ]
+}

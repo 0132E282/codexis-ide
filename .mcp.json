@@ -2,7 +2,15 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": [
+        "@playwright/mcp@latest",
+        "--output-dir",
+        ".agents/storage/playwright-mcp",
+        "--viewport-size",
+        "1440x900",
+        "--caps",
+        "devtools"
+      ]
     }
   }
 }

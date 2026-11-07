@@ -1,8 +1,8 @@
-import { ArrowRight, Check, Pencil } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import Field from '@/components/form/field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import type { Choices } from '@/lib/choices-parser';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -15,7 +15,7 @@ export type ChoiceHandlers = {
     onChoose: (text: string) => void;
 };
 
-/** * One-question choice card: numbered options, a free-text "Khác…" row and "Bỏ qua". Read-only once answered or superseded. */
+/** * One-question choice card: numbered options, a free-text "Something else" row, "Skip" and a close button (no "n of m" pager: the choices format carries a single question). Read-only once answered or superseded. */
 export function ChoiceCard({
     choices,
     interactive,
@@ -63,11 +63,23 @@ export function ChoiceCard({
             role="group"
             aria-labelledby={questionId}
             onKeyDown={handleKeyDown}
-            className="my-3 overflow-hidden rounded-lg border border-border"
+            className="my-3 overflow-hidden rounded-xl border border-ring bg-background px-4 py-3"
         >
-            <p id={questionId} className="px-4 py-3 text-sm font-medium">
-                {choices.question}
-            </p>
+            <div className="flex items-start justify-between gap-3 pb-3">
+                <p id={questionId} className="text-sm">
+                    {choices.question}
+                </p>
+                {interactive && (
+                    <button
+                        type="button"
+                        aria-label={t('choice_card.close')}
+                        onClick={() => setDismissed(true)}
+                        className="shrink-0 rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none"
+                    >
+                        <X aria-hidden="true" className="size-4" />
+                    </button>
+                )}
+            </div>
             {choices.options.map((option, index) => {
                 const picked = !interactive && option.label === answer;
 
@@ -78,7 +90,7 @@ export function ChoiceCard({
                         disabled={!interactive}
                         onClick={() => choose(option.label)}
                         className={cn(
-                            'group flex w-full items-start gap-3 border-t border-border px-4 py-2.5 text-left transition-colors focus-visible:outline-none',
+                            'group flex w-full items-center gap-3 border-t border-border py-2 text-left transition-colors focus-visible:outline-none',
                             interactive
                                 ? 'hover:bg-muted focus-visible:bg-muted'
                                 : 'cursor-default',
@@ -89,7 +101,7 @@ export function ChoiceCard({
                                 'opacity-50',
                         )}
                     >
-                        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs text-muted-foreground group-hover:bg-background group-focus-visible:bg-background">
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-sm text-muted-foreground">
                             {index + 1}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -102,34 +114,28 @@ export function ChoiceCard({
                                 )}
                             </span>
                             {option.description && (
-                                <span className="mt-0.5 block text-xs text-muted-foreground">
+                                <span className="block truncate text-xs text-muted-foreground">
                                     {option.description}
                                 </span>
                             )}
                         </span>
-                        {picked ? (
+                        {picked && (
                             <Check
                                 aria-hidden="true"
-                                className="mt-0.5 size-4 shrink-0"
+                                className="size-4 shrink-0"
                             />
-                        ) : (
-                            interactive && (
-                                <ArrowRight
-                                    aria-hidden="true"
-                                    className="mt-0.5 size-4 shrink-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-                                />
-                            )
                         )}
                     </button>
                 );
             })}
             {interactive ? (
-                <div className="flex items-center gap-2 border-t border-border px-4 py-2">
-                    <Pencil
-                        aria-hidden="true"
-                        className="size-4 shrink-0 text-muted-foreground"
-                    />
-                    <Input
+                <div className="flex items-center gap-3 border-t border-border pt-2">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <Pencil aria-hidden="true" className="size-3.5" />
+                    </span>
+                    <Field
+                        name={`${questionId}-other`}
+                        autoComplete="off"
                         value={other}
                         maxLength={2000}
                         placeholder={t('choice_card.other')}
@@ -144,13 +150,13 @@ export function ChoiceCard({
                                 choose(other);
                             }
                         }}
-                        className="h-8 flex-1 border-0 px-1 shadow-none focus-visible:ring-0"
+                        className="min-w-0 flex-1"
                     />
                     <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
-                        className="h-8 text-muted-foreground"
+                        className="h-7"
                         onClick={() => setDismissed(true)}
                     >
                         {t('choice_card.skip')}
@@ -159,7 +165,7 @@ export function ChoiceCard({
             ) : (
                 answer !== null &&
                 !matched && (
-                    <p className="flex items-center gap-2 border-t border-border px-4 py-2 text-sm">
+                    <p className="flex items-center gap-2 border-t border-border pt-2 text-sm">
                         <Check aria-hidden="true" className="size-4 shrink-0" />
                         <span className="min-w-0 break-words">{answer}</span>
                     </p>

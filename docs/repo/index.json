@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Testcase repo: session rail",
+    "description": "Testcase thủ công cấp repo cho session rail (chưa chạy).",
+    "tags": ["repo", "testcase", "session-rail"],
+    "path": "docs/repo/session-rail.md"
+  },
+  {
+    "title": "Testcase repo: chuyển lượt giữa các AI",
+    "description": "Testcase thủ công cấp repo cho relay giữa các AI (chưa chạy).",
+    "tags": ["repo", "testcase", "ai-relay"],
+    "path": "docs/repo/ai-relay.md"
+  }
+]

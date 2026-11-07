@@ -1,7 +1,9 @@
 use super::state::AppState;
-use crate::agent;
-use crate::git::{self, Branches, Change, Committed};
+use crate::agent::{self, ClaudeAgent};
+use crate::cli::CliKind;
+use crate::git::{Branches, Change, Committed, GitRepo};
 use crate::profiles::ProfileStore;
+use crate::validation;
 use serde::Serialize;
 use tauri::State;
 
@@ -33,8 +35,8 @@ pub async fn local_changes(
 ) -> Result<ChangesReply, String> {
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không đọc được thay đổi.", move || {
-        let changes = git::changes(&workspace);
+    super::blocking("git.changes_failed", move || {
+        let changes = GitRepo::new(&workspace).changes();
 
         Ok(ChangesReply {
             git: changes.is_some(),
@@ -51,8 +53,8 @@ pub async fn local_branches(
 ) -> Result<Branches, String> {
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không đọc được nhánh.", move || {
-        Ok(git::branches(&workspace))
+    super::blocking("git.branches_failed", move || {
+        Ok(GitRepo::new(&workspace).branches())
     })
     .await
 }
@@ -63,10 +65,14 @@ pub async fn local_head(
     root: Option<String>,
     path: String,
 ) -> Result<HeadReply, String> {
+    validation::relative_path(&path)?;
+
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không đọc được bản đã commit.", move || {
-        let head = git::head_content(&workspace, &path).map_err(|error| error.to_string())?;
+    super::blocking("git.head_failed", move || {
+        let head = GitRepo::new(&workspace)
+            .head_content(&path)
+            .map_err(|error| error.to_string())?;
 
         Ok(HeadReply {
             path,
@@ -83,10 +89,14 @@ pub async fn local_discard(
     root: Option<String>,
     path: String,
 ) -> Result<(), String> {
+    validation::relative_path(&path)?;
+
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không hoàn tác được tệp.", move || {
-        git::discard(&workspace, &path).map_err(|error| error.to_string())
+    super::blocking("git.restore_failed", move || {
+        GitRepo::new(&workspace)
+            .discard(&path)
+            .map_err(|error| error.to_string())
     })
     .await
 }
@@ -97,10 +107,14 @@ pub async fn local_commit(
     root: Option<String>,
     message: String,
 ) -> Result<Committed, String> {
+    validation::commit_message(&message)?;
+
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không commit được.", move || {
-        git::commit(&workspace, &message).map_err(|error| error.to_string())
+    super::blocking("git.commit_failed", move || {
+        GitRepo::new(&workspace)
+            .commit(&message)
+            .map_err(|error| error.to_string())
     })
     .await
 }
@@ -114,16 +128,15 @@ pub async fn local_commit_message(
 ) -> Result<CommitMessage, String> {
     let workspace = state.workspace_for(root.as_deref())?;
     // * The same account as the chat: the one chosen for the Claude CLI.
-    let environment = profiles.active_environment("claude");
+    let environment = profiles.active_environment(CliKind::Claude.name());
 
-    super::blocking("AI chưa viết được nội dung.", move || {
-        let diff = git::diff_text(&workspace).map_err(|error| error.to_string())?;
+    super::blocking("git.ai_message_failed", move || {
+        let diff = GitRepo::new(&workspace).diff_text().map_err(|error| error.to_string())?;
         let prompt = format!(
             "Viết commit message cho thay đổi dưới đây. Dòng đầu là tiêu đề ngắn (tối đa 72 ký tự, không dấu chấm cuối), \
              sau đó một dòng trống rồi phần mô tả ngắn gọn. Chỉ trả về message, không giải thích, không dùng markdown.\n\n{diff}"
         );
-        let answer = agent::ask_once(workspace.root(), &prompt, &environment)
-            .map_err(|error| format!("AI chưa viết được nội dung. {error}"))?;
+        let answer = ClaudeAgent.ask_once(workspace.root(), &prompt, &environment)?;
         let (title, description) = agent::split_message(&answer);
 
         Ok(CommitMessage { title, description })

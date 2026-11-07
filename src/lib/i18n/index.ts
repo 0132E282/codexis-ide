@@ -75,3 +75,22 @@ export function t(
               name in params ? String(params[name]) : whole,
           );
 }
+
+const ERROR_KEY = /^([a-z_]+(?:\.[a-z_]+)+)(?:\|([\s\S]*))?$/;
+
+/**
+ * The text of an error from the backend. Rust sends a fixed key (`auth.status_failed`, optionally `key|detail`); it is shown from the `errors.` texts.
+ * Anything else (a message of a CLI or the system) is shown as it came.
+ */
+export function translateError(message: string): string {
+    const match = ERROR_KEY.exec(message);
+
+    if (match === null) {
+        return message;
+    }
+
+    const key = `errors.${match[1]}`;
+    const translated = t(key, { value: match[2] ?? '' });
+
+    return translated === key ? message : translated;
+}

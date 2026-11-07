@@ -1,5 +1,6 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/invoke';
 import { ide } from '@/lib/ide';
+import { translateError } from '@/lib/i18n';
 
 export type ToolScope = 'project' | 'machine';
 export type ToolListing<T> = { items: T[]; warnings: string[] };
@@ -45,16 +46,22 @@ async function projectRoot(): Promise<string | null> {
     );
 }
 
-async function list<T>(command: string): Promise<ToolListing<T>> {
-    return invoke<ToolListing<T>>(command, {
-        projectRoot: await projectRoot(),
+async function list<T>(
+    command: string,
+    root?: string,
+): Promise<ToolListing<T>> {
+    const listing = await invoke<ToolListing<T>>(command, {
+        projectRoot: root ?? (await projectRoot()),
     });
+
+    return { ...listing, warnings: listing.warnings.map(translateError) };
 }
 
 export const ideTools = {
     skills: () => list<ToolEntry>('tools_skills'),
     agents: () => list<ToolEntry>('tools_agents'),
-    mcp: () => list<McpServer>('tools_mcp'),
+    /** The MCP servers configured for the project at `root` (the selected project when absent). */
+    mcp: (root?: string) => list<McpServer>('tools_mcp', root),
     rules: () => list<RuleFile>('tools_rules'),
     hooks: () => list<HookEntry>('tools_hooks'),
 };

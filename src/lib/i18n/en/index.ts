@@ -1,5 +1,7 @@
+import { appUpdateEnglish } from './app-update';
 import { aiChatEnglish } from './ai-chat';
 import { codeViewerEnglish } from './code-viewer';
+import { sessionRailEnglish } from './session-rail';
 import { shellChatEnglish } from './shell-chat';
 import { shellMainEnglish } from './shell-main';
 import { shellSettingsEnglish } from './shell-settings';
@@ -13,4 +15,6 @@ export const english: Record<string, string> = {
     ...aiChatEnglish,
     ...codeViewerEnglish,
     ...uiLibEnglish,
+    ...sessionRailEnglish,
+    ...appUpdateEnglish,
 };

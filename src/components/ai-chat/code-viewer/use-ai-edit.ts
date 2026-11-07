@@ -40,7 +40,7 @@ export function useAiEdit({
                       change.repo === repo &&
                       change.path === selected &&
                       change.status === 'pending' &&
-                      change.message_id !== undefined,
+                      change.messageId !== undefined,
               )
             : undefined;
     // * An edit already written to the file: the same arrow takes it back (revert-local).
@@ -51,7 +51,7 @@ export function useAiEdit({
                       change.repo === repo &&
                       change.path === selected &&
                       change.status === 'applied' &&
-                      change.message_id !== undefined,
+                      change.messageId !== undefined,
               )
             : undefined;
     const boxHost = useRef<HTMLDivElement>(null);
@@ -132,7 +132,7 @@ export function useAiEdit({
     const decideEdit = async (kind: 'apply' | 'reject' | 'revert') => {
         const target = pendingEdit ?? appliedEdit;
 
-        if (target?.message_id === undefined) {
+        if (target?.messageId === undefined) {
             return;
         }
 
@@ -140,7 +140,7 @@ export function useAiEdit({
 
         try {
             const { data } = await api.post<{ proposals: AiChatProposal[] }>(
-                `/ai-chat/messages/${target.message_id}/proposals/${
+                `/ai-chat/messages/${target.messageId}/proposals/${
                     {
                         apply: 'apply-local',
                         reject: 'reject',

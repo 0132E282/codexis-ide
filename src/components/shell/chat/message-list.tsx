@@ -22,6 +22,8 @@ export const MessageList = forwardRef<
             request: PermissionRequest,
             allow: boolean,
         ) => void;
+        /** Name of the project, shown on the card of the files a turn changed. */
+        projectName: string;
     }
 >(function MessageList(
     {
@@ -31,11 +33,15 @@ export const MessageList = forwardRef<
         onChoose,
         onSwitchAccount,
         onPermission,
+        projectName,
     },
     bottom,
 ) {
     return (
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
+        <div
+            data-chat-scroll
+            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-4"
+        >
             {/* * One centred column, as wide as the message box: a wide panel keeps lines readable instead of pushing the two sides apart. */}
             <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6">
                 {turns.length === 0 && (
@@ -65,6 +71,7 @@ export const MessageList = forwardRef<
                                 onChoose={onChoose}
                                 onSwitchAccount={onSwitchAccount}
                                 onPermission={onPermission}
+                                projectName={projectName}
                             />
                         ))}
                     </>

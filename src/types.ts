@@ -2,7 +2,7 @@
 export type AiChatProposal = {
     id: number | string;
     /** The answer (message) the edit belongs to; the apply / reject / revert calls are addressed with it. */
-    message_id?: number | string;
+    messageId?: number | string;
     /** The project the file belongs to. */
     repo: string;
     path: string;

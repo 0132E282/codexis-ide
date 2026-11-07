@@ -47,6 +47,8 @@ pub fn chat_save_turn(
     conversation: i64,
     turn: ChatTurn,
 ) -> Result<(), String> {
+    let workspace = state.workspace_key(Some(&workspace))?;
+
     state
         .lock_chats()
         .save_turn(&workspace, conversation, &turn)
@@ -61,6 +63,8 @@ pub fn chat_save_session(
     cli: String,
     session: String,
 ) -> Result<(), String> {
+    let workspace = state.workspace_key(Some(&workspace))?;
+
     state
         .lock_chats()
         .save_session(&workspace, conversation, &cli, &session)
@@ -70,6 +74,8 @@ pub fn chat_save_session(
 /// Starts a new conversation and returns its id.
 #[tauri::command]
 pub fn chat_new(state: State<AppState>, workspace: String) -> Result<i64, String> {
+    let workspace = state.workspace_key(Some(&workspace))?;
+
     state
         .lock_chats()
         .new_conversation(&workspace)

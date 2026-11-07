@@ -366,9 +366,14 @@ export function useFileSession({
         setSaving(true);
         setSaveError(null);
 
-        const written = draft;
+        const typed = draft;
 
         try {
+            // * The backend formats the text with Prettier as it is saved, like format-on-save in VS Code.
+            const { data: written } = await api.post<string>(
+                '/ai-chat/local/format',
+                { root: localRoot, path: selected, content: typed },
+            );
             await api.put('/ai-chat/local/file', {
                 root: localRoot,
                 path: selected,
@@ -377,8 +382,8 @@ export function useFileSession({
             });
             setContent(written);
             // * Typing went on during the request: that newer text stays a draft and is saved next.
-            setDraft((current) => (current === written ? null : current));
-            if (draftRef.current === written) {
+            setDraft((current) => (current === typed ? null : current));
+            if (draftRef.current === typed) {
                 drafts.current.delete(selected);
             }
         } catch (caught) {

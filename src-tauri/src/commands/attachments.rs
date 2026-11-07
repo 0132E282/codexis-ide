@@ -21,7 +21,7 @@ pub fn attachment_save(app: AppHandle, request: Request<'_>) -> Result<String, S
         .headers()
         .get("x-name")
         .and_then(|value| value.to_str().ok())
-        .map(percent_decode)
+        .map(|value| percent_decode(truncate_to_boundary(value, attachments::MAX_RAW_NAME_BYTES)))
         .unwrap_or_default();
     let dir = attachments_dir(&app)?;
 
@@ -38,6 +38,17 @@ pub fn attachment_read(app: AppHandle, path: String) -> Result<tauri::ipc::Respo
     attachments::read(&dir, Path::new(&path))
         .map(tauri::ipc::Response::new)
         .map_err(|error| error.to_string())
+}
+
+/// At most `limit` bytes of `text`, cut on a character boundary.
+fn truncate_to_boundary(text: &str, limit: usize) -> &str {
+    let mut end = limit.min(text.len());
+
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+
+    &text[..end]
 }
 
 /// Decodes `%XX` escapes (what `encodeURIComponent` produces); anything malformed is kept as it is.
@@ -69,7 +80,7 @@ fn percent_decode(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::percent_decode;
+    use super::{percent_decode, truncate_to_boundary};
 
     #[test]
     fn percent_escapes_are_decoded_and_bad_ones_kept() {
@@ -77,5 +88,12 @@ mod tests {
         assert_eq!(percent_decode("%E1%BA%A2nh.png"), "Ảnh.png");
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%zz"), "%zz");
+    }
+
+    #[test]
+    fn long_names_are_cut_on_a_character_boundary() {
+        assert_eq!(truncate_to_boundary("abc", 10), "abc");
+        assert_eq!(truncate_to_boundary("abcd", 2), "ab");
+        assert_eq!(truncate_to_boundary("\u{1EA1}\u{1EA1}", 4), "\u{1EA1}");
     }
 }

@@ -1,5 +1,7 @@
+import { appUpdateVietnamese } from './app-update';
 import { aiChatVietnamese } from './ai-chat';
 import { codeViewerVietnamese } from './code-viewer';
+import { sessionRailVietnamese } from './session-rail';
 import { shellChatVietnamese } from './shell-chat';
 import { shellMainVietnamese } from './shell-main';
 import { shellSettingsVietnamese } from './shell-settings';
@@ -13,4 +15,6 @@ export const vietnamese: Record<string, string> = {
     ...aiChatVietnamese,
     ...codeViewerVietnamese,
     ...uiLibVietnamese,
+    ...sessionRailVietnamese,
+    ...appUpdateVietnamese,
 };

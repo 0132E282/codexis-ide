@@ -1,7 +1,9 @@
 use super::state::AppState;
-use crate::agent;
+use crate::agent::ClaudeAgent;
+use crate::cli::CliKind;
 use crate::credentials::CredentialStore;
 use crate::profiles::ProfileStore;
+use crate::validation;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -41,6 +43,10 @@ pub async fn inline_ask(
     text: String,
     question: String,
 ) -> Result<InlineAnswer, String> {
+    // * Shape of the input first: a NUL byte or an oversized snippet never reaches the workspace or the AI.
+    validation::relative_path(&path)?;
+    validation::snippet(&text)?;
+
     let workspace = state.workspace_for(root.as_deref())?;
 
     // * Same guard as reading a file: a denied name (.env, keys...) or a path outside the root never reaches the AI.
@@ -49,18 +55,22 @@ pub async fn inline_ask(
         .map_err(|error| error.to_string())?;
 
     if question.trim().is_empty() {
-        return Err("Hãy nhập câu hỏi.".to_string());
+        return Err("inline.question_empty".to_string());
     }
+
+    validation::question(&question)?;
 
     let mut environment = app.state::<CredentialStore>().environment();
 
     // * The same account as the chat: the one chosen for the Claude CLI, not the CLI's own login.
-    environment.extend(app.state::<ProfileStore>().active_environment("claude"));
+    environment.extend(
+        app.state::<ProfileStore>()
+            .active_environment(CliKind::Claude.name()),
+    );
     let prompt = inline_prompt(&relative, start_line, end_line, &text, question.trim());
 
-    super::blocking("AI chưa trả lời được.", move || {
-        let answer = agent::ask_once(workspace.root(), &prompt, &environment)
-            .map_err(|error| format!("AI chưa trả lời được. {error}"))?;
+    super::blocking("inline.ask_failed", move || {
+        let answer = ClaudeAgent.ask_once(workspace.root(), &prompt, &environment)?;
 
         Ok(InlineAnswer {
             answer,

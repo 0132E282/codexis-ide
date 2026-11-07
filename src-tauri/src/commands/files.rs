@@ -1,5 +1,5 @@
 use super::state::AppState;
-use crate::vscode;
+use crate::{validation, vscode};
 use serde::Serialize;
 use tauri::State;
 
@@ -50,7 +50,7 @@ pub async fn workspace_tree(
 ) -> Result<TreeReply, String> {
     let workspace = state.workspace_for(root.as_deref())?;
 
-    super::blocking("Không đọc được cây thư mục.", move || {
+    super::blocking("files.tree_failed", move || {
         let tree = workspace.tree();
 
         Ok(TreeReply {
@@ -114,6 +114,8 @@ pub fn local_put_file(
     path: String,
     content: String,
 ) -> Result<String, String> {
+    validation::relative_path(&path)?;
+
     let workspace = state.workspace_for(root.as_deref())?;
     let current = workspace
         .current_hash_for_viewer(&path)
@@ -123,6 +125,22 @@ pub fn local_put_file(
         .write_for_viewer(&path, &content, current.as_deref())
         .map(|written| written.after)
         .map_err(|error| error.to_string())
+}
+
+/// The text of a file formatted with the project's Prettier (unchanged when it cannot be formatted); runs `prettier` off the UI thread.
+#[tauri::command]
+pub async fn format_code(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+    content: String,
+) -> Result<String, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("files.format_failed", move || {
+        Ok(crate::formatter::format(&workspace, &path, &content))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -148,6 +166,9 @@ pub fn workspace_rename(
     path: String,
     new_name: String,
 ) -> Result<String, String> {
+    validation::relative_path(&path)?;
+    validation::entry_name(&new_name)?;
+
     state
         .workspace_for(root.as_deref())?
         .rename_for_viewer(&path, &new_name)

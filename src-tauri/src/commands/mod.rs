@@ -1,14 +1,18 @@
 //! Tauri commands the front end reaches through `invoke()`, grouped by domain. Thin wrappers over the backend modules; errors are the fixed messages only.
 
 pub mod agent;
+pub mod app_update;
 pub mod attachments;
 pub mod auth;
+pub mod background;
 pub mod chat;
 pub mod files;
 pub mod git;
 pub mod inline_ask;
+pub mod plan;
 pub mod projects;
 pub mod remote;
+pub mod session_rail;
 mod state;
 pub mod terminal;
 

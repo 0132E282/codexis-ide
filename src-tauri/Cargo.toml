@@ -23,6 +23,9 @@ tokio = { version = "1", features = ["net", "sync", "time", "macros"] }
 getrandom = "0.3"
 tokio-tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
 futures-util = { version = "0.3", features = ["sink"] }
+sea-query = { version = "1", default-features = false, features = ["backend-sqlite"] }
+garde = { version = "0.23.0", features = ["derive"] }
+tauri-plugin-updater = "2.14.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
@@ -30,3 +33,9 @@ objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSButton", "NSContro
 
 [dev-dependencies]
 tempfile = "3"
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = 0

@@ -85,6 +85,8 @@ export function SettingsDialog({
 }) {
     const open = tab !== null;
     const [draft, setDraft] = useState<ChatSettings>(defaultChatSettings);
+    // * False until the saved values are in the draft: the Profile tab must not fill empty fields before that.
+    const [loaded, setLoaded] = useState(false);
     // * The Kết nối tab shows its own page title while a sub-page is open.
     const [connectSubpage, setConnectSubpage] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -99,11 +101,13 @@ export function SettingsDialog({
         let cancelled = false;
 
         setError(null);
+        setLoaded(false);
         ideSettings
             .get()
             .then((saved) => {
                 if (!cancelled) {
                     setDraft(saved);
+                    setLoaded(true);
                 }
             })
             .catch((caught: unknown) => {
@@ -183,6 +187,7 @@ export function SettingsDialog({
                                 <TabsContent value="character">
                                     <CharacterTab
                                         settings={draft}
+                                        loaded={loaded}
                                         onChange={setDraft}
                                     />
                                 </TabsContent>

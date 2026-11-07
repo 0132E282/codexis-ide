@@ -4,17 +4,22 @@ import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import {
     parsePayload,
     withDelta,
+    withPlan,
+    withSpeaker,
     withSubtext,
     withText,
     withToolCall,
     withToolResult,
 } from '@/components/shell/chat/turn-events';
 import type {
+    ContextUsage,
+    PlanEvent,
     SubagentEvent,
     SubtextEvent,
     ToolCallEvent,
     ToolResultEvent,
 } from '@/components/shell/chat/turn-events';
+import type { PlanData } from '@/components/shell/plan-pane';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent, onRemoteSend } from '@/lib/ide';
 import { ideAuth } from '@/lib/ide-auth';
@@ -22,7 +27,7 @@ import { ideProfiles } from '@/lib/ide-profiles';
 import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
 import type { AgentCli, ChangedFile, Subagent } from '@/lib/ide';
-import { t } from '@/lib/i18n';
+import { t, translateError } from '@/lib/i18n';
 
 // * Only sizes and the error text go to the statistics; the model is not known to the chat.
 const recordUsage = (turn: Turn): Promise<boolean> =>
@@ -100,6 +105,8 @@ export function useAgentTurns({
     session: {
         busy: boolean;
         setTurns: Dispatch<SetStateAction<Turn[]>>;
+        setContext: Dispatch<SetStateAction<ContextUsage | null>>;
+        setPlan: Dispatch<SetStateAction<PlanData | null>>;
         setSubagents: Dispatch<SetStateAction<Subagent[]>>;
         sessions: MutableRefObject<Partial<Record<AgentCli, string>>>;
         workspace: MutableRefObject<string | null>;
@@ -112,6 +119,8 @@ export function useAgentTurns({
     const {
         busy,
         setTurns,
+        setContext,
+        setPlan,
         setSubagents,
         sessions,
         workspace,
@@ -258,8 +267,38 @@ export function useAgentTurns({
 
                     break;
                 }
+                case 'plan': {
+                    const written = parsePayload<PlanEvent>(payload);
+
+                    if (written !== null) {
+                        setPlan((current) => withPlan(current, written));
+                    }
+
+                    break;
+                }
+                case 'context': {
+                    const usage = parsePayload<ContextUsage>(payload);
+
+                    if (usage !== null) {
+                        setContext(usage);
+                    }
+
+                    break;
+                }
+                case 'speaker':
+                    if (payload === 'claude' || payload === 'codex') {
+                        update(runId, (turn) => withSpeaker(turn, payload));
+                    }
+
+                    break;
                 case 'error':
-                    update(runId, (turn) => ({ ...turn, error: payload }));
+                    update(runId, (turn) => ({
+                        ...turn,
+                        error: translateError(payload),
+                    }));
+                    break;
+                case 'background':
+                    // * Announced mid-turn (handled by the background-tasks hook); it must not end the turn.
                     break;
                 default: {
                     runs.current.delete(runId);
@@ -315,6 +354,7 @@ export function useAgentTurns({
         return () => void stop.then((unlisten) => unlisten());
     }, [
         setTurns,
+        setContext,
         setSubagents,
         sessions,
         workspace,

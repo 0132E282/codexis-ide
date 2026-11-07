@@ -3,8 +3,10 @@ import { memo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
+import { ChangedFilesCard } from '@/components/shell/changed-files-card';
 import { UnifiedDiff } from '@/components/ai-chat/unified-diff';
-import type { ChangedFile, Step } from '@/lib/ide';
+import { CLI_ICONS, CLIS } from '@/components/shell/chat/cli-options';
+import type { AgentCli, ChangedFile, Step } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
@@ -137,17 +139,16 @@ function ToolView({ step }: { step: ToolStep }) {
     );
 }
 
-// * A turn in worktree mode edits a copy kept in the app's data folder: the part up to the copy's own root is noise.
-const WORKTREE_PREFIX = /^.*\/worktrees\/[^/]+\/[^/]+\//;
+/** The AI that speaks in the steps below, in a turn relayed between AIs. */
+function SpeakerLabel({ cli }: { cli: AgentCli }) {
+    const Icon = CLI_ICONS[cli];
 
-/** A file path as its name and the (shortened) folder it is in. */
-function splitPath(path: string): { name: string; folder: string } {
-    const short = path.replace(WORKTREE_PREFIX, '');
-    const slash = short.lastIndexOf('/');
-
-    return slash === -1
-        ? { name: short, folder: '' }
-        : { name: short.slice(slash + 1), folder: short.slice(0, slash) };
+    return (
+        <p className="flex items-center gap-2 font-semibold">
+            <Icon aria-hidden="true" className="size-4" />
+            {CLIS.find((item) => item.value === cli)?.label ?? cli}
+        </p>
+    );
 }
 
 /** The files the AI edited or wrote in the turn (calls that carry a change), each once, in order. */
@@ -170,19 +171,28 @@ export const TurnSteps = memo(function TurnSteps({
     running,
     changed,
     choices,
+    projectName = '',
 }: {
     steps: Step[];
     running: boolean;
     /** What git says the turn changed; without it the files of the edit calls are listed. */
     changed?: ChangedFile[];
     choices: ChoiceHandlers;
+    /** Name of the project shown on the card of changed files. */
+    projectName?: string;
 }) {
     // * Once the turn ends, its last words are the result: shown below the timeline, not as a step of it.
     const last = steps[steps.length - 1];
     const result = !running && last?.kind === 'text' ? last.text : null;
-    const edited = running
+    const edited: ChangedFile[] = running
         ? []
-        : (changed?.map((file) => file.path) ?? editedFiles(steps));
+        : (changed ??
+          editedFiles(steps).map((path) => ({
+              path,
+              status: 'M',
+              added: null,
+              removed: null,
+          })));
     const timeline = result === null ? steps : steps.slice(0, -1);
 
     return (
@@ -190,7 +200,10 @@ export const TurnSteps = memo(function TurnSteps({
             {timeline.length > 0 && (
                 <ol className="relative min-w-0 space-y-3 pl-6 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-px before:bg-border">
                     {timeline.map((step, index) => {
-                        const dot = step.kind === 'text' ? 'text' : step.status;
+                        const dot =
+                            step.kind === 'text' || step.kind === 'speaker'
+                                ? 'text'
+                                : step.status;
 
                         return (
                             <li key={index} className="relative min-w-0">
@@ -201,7 +214,9 @@ export const TurnSteps = memo(function TurnSteps({
                                         DOT_CLASS[dot],
                                     )}
                                 />
-                                {step.kind === 'text' ? (
+                                {step.kind === 'speaker' ? (
+                                    <SpeakerLabel cli={step.cli} />
+                                ) : step.kind === 'text' ? (
                                     <div className="min-w-0 break-words [overflow-wrap:anywhere]">
                                         <MarkdownContent
                                             content={step.text}
@@ -229,31 +244,11 @@ export const TurnSteps = memo(function TurnSteps({
                 </ol>
             )}
             {edited.length > 0 && (
-                <div className="min-w-0 rounded-lg border bg-card">
-                    <p className="border-b px-3 py-1.5 text-xs text-muted-foreground">
-                        {t('turn_steps.edited_count_files', {
-                            count: edited.length,
-                        })}
-                    </p>
-                    <ul className="space-y-0.5 px-3 py-2 text-xs">
-                        {edited.map((path) => {
-                            const { name, folder } = splitPath(path);
-
-                            return (
-                                <li key={path} className="min-w-0 break-all">
-                                    <span className="font-mono font-semibold">
-                                        {name}
-                                    </span>
-                                    {folder !== '' && (
-                                        <span className="ml-2 font-mono text-muted-foreground">
-                                            {folder}
-                                        </span>
-                                    )}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
+                <ChangedFilesCard
+                    files={edited}
+                    steps={steps}
+                    projectName={projectName}
+                />
             )}
             {result !== null && (
                 <div className="min-w-0 break-words [overflow-wrap:anywhere]">

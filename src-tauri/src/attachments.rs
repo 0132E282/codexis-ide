@@ -1,5 +1,6 @@
 //! Images and files pasted into the chat box. A pasted item has no path on disk, so it is written into the app cache folder and the chat sends that path to the CLI as `@path`, like a picked file.
 
+use crate::permission::Sandbox;
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::fs;
@@ -8,6 +9,10 @@ use std::path::{Path, PathBuf};
 /// Largest pasted item.
 pub const MAX_BYTES: usize = 25 * 1024 * 1024;
 const MAX_NAME_CHARS: usize = 80;
+/// Bytes of the content hash in the file name (16 hex characters).
+const HASH_BYTES: usize = 8;
+/// Longest raw name looked at before it is reduced to safe characters.
+pub const MAX_RAW_NAME_BYTES: usize = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttachmentError {
@@ -20,9 +25,9 @@ impl AttachmentError {
     /// Fixed user-facing text.
     pub fn message(self) -> &'static str {
         match self {
-            Self::Empty => "Tệp trống.",
-            Self::TooLarge => "Tệp quá lớn (tối đa 25 MB).",
-            Self::SaveFailed => "Không lưu được tệp đính kèm.",
+            Self::Empty => "attachments.empty",
+            Self::TooLarge => "attachments.too_large",
+            Self::SaveFailed => "attachments.save_failed",
         }
     }
 }
@@ -51,12 +56,18 @@ pub fn save(dir: &Path, name: &str, data: &[u8]) -> Result<PathBuf, AttachmentEr
     let hash = Sha256::digest(data);
     let prefix: String = hash
         .iter()
-        .take(4)
+        .take(HASH_BYTES)
         .map(|byte| format!("{byte:02x}"))
         .collect();
     let path = dir.join(format!("{prefix}-{}", safe_name(name)));
 
     fs::create_dir_all(dir).map_err(|_| AttachmentError::SaveFailed)?;
+
+    // * A symlink planted at the target would send the write elsewhere: refuse it.
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| !metadata.is_file()) {
+        return Err(AttachmentError::SaveFailed);
+    }
+
     fs::write(&path, data).map_err(|_| AttachmentError::SaveFailed)?;
 
     Ok(path)
@@ -67,14 +78,10 @@ pub fn save(dir: &Path, name: &str, data: &[u8]) -> Result<PathBuf, AttachmentEr
 /// # Errors
 /// Fails when the path is outside `dir`, is not a file, is too large, or cannot be read.
 pub fn read(dir: &Path, path: &Path) -> Result<Vec<u8>, AttachmentError> {
-    let dir = dir
-        .canonicalize()
-        .map_err(|_| AttachmentError::SaveFailed)?;
-    let path = path
-        .canonicalize()
-        .map_err(|_| AttachmentError::SaveFailed)?;
+    let sandbox = Sandbox::open(dir).ok_or(AttachmentError::SaveFailed)?;
+    let path = sandbox.resolve(path).ok_or(AttachmentError::SaveFailed)?;
 
-    if !path.starts_with(&dir) || !path.is_file() {
+    if !path.is_file() {
         return Err(AttachmentError::SaveFailed);
     }
 
@@ -102,77 +109,26 @@ fn safe_name(name: &str) -> String {
         .take(MAX_NAME_CHARS)
         .collect();
     let cleaned = cleaned.trim_start_matches('.');
+    let stem = cleaned.split('.').next().unwrap_or_default();
 
-    if cleaned.is_empty() {
+    if cleaned.is_empty() || is_device_name(stem) {
         "file".to_string()
     } else {
         cleaned.to_string()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// Windows device names (`CON`, `NUL`, `COM1`...), which cannot be file names there.
+fn is_device_name(stem: &str) -> bool {
+    let upper = stem.to_ascii_uppercase();
 
-    #[test]
-    fn only_files_inside_the_folder_can_be_read_back() {
-        let dir = tempfile::tempdir().unwrap();
-        let outside = tempfile::tempdir().unwrap();
-        let path = save(dir.path(), "a.png", b"png").unwrap();
-        let other = outside.path().join("secret.txt");
-
-        fs::write(&other, b"secret").unwrap();
-
-        assert_eq!(read(dir.path(), &path).unwrap(), b"png");
-        assert!(read(dir.path(), &other).is_err());
-        assert!(read(dir.path(), &dir.path().join("../x")).is_err());
-    }
-
-    #[test]
-    fn saved_file_has_the_content_and_stays_inside_the_folder() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = save(dir.path(), "../../etc/passwd", b"hello").unwrap();
-
-        assert_eq!(path.parent().unwrap(), dir.path());
-        assert!(path
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .ends_with("-passwd"));
-        assert_eq!(fs::read(&path).unwrap(), b"hello");
-    }
-
-    #[test]
-    fn same_content_and_name_is_one_file() {
-        let dir = tempfile::tempdir().unwrap();
-
-        assert_eq!(
-            save(dir.path(), "image.png", b"x").unwrap(),
-            save(dir.path(), "image.png", b"x").unwrap()
-        );
-        assert_ne!(
-            save(dir.path(), "image.png", b"x").unwrap(),
-            save(dir.path(), "image.png", b"y").unwrap()
-        );
-    }
-
-    #[test]
-    fn odd_names_are_made_safe() {
-        assert_eq!(safe_name("Ảnh chụp màn hình.png"), "_nh_ch_p_m_n_h_nh.png");
-        assert_eq!(safe_name(".hidden"), "hidden");
-        assert_eq!(safe_name(""), "file");
-        assert_eq!(safe_name("a\\b\\c.txt"), "c.txt");
-        assert!(safe_name(&"x".repeat(500)).chars().count() <= MAX_NAME_CHARS);
-    }
-
-    #[test]
-    fn empty_and_oversized_data_are_refused() {
-        let dir = tempfile::tempdir().unwrap();
-
-        assert_eq!(save(dir.path(), "a", b""), Err(AttachmentError::Empty));
-        assert_eq!(
-            save(dir.path(), "a", &vec![0; MAX_BYTES + 1]),
-            Err(AttachmentError::TooLarge)
-        );
-    }
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || upper
+            .strip_prefix("COM")
+            .or_else(|| upper.strip_prefix("LPT"))
+            .is_some_and(|number| matches!(number.as_bytes(), [b'1'..=b'9']))
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/attachments.rs"]
+mod tests;

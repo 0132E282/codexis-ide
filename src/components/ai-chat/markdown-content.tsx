@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { ChoiceCard } from '@/components/ai-chat/choice-card';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { CodeBlock } from '@/components/ai-chat/code-block';
+import { MermaidBlock } from '@/components/ai-chat/mermaid-block';
 import { FileBlock } from '@/components/ai-chat/file-card';
 import { parseChoices } from '@/lib/choices-parser';
 import { parseDiff } from '@/lib/diff-parser';
@@ -237,6 +238,10 @@ function buildComponents(choiceHandlers?: ChoiceHandlers): Components {
                 if (parsed) {
                     return <ChoiceCard choices={parsed} {...choiceHandlers} />;
                 }
+            }
+
+            if (info?.language === 'mermaid') {
+                return <MermaidBlock code={info.code} />;
             }
 
             if (!info) {

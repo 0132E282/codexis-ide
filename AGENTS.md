@@ -9,6 +9,7 @@ Codexis IDE là IDE desktop độc lập (Tauri 2 + Rust): trình soạn code c�
 - Backend: `src-tauri/` (Tauri 2, `serde`, `serde_json`, `sha2`, `tauri-plugin-dialog`; dev-dependency `tempfile`). Identifier app: `ai.geteasy.rynox-ide`.
     - `src-tauri/src/lib.rs`: khai báo module và `invoke_handler`; `main.rs`: entry.
     - Module: `commands.rs` (Tauri command + `AppState`), `workspace.rs` (workspace sandbox), `projects.rs` (lưu danh sách project), `git.rs`, `vscode.rs` (mở VS Code).
+    - `src-tauri/database/{migrations,seeders}`: migration SQL đánh số (`0001_*.sql`, nhúng bằng `include_str!` qua `src/migrations.rs`) và thư mục seeder (logic seed ở `src/seeders.rs`).
 - Frontend: `src/` (React 19, Vite 8, Tailwind 4, Monaco, xterm, Radix, react-hook-form + zod, tiptap).
     - `src/lib/api.ts`: lớp gọi các Rust command — nơi duy nhất nên đổi khi đổi cách gọi backend.
     - Thư mục: `actions/`, `components/` (`ai-chat`, `file-manager`, `form`, `shell`, `tables`, `ui`), `contexts/`, `css/`, `hooks/`, `icons/`, `lib/`, `wayfinder/`; entry `main.tsx`, `app.tsx`.
@@ -36,6 +37,36 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - TypeScript/JSON theo `.prettierrc`: 4 dấu cách (JSON 2), nháy đơn, có dấu `;`, `trailingComma: all`, `printWidth` 80. ESLint cấu hình ở `eslint.config.js`.
 - Rust theo skill `rust-best-practices`; `cargo fmt`, clippy với `-D warnings`.
 - Không viết tắt tên; theo convention và định dạng sẵn có của file đang sửa.
+
+### Quy ước đặt tên
+
+Biến đặt camelCase; tên lệnh Tauri đặt snake_case (là tên hàm Rust, không chứa `-`); đường dẫn kiểu URL của API trong `src/lib/api.ts` đặt kebab-case, không dùng `_`; còn lại theo quy ước chính thức của từng ngôn ngữ.
+
+| Thành phần                                  | Quy ước                                           | Ví dụ                           |
+| ------------------------------------------- | ------------------------------------------------- | ------------------------------- |
+| TS: biến, hàm, tham số, prop, trường object | camelCase                                         | `runId`, `newName`              |
+| TS: component, type, interface, enum        | PascalCase                                        | `ContextPanel`, `ContextUsage`  |
+| TS: hằng cấp module                         | UPPER_SNAKE_CASE                                  | `READ_ONLY_MODE`                |
+| Rust: hàm, biến, module, tệp                | snake_case                                        | `from_usage`, `project_data.rs` |
+| Rust: struct, enum, trait                   | PascalCase                                        | `BackgroundTasks`, `TaskState`  |
+| Rust: hằng, static                          | SCREAMING_SNAKE_CASE                              | `SIDE_RUN_PREFIX`               |
+| TS: hook React                              | camelCase, tiền tố `use`                          | `useSideChat`                   |
+| Rust và TS: biến thể enum, type alias       | PascalCase                                        | `Pending`, `UserId`             |
+| Rust: macro                                 | snake_case                                        | `create_user!()`                |
+| Tệp TS/TSX (cả component và tiện ích)       | kebab-case (theo mã hiện có, 224/224 tệp)         | `side-chat-dock.tsx`            |
+| SQLite: bảng, cột                           | snake_case, tên bảng số nhiều                     | `chat_turns`, `updated_at`      |
+| Lệnh Tauri (`#[tauri::command]`)            | snake_case                                        | `agent_send`, `background_list` |
+| Đường dẫn URL của API trong `api.ts`        | kebab-case, không dùng `_`                        | `/ai-chat/local/commit-message` |
+| Tham số lệnh Tauri phía JS                  | camelCase (Tauri tự đổi sang snake_case của Rust) | `runId`, `expectedHash`         |
+| Trường JSON trong payload backend gửi lên   | camelCase (`#[serde(rename_all = "camelCase")]`)  | `cacheRead`, `startedAt`        |
+| Tên sự kiện Tauri                           | kebab-case                                        | `agent-event`, `terminal-data`  |
+| Khoá i18n                                   | snake_case có dấu chấm                            | `side_chat.title`               |
+
+- Tên tệp theo kebab-case của dự án, không theo tài liệu chung (component PascalCase, tiện ích camelCase): đổi tên tệp là việc riêng, cần được yêu cầu.
+- Biến boolean nêu trạng thái hoặc điều kiện (`isActive`, `hasPermission`, `canEdit`, `shouldRetry`); tập hợp dùng danh từ số nhiều (`orderItems`); hàm bắt đầu bằng động từ (`get`, `find`, `create`, `update`, `delete`, `validate`, `calculate`, `send`, `sync`); struct, class, trait dùng danh từ và nêu đúng trách nhiệm. Tránh tên chung chung như `data`, `item`, `value` khi có thể cụ thể hơn.
+- Giá trị enum serialize và dữ liệu đọc từ CLI ngoài giữ nguyên tên gốc (`in_progress`, `file_path`, `tool_use_id`): không đổi sang camelCase.
+- Không đổi tên lệnh Tauri hoặc trường payload khi chưa được yêu cầu: phải đổi Rust và `src/lib/api.ts` cùng lúc, và trường payload còn là dạng dữ liệu đã lưu trên đĩa.
+- Test Rust nằm ở `src-tauri/tests/unit/`, nối vào module bằng `#[cfg(test)] #[path = "../tests/unit/<tên>.rs"] mod tests;`; không viết test inline trong `src/`.
 
 ## Quy tắc cho agent
 
