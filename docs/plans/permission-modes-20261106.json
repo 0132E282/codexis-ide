@@ -78,7 +78,7 @@
     {
       "id": "TASK-M3",
       "title": "Kiểm UI bằng Playwright và chạy thật chế độ Bypass",
-      "status": "PARTIAL_UI_PASS_CHUA_CHAY_THAT",
+      "status": "PARTIAL_UI_FAIL_MENU_CHUA_CHAY_APP_THAT",
       "priority": "P1",
       "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
       "requirements": ["REQ-M1"],
@@ -95,7 +95,8 @@
       ],
       "approach": "Theo kế hoạch đã duyệt",
       "test": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
-      "doneWhen": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions"
+      "doneWhen": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
+      "note": "2026-11-08. Đạt: backend nhận bypassPermissions (cargo test agent 53 đạt); hộp thoại xác nhận (huỷ giữ chế độ, xác nhận mới đổi); lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo hello.txt (qua CLI, không qua app Tauri). Chưa đạt: menu Cài đặt (ProjectRow compact, cả hai nơi gọi) không hiện mô tả, không có Recommended cho Auto, phím 1–5 không chọn mục, dấu chọn là chấm không phải ✓ (các phần này chỉ có ở nhánh không-compact, không hiển thị). Chưa chạy: lượt Bypass qua app Tauri thật (không có GUI). Ảnh: .agents/storage/evidence/permission-modes-m3/."
     }
   ],
   "risks": [

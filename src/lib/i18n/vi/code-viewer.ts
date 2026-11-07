@@ -7,6 +7,8 @@ export const codeViewerVietnamese: Record<string, string> = {
     'changes_panel.changes_against_git': 'Thay đổi so với git',
     'changes_panel.count_files': '{count} tệp',
     'changes_panel.outgoing': 'Commit chưa push',
+    'code_viewer.resize_file_panel': 'Đổi chiều rộng bảng tệp',
+    'changes_panel.resize': 'Đổi chiều rộng bảng thay đổi',
     'changes_panel.push': 'Push {count} commit',
     'changes_panel.pushed': 'Đã push lên remote.',
     'changes_panel.could_not_push': 'Không push được.',

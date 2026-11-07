@@ -25,7 +25,6 @@ import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent, onRemoteSend } from '@/lib/ide';
 import { ideAuth } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
-import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
 import type { AgentCli, ChangedFile, Subagent } from '@/lib/ide';
 import { t, translateError } from '@/lib/i18n';
@@ -85,12 +84,11 @@ function changeSignature(file: ChangedFile): string {
     return `${file.status}:${file.added}:${file.removed}`;
 }
 
-/** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn, and moves a turn that hit a limit to the next AI. */
+/** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn. */
 export function useAgentTurns({
     root,
     projects,
     cli,
-    onCli,
     models,
     mode,
     agentTeam,
@@ -103,7 +101,6 @@ export function useAgentTurns({
     root: string;
     projects: { root: string; name: string }[];
     cli: AgentCli;
-    onCli: (cli: AgentCli) => void;
     models: Partial<Record<AgentCli, string>>;
     mode: string;
     agentTeam: boolean;
@@ -142,8 +139,6 @@ export function useAgentTurns({
     const chains = useRef(new Map<string, AgentCli[]>());
     // * The accounts of the same AI already tried for that message, by turn id.
     const accountChains = useRef(new Map<string, number[]>());
-    // * Set after each render: the agent events are listened to once, and the move to the next AI needs the latest state.
-    const failover = useRef<((finished: Turn) => void) | null>(null);
     // * Sub-agents of the running turns that are not done yet: only while there are some does a message sent meanwhile start its own turn.
     const working = useRef(new Set<string>());
     // * Messages sent while a turn runs without sub-agents: they wait and go as one message when the chat is free or a sub-agent starts. Each keeps the AI chosen when it was typed and the conversation it belongs to; the ref is read at once, the state is what the box shows.
@@ -153,7 +148,7 @@ export function useAgentTurns({
         queued.current = next;
         setWaiting(next);
     };
-    // * Set after each render (like `failover`): the events are listened to once, and sending needs the latest state.
+    // * Set after each render : the events are listened to once, and sending needs the latest state.
     const flushQueue = useRef<(() => void) | null>(null);
     // * Turns waiting (a few seconds at most) for the session id of the turn that is still starting: a `session` event wakes them.
     const sessionWaiters = useRef(new Set<() => void>());
@@ -375,11 +370,11 @@ export function useAgentTurns({
 
                     if (finished !== undefined) {
                         persist(finished);
-                        void recordUsage(finished).then((limited) =>
-                            limited
-                                ? failover.current?.(finished)
-                                : flushQueue.current?.(),
-                        );
+                        void recordUsage(finished).then((limited) => {
+                            if (!limited) {
+                                flushQueue.current?.();
+                            }
+                        });
                         drafts.current.delete(runId);
                     } else {
                         flushQueue.current?.();
@@ -591,7 +586,6 @@ export function useAgentTurns({
         return () => void stop.then((unlisten) => unlisten());
     }, [remoteSend]);
 
-    // * A turn that ended on a limit error is sent again to the next AI of the saved order; when none is left the turn says so.
     /** Ctrl+C in the box: stops the running turns; each finishes with what it had. */
     const stopTurns = useStableCallback(() => {
         for (const runId of runs.current.keys()) {
@@ -664,69 +658,6 @@ export function useAgentTurns({
                 );
             })
             .catch((caught) => console.error(errorText(caught)));
-    });
-
-    useEffect(() => {
-        failover.current = (finished) => {
-            const triedAccounts = accountChains.current.get(finished.id) ?? [];
-
-            void nextAccount(finished, triedAccounts)
-                .catch(() => null)
-                .then(async (account) => {
-                    if (account === null) {
-                        return false;
-                    }
-
-                    await ideProfiles.select(finished.cli, account);
-                    // * A saved conversation belongs to the account that started it, so the new account starts a fresh one.
-                    delete sessions.current[finished.cli];
-                    startTurn(
-                        finished.prompt,
-                        finished.cli,
-                        chains.current.get(finished.id) ?? [],
-                        false,
-                        [...triedAccounts, account],
-                    );
-
-                    return true;
-                })
-                .catch(() => false)
-                .then((switched) => (switched ? undefined : ideSettings.get()))
-                .then((settings) => {
-                    if (settings === undefined || !settings.fallbackEnabled) {
-                        return;
-                    }
-
-                    const tried = [
-                        ...(chains.current.get(finished.id) ?? []),
-                        finished.cli,
-                    ];
-                    const next = settings.fallbackOrder.find(
-                        (candidate) => !tried.includes(candidate),
-                    );
-
-                    if (next === undefined) {
-                        const exhausted = {
-                            ...finished,
-                            running: false,
-                            error: `${finished.error ?? ''}\n${t('use_agent_turns.all_ais_in_the')}`.trim(),
-                        };
-
-                        setTurns((current) =>
-                            current.map((turn) =>
-                                turn.id === finished.id ? exhausted : turn,
-                            ),
-                        );
-                        persist(exhausted);
-
-                        return;
-                    }
-
-                    onCli(next);
-                    startTurn(finished.prompt, next, tried, false);
-                })
-                .catch(() => undefined);
-        };
     });
 
     return {

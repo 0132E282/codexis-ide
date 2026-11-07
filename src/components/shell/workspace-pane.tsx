@@ -1,5 +1,4 @@
 import {
-    ClipboardList,
     Code2,
     LayoutGrid,
     ListChecks,
@@ -22,8 +21,6 @@ import { DockLayout } from '@/components/shell/dock-layout';
 import type { DockPanel } from '@/components/shell/dock-layout';
 import { PanelMenu } from '@/components/shell/panel-menu';
 import { PanelsMenu } from '@/components/shell/panels-menu';
-import { PlanDock } from '@/components/shell/plan-dock';
-import type { PlanData } from '@/components/shell/plan-pane';
 import { RailPopup } from '@/components/shell/rail-popup';
 import { SessionRail } from '@/components/shell/session-rail';
 import { SideChatDock } from '@/components/shell/side-chat-dock';
@@ -107,7 +104,6 @@ export function WorkspacePane({
     const [sideChatOpen, setSideChatOpen] = useState(false);
     const sideChat = useSideChat(pane.root);
     const sideChatPlacement = usePanelPlacement('side-chat', 'bottom');
-    const planPlacement = usePanelPlacement('plan', 'right');
     // * The session rail: open or not, the context usage the chat reports, a counter bumped when a turn was saved (the rail reads files, branch and pull request again) and the file the rail asked the viewer to open.
     const [railOpen, setRailOpen] = useState(false);
     // * Left of the editor moves the whole file area (tree and editor, with the Multichat under them) in front of the main chat.
@@ -160,19 +156,6 @@ export function WorkspacePane({
     const sideChatAlone =
         sideChatOpen && !state.editorVisible && state.chatCollapsed;
     const toggleSideChat = () => setSideChatOpen((open) => !open);
-    // * The plan of the open conversation (from the chat), and whether the Plan pane is open; a plan that arrives while it is closed leaves a dot on its button.
-    const [plan, setPlan] = useState<PlanData | null>(null);
-    const [planOpen, setPlanOpen] = useState(false);
-    const [planUnseen, setPlanUnseen] = useState(false);
-    const togglePlan = () => {
-        setPlanOpen((open) => !open);
-        setPlanUnseen(false);
-    };
-    const changePlan = (next: PlanData | null) => {
-        setPlan(next);
-        setPlanUnseen(next !== null && !planOpen);
-    };
-
     // * Cmd/Ctrl+; opens and closes the side chat of the open project.
     useEffect(() => {
         if (!active) {
@@ -211,7 +194,6 @@ export function WorkspacePane({
     // * One menu for the three dock panels; every row ticks with the real state and shares the toolbar toggles.
     const panelsMenu = (
         <PanelsMenu
-            unseen={planUnseen}
             items={[
                 {
                     id: 'side-chat',
@@ -234,13 +216,6 @@ export function WorkspacePane({
                     label: t('plans.title'),
                     open: plansOpen,
                     onToggle: onTogglePlans,
-                },
-                {
-                    id: 'plan',
-                    icon: ClipboardList,
-                    label: t('plan_pane.title'),
-                    open: planOpen,
-                    onToggle: togglePlan,
                 },
             ]}
         />
@@ -311,27 +286,16 @@ export function WorkspacePane({
                 />
             ),
         },
-        {
-            id: 'plan',
-            placement: planPlacement.placement,
-            open: planOpen,
-            size: 352,
-            content: (
-                <PlanDock
-                    plan={plan}
-                    open={planOpen}
-                    placementMenu={placementMenu(planPlacement)}
-                    onClose={() => setPlanOpen(false)}
-                />
-            ),
-        },
     ];
 
     return (
         <div className="relative flex min-h-0 min-w-0 flex-1">
             <DockLayout
                 panels={dockPanels}
-                trailingGrows={state.editorVisible}
+                // * The file and change columns have their own width (dragged) and the chat takes the rest; with the chat folded away they take it all.
+                trailingGrows={
+                    state.editorVisible && state.chatCollapsed && !filesHidden
+                }
                 trailingHidden={filesHidden}
                 trailingFirst={treePlacement.placement === 'left'}
                 trailing={
@@ -371,6 +335,8 @@ export function WorkspacePane({
                                         />
                                     </Button>
                                 </>
+                            ) : !state.editorVisible ? (
+                                panelsMenu
                             ) : undefined
                         }
                         onAttachFile={(path) =>
@@ -402,7 +368,7 @@ export function WorkspacePane({
                     root={pane.root}
                     acceptsRemote={active}
                     projects={projects}
-                    fill={!state.editorVisible || filesHidden}
+                    fill
                     headerStart={sidebarCollapsed ? sidebarToggle : null}
                     headerActions={
                         <>
@@ -483,6 +449,7 @@ export function WorkspacePane({
                             {panelsMenu}
                         </>
                     }
+                    canCollapse={!filesHidden}
                     onTooNarrow={() =>
                         onPatch(pane.key, { chatCollapsed: true })
                     }
@@ -513,7 +480,7 @@ export function WorkspacePane({
                     onSubagents={(subagents) =>
                         onPatch(pane.key, { subagents })
                     }
-                    onPlan={changePlan}
+                    onPlan={() => undefined}
                 />
             </DockLayout>
         </div>

@@ -2,6 +2,8 @@ import { t } from '@/lib/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FolderOpen } from 'lucide-react';
+import { ResizeHandle } from '@/components/ai-chat/resize-handle';
+import { cn } from '@/lib/utils';
 import { QuickOpen } from '@/components/ai-chat/quick-open';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
@@ -105,7 +107,7 @@ export function CodeViewer({
     onMarkedFiles?: (paths: string[]) => void;
 }) {
     const { copy: copyPath } = useCopyToClipboard();
-    const { fileWidth, treeWidth } = usePanelWidths(
+    const { fileWidth, changesWidth, treeWidth } = usePanelWidths(
         chatCollapsed,
         treePlacement.placement === 'left' ? 'trailing' : 'leading',
     );
@@ -245,6 +247,8 @@ export function CodeViewer({
 
     const showChanges = localRoot !== null && view === 'changes';
     const editorVisible = selected !== null || showChanges;
+    // * The chat is folded away: the open file or change list takes its room, so no empty gap is left.
+    const isFilling = chatCollapsed && editorVisible;
     // * No file open: the editor column stays as a small empty state; the chat keeps the rest of the width.
     const showEmpty = alwaysShowEditor && !editorVisible && treeClosed !== true;
 
@@ -438,13 +442,36 @@ export function CodeViewer({
                     aiSelection={aiSelection}
                     actions={fileActions}
                     onOpenFile={openPath}
+                    width={changesWidth}
+                    isFilling={isFilling}
+                    edge={
+                        treePlacement.placement === 'left'
+                            ? 'trailing'
+                            : 'leading'
+                    }
                 />
             )}
             {selected !== null && !showChanges && (
                 <section
                     aria-label={t('code_viewer.file_content')}
-                    className="@container relative hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden"
+                    style={isFilling ? undefined : { width: fileWidth.width }}
+                    className={cn(
+                        '@container relative hidden min-h-0 max-w-full min-w-0 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden',
+                        isFilling ? 'flex-1' : 'shrink-0',
+                        treePlacement.placement !== 'left' && 'border-l',
+                    )}
                 >
+                    {!isFilling && (
+                        <ResizeHandle
+                            label={t('code_viewer.resize_file_panel')}
+                            className={
+                                treePlacement.placement === 'left'
+                                    ? 'right-0 left-auto translate-x-0'
+                                    : 'translate-x-0'
+                            }
+                            {...fileWidth.handleProps}
+                        />
+                    )}
                     <FileTabs
                         tabs={tabs}
                         selected={selected}
@@ -572,7 +599,10 @@ export function CodeViewer({
             {showEmpty && (
                 <section
                     aria-label={t('code_viewer.file_content')}
-                    className="relative hidden min-h-0 w-96 max-w-full shrink-0 flex-col overflow-hidden lg:flex"
+                    className={cn(
+                        'relative hidden min-h-0 w-96 max-w-full shrink-0 flex-col overflow-hidden lg:flex',
+                        treePlacement.placement !== 'left' && 'border-l',
+                    )}
                 >
                     {(tabsStart !== undefined || tabsEnd !== undefined) && (
                         <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">

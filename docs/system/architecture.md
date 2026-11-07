@@ -15,7 +15,7 @@ Codexis IDE là IDE desktop độc lập (Tauri 2 + Rust, UI React 19): soạn c
 | UI        | React 19, Vite 8, Tailwind 4, Monaco, xterm, Radix | Hiển thị, soạn thảo, chat                 |
 | Cầu nối   | Tauri `invoke` / `emit`, lớp `src/lib/*.ts`        | Gọi lệnh Rust, nhận sự kiện               |
 | Lõi       | Rust (`src-tauri/src`)                             | Workspace, git, PTY, agent, lưu trữ       |
-| Lưu trữ   | SQLite (`codexis.db`, thư mục dữ liệu app)          | Dự án, chat, tài khoản, thống kê, cài đặt |
+| Lưu trữ   | SQLite (`codexis.db`, thư mục dữ liệu app)         | Dự án, chat, tài khoản, thống kê, cài đặt |
 | Bên ngoài | CLI `claude`, `codex`, `git`, VS Code              | Chạy AI, git, mở trong VS Code            |
 
 Toàn bộ hệ thống nhìn từ trên xuống, và tài liệu nào mô tả phần nào:
@@ -529,6 +529,12 @@ flowchart LR
 | P12 | Đọc cấu hình tool           | Người dùng: `tools_*`                                                                                      | đọc                               | `~/.claude*`, `.codex`, `.agents`, `.mcp.json` | Symlink phải nằm trong base; file ≤ 256 KB (`~/.claude.json` ≤ 8 MB); ≤ 500 mục mỗi thư mục                                                                                                                                                                                                                                  | `tools.link_outside\|<path>`, `tools.file_too_large\|<path>`, `tools.invalid_json\|<path>`                                                                   | `Base` + `Sandbox`                              |
 | P13 | Đính kèm                    | Người dùng: `attachment_save/read`                                                                         | ghi, đọc                          | Cache `attachments/`                           | Tên = 8 hex băm + tên an toàn (`[A-Za-z0-9._-]`); ≤ 25 MB; chỉ đọc file nằm trong thư mục cache                                                                                                                                                                                                                              | `attachments.empty`, `attachments.too_large`, `attachments.save_failed`                                                                                      | `Sandbox`                                       |
 | P14 | Format khi lưu              | Người dùng: `format_code`                                                                                  | chạy prettier                     | Text trong bộ nhớ                              | Chỉ phần mở rộng trong `EXTENSIONS`; đường dẫn chỉ gồm thành phần thường; lỗi → trả nguyên văn                                                                                                                                                                                                                               | `files.format_failed` (chỉ khi task chết)                                                                                                                    | không đổi                                       |
+
+Kiểm TASK-M3 (2026-11-08, ảnh ở `.agents/storage/evidence/permission-modes-m3/`, Playwright trên vite với `invoke` giả; thư mục tạm rỗng):
+
+- Đạt: backend nhận `bypassPermissions` (`cargo test agent`: 53 đạt); chọn Bypass hiện hộp thoại xác nhận, huỷ giữ nguyên chế độ, xác nhận mới đổi; một lượt `claude -p --permission-mode bypassPermissions` (cờ như `claude.rs`, không qua app Tauri) tạo được `hello.txt`, sự kiện khởi tạo báo `permissionMode: bypassPermissions`.
+- Chưa đạt (lỗi sản phẩm, chưa sửa): menu hiện dùng (cả hai nơi gọi `ProjectRow` đều `compact`) là menu Cài đặt, không có mô tả hiển thị (chỉ tooltip), không có nhãn Recommended, phím 1–5 không chọn mục, dấu chọn là chấm tròn không phải ✓. Nhánh có mô tả, Recommended, phím 1–5 chỉ nằm trong nhánh không-compact, hiện không hiển thị ở đâu.
+- Chưa chạy: lượt Bypass qua app Tauri thật (không có GUI trong phiên này).
 
 ### 6.3. Sơ đồ kiểm đường dẫn (P1, P2)
 

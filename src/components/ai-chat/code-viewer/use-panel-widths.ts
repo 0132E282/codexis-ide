@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
-import { CHAT_OPEN_WIDTH, SIDEBAR_WIDTH, TREE_MAX_WIDTH } from './constants';
+import {
+    CHANGES_PANEL_DEFAULT_WIDTH,
+    CHAT_OPEN_WIDTH,
+    FILE_PANEL_DEFAULT_WIDTH,
+    SIDEBAR_WIDTH,
+    TREE_MAX_WIDTH,
+} from './constants';
 
 /** * Widths of the file and tree columns. Either can be dragged out to the full width: the chat then shrinks, and closes once it is too narrow to use. */
 export function usePanelWidths(
@@ -9,9 +15,18 @@ export function usePanelWidths(
 ) {
     const fileWidth = useResizableWidth(
         'ai-chat.width.file',
-        704,
+        FILE_PANEL_DEFAULT_WIDTH,
         320,
         window.innerWidth,
+    );
+    const changesWidth = useResizableWidth(
+        'ai-chat.width.changes',
+        CHANGES_PANEL_DEFAULT_WIDTH,
+        320,
+        window.innerWidth,
+        'x',
+        // * With the tree on the left, the change list is beside the chat's side of the tree: dragged by its right edge like the tree.
+        treeEdge === 'trailing' ? 'trailing' : 'leading',
     );
     const treeWidth = useResizableWidth(
         'ai-chat.width.tree',
@@ -23,8 +38,8 @@ export function usePanelWidths(
         treeEdge,
     );
 
-    // * The chat was opened again: the columns give back the room it needs, or it would be squeezed shut at once.
-    const wasCollapsed = useRef(chatCollapsed);
+    // * Mounted with the chat open, or the chat was opened again: the columns (only in memory, the saved widths stay) give the chat the room it needs, or it would be squeezed shut at once and leave a gap.
+    const wasCollapsed = useRef(true);
 
     useEffect(() => {
         if (wasCollapsed.current && !chatCollapsed) {
@@ -32,10 +47,11 @@ export function usePanelWidths(
 
             treeWidth.shrinkTo(room - 320);
             fileWidth.shrinkTo(room - Math.min(treeWidth.width, room - 320));
+            changesWidth.shrinkTo(room - Math.min(treeWidth.width, room - 320));
         }
 
         wasCollapsed.current = chatCollapsed;
-    }, [chatCollapsed, fileWidth, treeWidth]);
+    }, [chatCollapsed, fileWidth, changesWidth, treeWidth]);
 
-    return { fileWidth, treeWidth };
+    return { fileWidth, changesWidth, treeWidth };
 }

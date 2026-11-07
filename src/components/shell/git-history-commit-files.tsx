@@ -104,10 +104,12 @@ export function CommitFiles({
     root,
     hash,
     indentClassName = 'pl-9',
+    className = '',
 }: {
     root: string;
     hash: string;
     indentClassName?: string;
+    className?: string;
 }) {
     const cacheKey = `${root}\n${hash}`;
     const [request, setRequest] = useState<Request<GitCommitFile[]>>(() => {
@@ -146,7 +148,9 @@ export function CommitFiles({
 
     if (request.state === 'loading') {
         return (
-            <p className={`py-1 ${indentClassName} text-xs text-muted-foreground`}>
+            <p
+                className={`py-1 ${indentClassName} text-xs text-muted-foreground`}
+            >
                 {t('history.files_loading')}
             </p>
         );
@@ -154,7 +158,10 @@ export function CommitFiles({
 
     if (request.state === 'failed') {
         return (
-            <p role="alert" className={`py-1 ${indentClassName} text-xs text-destructive`}>
+            <p
+                role="alert"
+                className={`py-1 ${indentClassName} text-xs text-destructive`}
+            >
                 {t('history.error', { message: request.message })}
             </p>
         );
@@ -162,14 +169,19 @@ export function CommitFiles({
 
     if (request.value.length === 0) {
         return (
-            <p className={`py-1 ${indentClassName} text-xs text-muted-foreground`}>
+            <p
+                className={`py-1 ${indentClassName} text-xs text-muted-foreground`}
+            >
                 {t('history.no_files')}
             </p>
         );
     }
 
     return (
-        <ul aria-label={t('history.files_label')} className={`pb-1 ${indentClassName}`}>
+        <ul
+            aria-label={t('history.files_label')}
+            className={`pb-1 ${indentClassName} ${className}`.trimEnd()}
+        >
             {request.value.map((file) => (
                 <li key={file.path}>
                     <button

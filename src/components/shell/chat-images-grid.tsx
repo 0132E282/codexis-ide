@@ -64,7 +64,7 @@ function ImageTile({
     return (
         <li
             className={cn(
-                'group relative size-28 overflow-hidden rounded-md border bg-muted',
+                'group relative aspect-square overflow-hidden rounded-md border bg-muted',
                 checked && 'ring-2 ring-primary',
             )}
         >
@@ -207,7 +207,7 @@ export function ChatImagesGrid({ root }: { root: string | undefined }) {
     };
 
     return (
-        <div className="flex flex-col gap-2 p-2 text-xs">
+        <div className="flex w-full min-w-0 flex-col gap-2 p-2 text-xs">
             {dialog}
             <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">
@@ -217,7 +217,7 @@ export function ChatImagesGrid({ root }: { root: string | undefined }) {
                     type="button"
                     variant="destructive"
                     size="sm"
-                    className="ml-auto"
+                    className="ml-auto shrink-0"
                     disabled={picked.size === 0}
                     onClick={() => void deletePicked()}
                 >
@@ -237,7 +237,7 @@ export function ChatImagesGrid({ root }: { root: string | undefined }) {
                     {t('data_pane.images_empty')}
                 </p>
             )}
-            <ul className="flex flex-wrap gap-2">
+            <ul className="grid w-full grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
                 {images.map((image) => (
                     <ImageTile
                         key={image.id}

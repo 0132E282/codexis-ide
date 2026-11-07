@@ -19,3 +19,7 @@ export const SIDEBAR_WIDTH = 256;
 // * The file tree can be dragged this wide at most.
 export const TREE_MAX_WIDTH = 640;
 export const CHAT_OPEN_WIDTH = 384;
+// * The open file's column starts this wide (dragged wider or narrower); the chat takes the rest.
+export const FILE_PANEL_DEFAULT_WIDTH = 600;
+// * The change list column starts this wide; the chat takes the rest, and the column is dragged wider or narrower.
+export const CHANGES_PANEL_DEFAULT_WIDTH = FILE_PANEL_DEFAULT_WIDTH;

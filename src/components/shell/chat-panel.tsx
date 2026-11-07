@@ -47,6 +47,7 @@ const clearNoProject = () => undefined;
 export function ChatPanel({
     root,
     fill,
+    canCollapse = !fill,
     newChat,
     openConversation,
     onConversation,
@@ -76,6 +77,8 @@ export function ChatPanel({
     /** Folder of the project this chat belongs to: every command of the panel is addressed to it, so it keeps working while another project is open. */
     root: string;
     fill: boolean;
+    /** The chat folds away once squeezed too narrow; by default only when it is not filling (its width is its own). */
+    canCollapse?: boolean;
     /** Counter bumped to start a new conversation (ignored while a turn is running). */
     newChat: number;
     /** Conversation picked in the sidebar (ignored while a turn is running). */
@@ -185,7 +188,7 @@ export function ChatPanel({
 
     useEffect(() => reportContext(context), [context, reportContext]);
 
-    useTooNarrow(section, !fill && !collapsed, onTooNarrow);
+    useTooNarrow(section, canCollapse && !collapsed, onTooNarrow);
 
     const {
         waiting,
@@ -200,7 +203,6 @@ export function ChatPanel({
         root,
         projects,
         cli,
-        onCli: setCli,
         models,
         mode,
         agentTeam,

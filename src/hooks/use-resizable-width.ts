@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, PointerEvent } from 'react';
+import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 
 const KEYBOARD_STEP = 16;
+
+// * While a handle is dragged: no text can be selected (the panels hold diffs, chats and editors) and the cursor stays the resize one, even over other elements.
+function lockPage(cursor: string) {
+    window.getSelection()?.removeAllRanges();
+    document.body.style.userSelect = 'none';
+    document.body.style.setProperty('-webkit-user-select', 'none');
+    document.body.style.cursor = cursor;
+}
+
+function unlockPage() {
+    document.body.style.userSelect = '';
+    document.body.style.removeProperty('-webkit-user-select');
+    document.body.style.cursor = '';
+}
 
 function readWidth(key: string, fallback: number, min: number, max: number) {
     try {
@@ -45,7 +59,7 @@ export function useResizableWidth(
     useEffect(
         () => () => {
             cancelAnimationFrame(frame.current ?? 0);
-            document.body.style.userSelect = '';
+            unlockPage();
         },
         [],
     );
@@ -72,6 +86,8 @@ export function useResizableWidth(
             return;
         }
 
+        // * A pointerdown default starts a text selection: stop it, and drop one that already exists.
+        event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         setDragging(true);
         drag.current = {
@@ -79,7 +95,7 @@ export function useResizableWidth(
             startWidth: latest.current,
         };
         // * No text selection while dragging.
-        document.body.style.userSelect = 'none';
+        lockPage(axis === 'x' ? 'col-resize' : 'row-resize');
     };
 
     const onPointerMove = (event: PointerEvent<HTMLElement>) => {
@@ -110,7 +126,7 @@ export function useResizableWidth(
 
         drag.current = null;
         setDragging(false);
-        document.body.style.userSelect = '';
+        unlockPage();
 
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
@@ -182,6 +198,9 @@ export function useResizableWidth(
             'data-dragging': dragging,
             tabIndex: 0,
             onPointerDown,
+            // * The mouse press must not select text or take focus (the handle is blurred after a drag anyway); keyboard focus still works.
+            onMouseDown: (event: MouseEvent<HTMLElement>) =>
+                event.preventDefault(),
             onPointerMove,
             onPointerUp: endDrag,
             onPointerCancel: endDrag,

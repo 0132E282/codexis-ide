@@ -70,7 +70,7 @@ export function OutgoingCommits({
 
     return (
         <div className="shrink-0 border-b text-sm">
-            <div className="flex items-center gap-1 px-3 py-1.5">
+            <div className="flex h-12 items-center gap-1 px-3">
                 <button
                     type="button"
                     aria-expanded={open}
@@ -108,7 +108,7 @@ export function OutgoingCommits({
                 </Button>
             </div>
             {open && (
-                <ul className="max-h-64 space-y-0.5 overflow-y-auto px-2 pb-2">
+                <ul className="max-h-72 min-h-0 min-w-0 space-y-0.5 overflow-y-auto px-2 pb-2">
                     {commits.map((commit) => (
                         <li key={commit.hash} className="min-w-0 text-xs">
                             <button
@@ -162,6 +162,7 @@ export function OutgoingCommits({
                                         root={root}
                                         hash={commit.hash}
                                         indentClassName="pl-1"
+                                        className="max-h-40 min-w-0 overflow-y-auto"
                                     />
                                 </div>
                             )}

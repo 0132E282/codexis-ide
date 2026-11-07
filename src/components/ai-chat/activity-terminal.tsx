@@ -4,7 +4,7 @@ import { Columns2, SquareTerminal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ide, onTerminalData, onTerminalExit } from '@/lib/ide';
 import { cn } from '@/lib/utils';
-import { t } from '@/lib/i18n';
+import { t, translateError } from '@/lib/i18n';
 
 const THEME = {
     dark: { background: '#09090b', foreground: '#e4e4e7' },
@@ -134,9 +134,17 @@ function ShellTerminal({
                 );
                 instance.focus();
             } catch (caught) {
-                instance.writeln(
-                    `\x1b[31m${caught instanceof Error ? caught.message : String(caught)}\x1b[0m`,
-                );
+                const message =
+                    caught instanceof Error ? caught.message : String(caught);
+
+                // * An already open terminal is not an error: keep using it.
+                if (message === translateError('terminal.exists')) {
+                    instance.focus();
+
+                    return;
+                }
+
+                instance.writeln(`\x1b[31m${message}\x1b[0m`);
             }
         });
 

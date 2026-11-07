@@ -8,6 +8,8 @@ export const codeViewerEnglish: Record<string, string> = {
     'changes_panel.changes_against_git': 'Changes against git',
     'changes_panel.count_files': '{count} files',
     'changes_panel.outgoing': 'Commits not pushed',
+    'code_viewer.resize_file_panel': 'Resize the file panel',
+    'changes_panel.resize': 'Resize the changes panel',
     'changes_panel.push': 'Push {count} commits',
     'changes_panel.pushed': 'Pushed to the remote.',
     'changes_panel.could_not_push': 'Could not push.',
