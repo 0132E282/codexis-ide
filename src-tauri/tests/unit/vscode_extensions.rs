@@ -397,3 +397,50 @@ fn versions_parse_and_order_like_semver() {
         assert!(Version::parse(bad).is_none(), "{bad:?}");
     }
 }
+
+#[test]
+fn one_scan_serves_several_extensions_without_reading_the_files_again() {
+    let home = TempDir::new().unwrap();
+    let root = ".vscode/extensions";
+
+    install(home.path(), root, "rust-lang.rust-analyzer-0.3.3105");
+    install(home.path(), root, "rust-lang.rust-analyzer-0.3.3000");
+    fs::write(
+        home.path().join(root).join(".obsolete"),
+        r#"{"rust-lang.rust-analyzer-0.3.3000":true}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.path().join(root).join("extensions.json"),
+        r#"[{"identifier":{"id":"Rust-Lang.Rust-Analyzer"},"relativeLocation":"rust-lang.rust-analyzer-0.3.3105"}]"#,
+    )
+    .unwrap();
+
+    let scan = ExtensionScan::default();
+    let first = find_in(&scan, home.path(), RUST_ANALYZER, MACHINE);
+
+    // * Everything on disk is gone: a second lookup in the same scan must be answered from memory.
+    fs::remove_file(home.path().join(root).join(".obsolete")).unwrap();
+    fs::remove_file(home.path().join(root).join("extensions.json")).unwrap();
+
+    let again = find_in(&scan, home.path(), RUST_ANALYZER, MACHINE);
+    let other = find_in(&scan, home.path(), "other.extension", MACHINE);
+
+    assert_eq!(
+        versions(&first),
+        vec![("0.3.3105", None), ("0.3.3000", Some(PROBLEM_OBSOLETE)),]
+    );
+    assert_eq!(first, again);
+    assert!(other.is_empty());
+    // * A new scan sees the change.
+    assert_eq!(
+        usable(&find_in(
+            &ExtensionScan::default(),
+            home.path(),
+            RUST_ANALYZER,
+            MACHINE
+        ))
+        .len(),
+        1
+    );
+}

@@ -102,9 +102,11 @@ impl StoredServer {
     }
 }
 
+/// The settings are read on every keystroke of an open file (the editor asks whether a server is on), so the last answer is kept in memory. `save` is the only writer of the row and drops the kept answer; every clone of the store shares both.
 #[derive(Clone)]
 pub struct LanguageServerConfigStore {
     connection: Arc<Mutex<Connection>>,
+    cache: Arc<Mutex<Option<Vec<ServerSetting>>>>,
 }
 
 impl LanguageServerConfigStore {
@@ -113,14 +115,24 @@ impl LanguageServerConfigStore {
 
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
+            cache: Arc::new(Mutex::new(None)),
         })
     }
 
     /// The setting of every known server, in catalog order; a server never saved, or a row that cannot be read, is off with the automatic source.
     pub fn get(&self) -> Vec<ServerSetting> {
-        let stored = self.read().unwrap_or_default();
+        // * Held while the row is read, so a `save` cannot slip in between the read and the store and leave an old answer behind.
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        catalog::SERVERS
+        if let Some(settings) = cache.as_ref() {
+            return settings.clone();
+        }
+
+        let (stored, trustworthy) = self.read();
+        let settings: Vec<ServerSetting> = catalog::SERVERS
             .iter()
             .map(|spec| {
                 stored
@@ -129,7 +141,14 @@ impl LanguageServerConfigStore {
                     .cloned()
                     .unwrap_or_else(|| ServerSetting::default_for(spec.id))
             })
-            .collect()
+            .collect();
+
+        // * A failed read (database busy or unreachable) is not kept: the next call asks again.
+        if trustworthy {
+            *cache = Some(settings.clone());
+        }
+
+        settings
     }
 
     /// The setting of one known server.
@@ -137,14 +156,21 @@ impl LanguageServerConfigStore {
         self.get().into_iter().find(|setting| setting.id == id)
     }
 
-    fn read(&self) -> Option<Vec<ServerSetting>> {
-        let connection = self.connection.lock().ok()?;
-        let json: String =
-            sql::find_by_key(&connection, "settings", &["value"], "key", KEY, |row| {
-                row.get(0)
-            })
-            .ok()??;
-        let stored: Stored = serde_json::from_str(&json).ok()?;
+    /// The saved settings, and whether the answer can be kept: false when the database could not be asked, true for a row that is absent or damaged (that stays so until the next save).
+    fn read(&self) -> (Vec<ServerSetting>, bool) {
+        let Ok(connection) = self.connection.lock() else {
+            return (Vec::new(), false);
+        };
+        let json = match sql::find_by_key(&connection, "settings", &["value"], "key", KEY, |row| {
+            row.get::<_, String>(0)
+        }) {
+            Ok(Some(json)) => json,
+            Ok(None) => return (Vec::new(), true),
+            Err(_) => return (Vec::new(), false),
+        };
+        let Ok(stored) = serde_json::from_str::<Stored>(&json) else {
+            return (Vec::new(), true);
+        };
         let mut settings: Vec<ServerSetting> = Vec::new();
 
         for setting in stored
@@ -157,7 +183,7 @@ impl LanguageServerConfigStore {
             }
         }
 
-        Some(settings)
+        (settings, true)
     }
 
     /// Saves the choice for one server and returns it as stored.
@@ -208,10 +234,17 @@ impl LanguageServerConfigStore {
                 .collect(),
         })
         .map_err(|_| ConfigError::SaveFailed)?;
+        // * Cache first, then connection: the same order `get` uses. The kept answer is dropped even when the write fails, so the next read tells the truth.
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let connection = self
             .connection
             .lock()
             .map_err(|_| ConfigError::SaveFailed)?;
+
+        *cache = None;
 
         sql::upsert(
             &connection,

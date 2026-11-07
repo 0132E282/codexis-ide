@@ -4,10 +4,11 @@
 
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// Largest file read from an extension folder.
 const MAX_FILE_BYTES: u64 = 1024 * 1024;
@@ -176,11 +177,70 @@ pub struct InstalledExtension {
     pub problem: Option<&'static str>,
 }
 
+/// What was read once from the four extension folders under a home: per folder its entries, `.obsolete` and `extensions.json`. Looking up several extensions in one scan (the settings tab lists every server) reads these files once instead of once per extension; a scan is a snapshot, so make a new one to see later changes.
+#[derive(Debug, Clone, Default)]
+pub struct ExtensionScan {
+    roots: OnceLock<Vec<ScannedRoot>>,
+}
+
+#[derive(Debug, Clone)]
+struct ScannedRoot {
+    origin: ExtensionOrigin,
+    /// Real path of the extensions folder.
+    path: PathBuf,
+    /// Names of the folders directly inside `path`.
+    entries: Vec<String>,
+    obsolete: HashSet<String>,
+    /// Folder names `extensions.json` lists, by lowercased extension id; `None` when the file cannot be read.
+    installed: Option<HashMap<String, HashSet<String>>>,
+}
+
+impl ExtensionScan {
+    /// The roots under `home`, read on first use.
+    fn roots(&self, home: &Path) -> &[ScannedRoot] {
+        self.roots.get_or_init(|| {
+            ExtensionOrigin::ALL
+                .into_iter()
+                .filter_map(|origin| scan_root(home, origin))
+                .collect()
+        })
+    }
+}
+
+fn scan_root(home: &Path, origin: ExtensionOrigin) -> Option<ScannedRoot> {
+    let path = fs::canonicalize(home.join(origin.extensions_folder())).ok()?;
+    let entries = fs::read_dir(&path)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    let obsolete = obsolete_folders(&path);
+    let installed = installed_folders(&path);
+
+    Some(ScannedRoot {
+        origin,
+        path,
+        entries,
+        obsolete,
+        installed,
+    })
+}
+
 /// What the extension `extension_id` looks like in every root under `home`: per root the newest usable version for `platform` (no `problem`), then the folders that were left out, with their `problem` (`obsolete`, `platform_mismatch`, `symlink_outside`, `bad_manifest`), newest first. Folders whose name is not `<id>-<version>[-<platform>]` are not the extension and not listed.
 pub fn find(home: &Path, extension_id: &str, platform: Option<&str>) -> Vec<InstalledExtension> {
-    ExtensionOrigin::ALL
-        .into_iter()
-        .flat_map(|origin| find_in_root(home, origin, extension_id, platform))
+    find_in(&ExtensionScan::default(), home, extension_id, platform)
+}
+
+/// Like [`find`], reading the folders only the first time `scan` is used.
+pub fn find_in(
+    scan: &ExtensionScan,
+    home: &Path,
+    extension_id: &str,
+    platform: Option<&str>,
+) -> Vec<InstalledExtension> {
+    scan.roots(home)
+        .iter()
+        .flat_map(|root| find_in_root(root, extension_id, platform))
         .collect()
 }
 
@@ -216,34 +276,26 @@ fn parse_folder_name(name: &str, extension_id: &str) -> Option<FolderName> {
 }
 
 fn find_in_root(
-    home: &Path,
-    origin: ExtensionOrigin,
+    root: &ScannedRoot,
     extension_id: &str,
     platform: Option<&str>,
 ) -> Vec<InstalledExtension> {
-    let Ok(root_path) = fs::canonicalize(home.join(origin.extensions_folder())) else {
-        return Vec::new();
-    };
-    let Ok(entries) = fs::read_dir(&root_path) else {
-        return Vec::new();
-    };
-    let obsolete = obsolete_folders(&root_path);
-    let installed = installed_folders(&root_path, extension_id);
+    let installed = root
+        .installed
+        .as_ref()
+        .and_then(|by_id| by_id.get(&extension_id.to_ascii_lowercase()));
     let mut usable: Vec<(Version, InstalledExtension)> = Vec::new();
     let mut rejected: Vec<(Version, InstalledExtension)> = Vec::new();
 
-    for entry in entries.flatten() {
-        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        let Some(parsed) = parse_folder_name(&name, extension_id) else {
+    for name in &root.entries {
+        let Some(parsed) = parse_folder_name(name, extension_id) else {
             continue;
         };
 
         // * What `extensions.json` does not list is not the installed version any more, whatever is left on disk.
-        let listed = installed.as_ref().is_none_or(|names| names.contains(&name));
+        let listed = installed.is_none_or(|names| names.contains(name));
         let for_this_machine = parsed.platform.is_none() || parsed.platform == platform;
-        let early_problem = if obsolete.contains(&name) || !listed {
+        let early_problem = if root.obsolete.contains(name) || !listed {
             Some(PROBLEM_OBSOLETE)
         } else if !for_this_machine {
             Some(PROBLEM_PLATFORM_MISMATCH)
@@ -254,13 +306,13 @@ fn find_in_root(
             extension_id: extension_id.to_string(),
             display_name: extension_id.to_string(),
             version: parsed.version_text,
-            origin,
-            folder: entry.path(),
+            origin: root.origin,
+            folder: root.path.join(name),
             problem: early_problem,
         };
 
         if early_problem.is_none() {
-            match inspect_folder(&root_path, &entry.path(), extension_id) {
+            match inspect_folder(&root.path, &extension.folder, extension_id) {
                 Ok((folder, display_name)) => {
                     extension.folder = folder;
                     extension.display_name = display_name;
@@ -352,27 +404,29 @@ fn obsolete_folders(root: &Path) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Folder names `extensions.json` lists for the extension, `None` when the file cannot be read or does not mention it (the folder names are used then).
-fn installed_folders(root: &Path, extension_id: &str) -> Option<HashSet<String>> {
+/// Folder names `extensions.json` lists, by lowercased extension id; `None` when the file cannot be read (the folder names are used then).
+fn installed_folders(root: &Path) -> Option<HashMap<String, HashSet<String>>> {
     let bytes = read_inside(root, "extensions.json")?;
     let entries: Vec<serde_json::Value> = serde_json::from_slice(&bytes).ok()?;
-    let names: HashSet<String> = entries
-        .iter()
-        .filter(|entry| {
-            entry
-                .pointer("/identifier/id")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|id| id.eq_ignore_ascii_case(extension_id))
-        })
-        .filter_map(|entry| {
-            entry
-                .get("relativeLocation")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
-        .collect();
+    let mut by_id: HashMap<String, HashSet<String>> = HashMap::new();
 
-    (!names.is_empty()).then_some(names)
+    for entry in &entries {
+        let id = entry
+            .pointer("/identifier/id")
+            .and_then(serde_json::Value::as_str);
+        let location = entry
+            .get("relativeLocation")
+            .and_then(serde_json::Value::as_str);
+
+        if let (Some(id), Some(location)) = (id, location) {
+            by_id
+                .entry(id.to_ascii_lowercase())
+                .or_default()
+                .insert(location.to_string());
+        }
+    }
+
+    Some(by_id)
 }
 
 #[cfg(test)]

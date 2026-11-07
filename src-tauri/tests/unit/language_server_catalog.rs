@@ -9,6 +9,7 @@ fn locator(home: &Path) -> Locator {
         platform: MACHINE,
         path_dirs: Vec::new(),
         fixed_dirs: Vec::new(),
+        extensions: Default::default(),
     }
 }
 
@@ -403,6 +404,11 @@ fn an_extension_is_preferred_over_path_but_path_is_the_fallback() {
 
     rust_extension(home.path(), ".vscode/extensions", "0.3.1", true);
 
+    // * The folders changed: a locator keeps what it read, so a new one looks again.
+    let place = Locator {
+        extensions: Default::default(),
+        ..place
+    };
     let found = candidates(rust_spec(), &place, false);
 
     assert_eq!(found.len(), 2);

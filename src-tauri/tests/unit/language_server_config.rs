@@ -5,8 +5,10 @@ fn store() -> LanguageServerConfigStore {
     LanguageServerConfigStore::new(db::in_memory()).expect("store")
 }
 
-/// Writes the raw row, as an older or damaged install might have left it.
+/// Writes the raw row, as an older or damaged install might have left it. It goes around `save`, so it drops the kept answer the way `save` does.
 fn write_row(store: &LanguageServerConfigStore, json: &str) {
+    *store.cache.lock().unwrap() = None;
+
     let connection = store.connection.lock().unwrap();
 
     sql::upsert(
@@ -189,4 +191,59 @@ fn the_chat_settings_row_is_not_affected() {
         serde_json::from_str::<settings::ChatSettings>(&chat_json).unwrap(),
         chat
     );
+}
+
+#[test]
+fn the_kept_answer_is_dropped_by_save_and_shared_by_clones() {
+    let store = store();
+    let clone = store.clone();
+
+    assert!(!store.setting("rust-analyzer").unwrap().enabled);
+    assert!(store.cache.lock().unwrap().is_some());
+
+    // * Behind the store's back the row now says "on": a kept answer is still served.
+    {
+        let connection = store.connection.lock().unwrap();
+
+        sql::upsert(
+            &connection,
+            "settings",
+            &["key"],
+            vec![
+                ("key", Value::from(KEY)),
+                (
+                    "value",
+                    Value::from(
+                        r#"{"servers":[{"id":"rust-analyzer","enabled":true,"source":"auto"}]}"#,
+                    ),
+                ),
+            ],
+        )
+        .unwrap();
+    }
+
+    assert!(!clone.setting("rust-analyzer").unwrap().enabled);
+
+    store
+        .save("intelephense", true, SourceChoice::Auto, None)
+        .unwrap();
+
+    assert!(store.cache.lock().unwrap().is_none());
+    // * After the save the row is read again, by the clone too.
+    assert!(clone.setting("intelephense").unwrap().enabled);
+}
+
+#[test]
+fn a_failed_read_is_not_kept() {
+    let store = store();
+
+    store
+        .connection
+        .lock()
+        .unwrap()
+        .execute_batch("DROP TABLE settings")
+        .unwrap();
+
+    assert!(store.get().iter().all(|setting| !setting.enabled));
+    assert!(store.cache.lock().unwrap().is_none());
 }

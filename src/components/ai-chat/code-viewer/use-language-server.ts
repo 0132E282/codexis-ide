@@ -124,9 +124,15 @@ export function useLanguageServer({
         };
 
         const listener = model.onDidChangeContent((event) => {
-            pending = event.isFlush
-                ? [{ range: null, text: model.getValue() }]
-                : [...pending, ...event.changes.map(toChange)];
+            if (event.isFlush) {
+                pending = [{ range: null, text: model.getValue() }];
+            } else {
+                // * Appended in place: a burst of keys is O(k), not a copy of the queue per key.
+                for (const change of event.changes) {
+                    pending.push(toChange(change));
+                }
+            }
+
             window.clearTimeout(timer);
             timer = window.setTimeout(() => void flush(), CHANGE_DELAY_MS);
         });

@@ -128,3 +128,22 @@ fn the_old_database_file_is_renamed_with_its_data_and_never_overwrites_a_new_one
     move_legacy_file(empty.path());
     assert!(!empty.path().join("codexis.db").exists());
 }
+
+#[test]
+fn conversation_index_exists_is_idempotent_and_used_by_the_lookups() {
+    let connection = in_memory();
+
+    connection
+        .execute_batch(migrations::ADD_CONVERSATION_INDEX_TO_CHAT_TURNS)
+        .unwrap();
+
+    let plan: String = connection
+        .query_row(
+            "EXPLAIN QUERY PLAN SELECT cli FROM chat_turns WHERE conversation = 1 ORDER BY position DESC LIMIT 1",
+            [],
+            |row| row.get(3),
+        )
+        .unwrap();
+
+    assert!(plan.contains("chat_turns_conversation_position"), "{plan}");
+}

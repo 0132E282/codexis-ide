@@ -9,6 +9,13 @@ import { t } from '@/lib/i18n';
 /** Whether the page runs inside the desktop app (not in a plain browser, where there is no backend to ask). */
 const hasBackend = () => '__TAURI_INTERNALS__' in window;
 
+/** Only a payload with a version to show is an update; anything else (an empty object, a list) is ignored. */
+const isUpdate = (found: unknown): found is AvailableUpdate =>
+    typeof found === 'object' &&
+    found !== null &&
+    typeof (found as { version?: unknown }).version === 'string' &&
+    (found as { version: string }).version !== '';
+
 /** A small notice in the corner when a newer version is published: "Update" installs it and restarts the app. */
 export function UpdateBanner() {
     const [update, setUpdate] = useState<AvailableUpdate | null>(null);
@@ -29,12 +36,14 @@ export function UpdateBanner() {
 
         void ideUpdate
             .pending()
-            .then((found) => active && found !== null && setUpdate(found))
+            .then((found) => active && isUpdate(found) && setUpdate(found))
             .catch(() => undefined);
         void ideUpdate
             .onAvailable((found) => {
-                setUpdate(found);
-                setDismissed(false);
+                if (isUpdate(found)) {
+                    setUpdate(found);
+                    setDismissed(false);
+                }
             })
             .then(keep);
         void ideUpdate

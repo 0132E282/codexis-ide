@@ -1,31 +1,20 @@
-import {
-    ChartColumn,
-    EllipsisVertical,
-    Folder,
-    LayoutGrid,
-    X,
-    Github,
-    FolderOpen,
-    Plus,
-    Settings,
-    Trash2,
-} from 'lucide-react';
+import { Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import {
     Fragment,
     lazy,
     Suspense,
     useEffect,
+    useMemo,
     useState,
     type ReactNode,
 } from 'react';
-import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
-import { Button } from '@/components/ui/button';
+import { SidebarConversationItem } from '@/components/shell/sidebar-conversation-item';
+import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+    SidebarGridGroups,
+    buildGridGroups,
+} from '@/components/shell/sidebar-grid-groups';
+import { Button } from '@/components/ui/button';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import Field from '@/components/form/field';
 import { useAuthStatus } from '@/hooks/use-auth-status';
@@ -45,6 +34,8 @@ const loadNewProjectDialog = () =>
     }));
 const NewProjectDialog = lazy(loadNewProjectDialog);
 
+const NO_SUBAGENTS: Subagent[] = [];
+
 /** Lower case without accents, so "du an" finds "Dự án". */
 const plain = (text: string) =>
     text
@@ -52,32 +43,6 @@ const plain = (text: string) =>
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/đ/g, 'd')
         .toLowerCase();
-
-/** The GitHub avatar of the signed-in account; the GitHub mark while the account is unknown or the picture cannot be loaded. */
-function GithubAvatar({ account }: { account: string | null }) {
-    const [failed, setFailed] = useState(false);
-
-    if (account === null || failed) {
-        return (
-            <span
-                aria-hidden="true"
-                className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
-            >
-                <Github className="size-4" />
-            </span>
-        );
-    }
-
-    return (
-        <img
-            src={`https://github.com/${encodeURIComponent(account)}.png?size=64`}
-            alt=""
-            aria-hidden="true"
-            onError={() => setFailed(true)}
-            className="size-7 shrink-0 rounded-full object-cover"
-        />
-    );
-}
 
 /** A line with a label in the middle, between two sections of the sidebar (the group and the projects). */
 function SectionDivider({ label }: { label: string }) {
@@ -194,40 +159,16 @@ export function Sidebar({
             : startupName !== null
               ? [{ id: null, name: startupName }]
               : [];
-    // * The groups, by number; the group new chats go to is always listed (it may still be empty). Each lists its projects in the order they first appear, with the titles of their chats: the sidebar shows these, not every chat.
-    const groupNumbers = [
-        ...new Set([...grid.map((member) => member.group), targetGroup]),
-    ].sort((first, second) => first - second);
-    const gridGroups = groupNumbers.map((group) => ({
-        group,
-        count: grid.filter((member) => member.group === group).length,
-        projects: grid
-            .filter((member) => member.group === group)
-            .reduce<{ root: string; titles: string[] }[]>((entries, member) => {
-                const known = entries.find(
-                    (entry) => entry.root === member.workspace,
-                );
-
-                return known === undefined
-                    ? [
-                          ...entries,
-                          { root: member.workspace, titles: [member.title] },
-                      ]
-                    : entries.map((entry) =>
-                          entry === known
-                              ? {
-                                    ...entry,
-                                    titles: [...entry.titles, member.title],
-                                }
-                              : entry,
-                      );
-            }, []),
-    }));
-    // * Name of the project a grid chat belongs to: the saved project with that folder, else the folder's own name.
-    const projectName = (workspace: string) =>
-        projects.find((project) => project.folders[0] === workspace)?.name ??
-        workspace.split('/').filter(Boolean).pop() ??
-        workspace;
+    // * The groups of the chat grid and the chats in it, worked out again only when the grid changes.
+    const gridGroups = useMemo(
+        () => buildGridGroups(grid, targetGroup),
+        [grid, targetGroup],
+    );
+    const gridConversations = useMemo(
+        () => new Set(grid.map((member) => member.conversation)),
+        [grid],
+    );
+    const nextGroup = Math.max(...gridGroups.map((entry) => entry.group)) + 1;
     const visible = rows.filter((row) => plain(row.name).includes(needle));
 
     const newProjectButton = (
@@ -302,150 +243,17 @@ export function Sidebar({
                     <SectionDivider label={t('sidebar.group_section')} />
                 )}
                 {grid.length > 0 && (
-                    <div data-testid="sidebar-chat-grid" className="mb-1">
-                        {gridGroups.map((entry, index) => (
-                            <div
-                                key={entry.group}
-                                data-testid="sidebar-chat-group"
-                                className={cn(
-                                    // * One background holds the whole group.
-                                    'mb-1.5 rounded-md bg-accent/30 p-1',
-                                    entry.group === openGroup &&
-                                        'bg-accent/60 ring-1 ring-primary/40',
-                                )}
-                            >
-                                <button
-                                    type="button"
-                                    aria-pressed={entry.group === openGroup}
-                                    disabled={entry.count < 2}
-                                    onClick={() => onOpenGroup(entry.group)}
-                                    className="flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-xs font-medium hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:hover:bg-transparent"
-                                >
-                                    <LayoutGrid
-                                        aria-hidden="true"
-                                        className="size-3.5 shrink-0"
-                                    />
-                                    <span className="min-w-0 flex-1 truncate">
-                                        {t('sidebar.group_section')} {index + 1}
-                                    </span>
-                                    {entry.group === targetGroup && (
-                                        <span
-                                            title={t('sidebar.group_target')}
-                                            className="size-1.5 shrink-0 rounded-full bg-primary"
-                                        />
-                                    )}
-                                    <span className="shrink-0 text-muted-foreground tabular-nums">
-                                        {entry.count}/{maxGrid}
-                                    </span>
-                                </button>
-                                <ul className="flex flex-col gap-0.5">
-                                    {entry.projects.map((project, position) => (
-                                        <li
-                                            key={project.root}
-                                            className={cn(
-                                                'group/member relative',
-                                                // * The line down the left side links the projects of the group: one tick into each row, cut to fit the first, middle and last.
-                                                'before:absolute before:top-3.5 before:left-1 before:h-px before:w-1.5 before:bg-primary/60 after:absolute after:left-1 after:w-px after:bg-primary/60',
-                                                entry.projects.length === 1 &&
-                                                    'after:hidden',
-                                                position === 0 &&
-                                                    'after:top-3.5 after:-bottom-0.5',
-                                                position > 0 &&
-                                                    position <
-                                                        entry.projects.length -
-                                                            1 &&
-                                                    'after:-top-0.5 after:-bottom-0.5',
-                                                position > 0 &&
-                                                    position ===
-                                                        entry.projects.length -
-                                                            1 &&
-                                                    'after:-top-0.5 after:bottom-[calc(100%-0.875rem)]',
-                                            )}
-                                        >
-                                            <button
-                                                type="button"
-                                                disabled={entry.count < 2}
-                                                onClick={() =>
-                                                    onOpenGroup(entry.group)
-                                                }
-                                                className="flex w-full items-center gap-2 rounded-sm py-1.5 pr-8 pl-2.5 text-left text-sm text-foreground hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:hover:bg-transparent"
-                                            >
-                                                <Folder
-                                                    aria-hidden="true"
-                                                    className="size-4 shrink-0"
-                                                />
-                                                <span
-                                                    title={projectName(
-                                                        project.root,
-                                                    )}
-                                                    className="min-w-0 flex-1 truncate"
-                                                >
-                                                    {projectName(project.root)}
-                                                </span>
-                                                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                                    {project.titles.length}
-                                                </span>
-                                            </button>
-                                            <ul className="mb-1 flex flex-col pr-2 pl-9">
-                                                {project.titles.map(
-                                                    (title, titleIndex) => (
-                                                        <li
-                                                            key={titleIndex}
-                                                            title={
-                                                                title ||
-                                                                t(
-                                                                    'sidebar.conversation',
-                                                                )
-                                                            }
-                                                            className="truncate py-0.5 text-xs text-muted-foreground"
-                                                        >
-                                                            {title ||
-                                                                t(
-                                                                    'sidebar.conversation',
-                                                                )}
-                                                        </li>
-                                                    ),
-                                                )}
-                                            </ul>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon-xs"
-                                                aria-label={t(
-                                                    'sidebar.remove_project_from_grid',
-                                                )}
-                                                title={t(
-                                                    'sidebar.remove_project_from_grid',
-                                                )}
-                                                onClick={() =>
-                                                    onRemoveGridProject(
-                                                        project.root,
-                                                        entry.group,
-                                                    )
-                                                }
-                                                className="absolute top-3.5 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/member:opacity-100 group-hover/member:opacity-100 hover:text-destructive focus-visible:opacity-100"
-                                            >
-                                                <X aria-hidden="true" />
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ))}
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={onNewGroup}
-                            disabled={grid.every(
-                                (member) => member.group !== targetGroup,
-                            )}
-                            className="w-full justify-start gap-1.5 text-muted-foreground"
-                        >
-                            <Plus aria-hidden="true" />
-                            {t('sidebar.new_group')}
-                        </Button>
-                    </div>
+                    <SidebarGridGroups
+                        grid={grid}
+                        gridGroups={gridGroups}
+                        projects={projects}
+                        openGroup={openGroup}
+                        targetGroup={targetGroup}
+                        maxGrid={maxGrid}
+                        onOpenGroup={onOpenGroup}
+                        onNewGroup={onNewGroup}
+                        onRemoveGridProject={onRemoveGridProject}
+                    />
                 )}
                 {grid.length > 0 && visible.length > 0 && (
                     <SectionDivider label={t('common.projects')} />
@@ -528,306 +336,49 @@ export function Sidebar({
                             )}
                             {active && (
                                 <ul className="ml-5 flex flex-col gap-0.5">
-                                    {(() => {
-                                        const inGrid = (id: number) =>
-                                            grid.some(
-                                                (member) =>
-                                                    member.conversation === id,
-                                            );
-                                        const renderConversation = (
-                                            conversation: (typeof conversations)[number],
-                                        ) => (
-                                            <li
-                                                key={conversation.id}
-                                                className="group/chat relative"
-                                            >
-                                                <button
-                                                    type="button"
-                                                    aria-current={
-                                                        conversation.id ===
-                                                        currentConversation
-                                                    }
-                                                    title={conversation.title}
-                                                    onClick={() =>
-                                                        onOpenConversation(
-                                                            conversation.id,
-                                                        )
-                                                    }
-                                                    className={cn(
-                                                        'flex w-full items-center rounded-sm py-1.5 pr-14 pl-2.5 text-left text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                                        conversation.id ===
-                                                            currentConversation &&
-                                                            'bg-accent/60 text-foreground',
-                                                    )}
-                                                >
-                                                    <span className="truncate">
-                                                        {conversation.title ||
-                                                            t(
-                                                                'sidebar.conversation',
-                                                            )}
-                                                    </span>
-                                                </button>
-                                                {inGrid(conversation.id) ? (
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon-xs"
-                                                        aria-label={t(
-                                                            'sidebar.remove_from_grid',
-                                                        )}
-                                                        title={t(
-                                                            'sidebar.remove_from_grid',
-                                                        )}
-                                                        aria-pressed
-                                                        onClick={() => {
-                                                            if (
-                                                                activeRoot !==
-                                                                null
-                                                            ) {
-                                                                onToggleGrid(
-                                                                    activeRoot,
-                                                                    conversation.id,
-                                                                    targetGroup,
-                                                                );
-                                                            }
-                                                        }}
-                                                        className="absolute top-1/2 right-7 -translate-y-1/2 text-foreground opacity-100"
-                                                    >
-                                                        <LayoutGrid aria-hidden="true" />
-                                                    </Button>
-                                                ) : (
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger
-                                                            asChild
-                                                        >
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon-xs"
-                                                                aria-label={t(
-                                                                    'sidebar.add_to_grid',
-                                                                )}
-                                                                title={t(
-                                                                    'sidebar.add_to_grid',
-                                                                )}
-                                                                disabled={
-                                                                    activeRoot ===
-                                                                    null
-                                                                }
-                                                                className="absolute top-1/2 right-7 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-                                                            >
-                                                                <LayoutGrid aria-hidden="true" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            {gridGroups.map(
-                                                                (
-                                                                    entry,
-                                                                    index,
-                                                                ) => (
-                                                                    <DropdownMenuItem
-                                                                        key={
-                                                                            entry.group
-                                                                        }
-                                                                        disabled={
-                                                                            entry.count >=
-                                                                            maxGrid
-                                                                        }
-                                                                        onSelect={() => {
-                                                                            if (
-                                                                                activeRoot !==
-                                                                                null
-                                                                            ) {
-                                                                                onToggleGrid(
-                                                                                    activeRoot,
-                                                                                    conversation.id,
-                                                                                    entry.group,
-                                                                                );
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        <span className="flex-1">
-                                                                            {t(
-                                                                                'sidebar.group_section',
-                                                                            )}{' '}
-                                                                            {index +
-                                                                                1}
-                                                                        </span>
-                                                                        <span className="text-xs text-muted-foreground tabular-nums">
-                                                                            {
-                                                                                entry.count
-                                                                            }
-                                                                            /
-                                                                            {
-                                                                                maxGrid
-                                                                            }
-                                                                        </span>
-                                                                    </DropdownMenuItem>
-                                                                ),
-                                                            )}
-                                                            <DropdownMenuItem
-                                                                onSelect={() => {
-                                                                    if (
-                                                                        activeRoot !==
-                                                                        null
-                                                                    ) {
-                                                                        onToggleGrid(
-                                                                            activeRoot,
-                                                                            conversation.id,
-                                                                            Math.max(
-                                                                                ...groupNumbers,
-                                                                            ) +
-                                                                                1,
-                                                                        );
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Plus aria-hidden="true" />
-                                                                {t(
-                                                                    'sidebar.new_group',
-                                                                )}
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                )}
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon-xs"
-                                                    aria-label={t(
-                                                        'sidebar.delete_conversation',
-                                                    )}
-                                                    title={t(
-                                                        'sidebar.delete_conversation',
-                                                    )}
-                                                    onClick={() =>
-                                                        onDeleteConversation(
-                                                            conversation.id,
-                                                        )
-                                                    }
-                                                    className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
-                                                >
-                                                    <Trash2 aria-hidden="true" />
-                                                </Button>
-                                                {conversation.id ===
-                                                    currentConversation &&
-                                                    subagents.length > 0 && (
-                                                        <ul
-                                                            aria-label={t(
-                                                                'sidebar.agent_is_working',
-                                                            )}
-                                                            className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
-                                                        >
-                                                            {subagents.map(
-                                                                (agent) => (
-                                                                    <li
-                                                                        key={
-                                                                            agent.id
-                                                                        }
-                                                                    >
-                                                                        <button
-                                                                            type="button"
-                                                                            title={
-                                                                                agent.label
-                                                                            }
-                                                                            onClick={() =>
-                                                                                onOpenSubagent(
-                                                                                    agent.id,
-                                                                                )
-                                                                            }
-                                                                            className="flex w-full items-center gap-2 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                                        >
-                                                                            <span
-                                                                                aria-hidden="true"
-                                                                                className={cn(
-                                                                                    'size-1.5 shrink-0 rounded-full',
-                                                                                    agent.done
-                                                                                        ? 'bg-muted-foreground/50'
-                                                                                        : 'animate-pulse bg-primary',
-                                                                                )}
-                                                                            />
-                                                                            <span className="truncate">
-                                                                                {
-                                                                                    agent.label
-                                                                                }
-                                                                            </span>
-                                                                        </button>
-                                                                    </li>
-                                                                ),
-                                                            )}
-                                                        </ul>
-                                                    )}
-                                            </li>
-                                        );
-                                        return conversations.map(
-                                            (conversation) =>
-                                                renderConversation(
-                                                    conversation,
-                                                ),
-                                        );
-                                    })()}
+                                    {conversations.map((conversation) => (
+                                        <SidebarConversationItem
+                                            key={conversation.id}
+                                            conversation={conversation}
+                                            isCurrent={
+                                                conversation.id ===
+                                                currentConversation
+                                            }
+                                            inGrid={gridConversations.has(
+                                                conversation.id,
+                                            )}
+                                            activeRoot={activeRoot}
+                                            targetGroup={targetGroup}
+                                            maxGrid={maxGrid}
+                                            gridGroups={gridGroups}
+                                            nextGroup={nextGroup}
+                                            subagents={
+                                                conversation.id ===
+                                                currentConversation
+                                                    ? subagents
+                                                    : NO_SUBAGENTS
+                                            }
+                                            onOpenConversation={
+                                                onOpenConversation
+                                            }
+                                            onOpenSubagent={onOpenSubagent}
+                                            onDeleteConversation={
+                                                onDeleteConversation
+                                            }
+                                            onToggleGrid={onToggleGrid}
+                                        />
+                                    ))}
                                 </ul>
                             )}
                         </Fragment>
                     );
                 })}
             </nav>
-            <div className="flex items-center gap-2 border-t px-3 py-2.5">
-                {github?.loggedIn ? (
-                    // * Signed in with GitHub: the footer shows the account's GitHub avatar.
-                    <GithubAvatar account={github.account} />
-                ) : (
-                    <AssistantAvatar />
-                )}
-                <p className="min-w-0 flex-1 truncate text-sm">
-                    {github?.loggedIn
-                        ? (github.account ?? t('accounts.signed_in'))
-                        : 'Codexis'}
-                </p>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('common.add')}
-                            className="text-muted-foreground"
-                        >
-                            <EllipsisVertical aria-hidden="true" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" side="top">
-                        {github?.loggedIn ? (
-                            <DropdownMenuItem disabled>
-                                <Github aria-hidden="true" />
-                                {t('sidebar.github_signed_in', {
-                                    account:
-                                        github.account ??
-                                        t('accounts.signed_in'),
-                                })}
-                            </DropdownMenuItem>
-                        ) : (
-                            // * The sign-in itself is the "Kết nối" tab: GitHub's own `gh` login, which shows the one-time code there.
-                            <DropdownMenuItem
-                                onSelect={() => onOpenSettings('connect')}
-                            >
-                                <Github aria-hidden="true" />
-                                {t('sidebar.sign_in_with_github')}
-                            </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                            onSelect={() => onOpenSettings('character')}
-                        >
-                            <Settings aria-hidden="true" />
-                            {t('common.chat_settings')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onOpenUsage}>
-                            <ChartColumn aria-hidden="true" />
-                            {t('sidebar.statistics')}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+            <SidebarFooter
+                github={github}
+                onOpenSettings={onOpenSettings}
+                onOpenUsage={onOpenUsage}
+            />
         </aside>
     );
 }

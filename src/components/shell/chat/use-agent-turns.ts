@@ -72,12 +72,12 @@ const nextAccount = async (
     return null;
 };
 
-/** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn, and moves a turn that hit a limit to the next AI. */
 /** What identifies the state of a changed file: it differs when the file changed again. */
 function changeSignature(file: ChangedFile): string {
     return `${file.status}:${file.added}:${file.removed}`;
 }
 
+/** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn, and moves a turn that hit a limit to the next AI. */
 export function useAgentTurns({
     root,
     projects,

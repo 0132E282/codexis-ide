@@ -27,6 +27,9 @@ pub const CREATE_CHAT_GRID_TABLE: &str =
 pub const CREATE_ACTIVITY_TABLES: &str =
     include_str!("../database/migrations/0011_create_activity_tables.sql");
 
+pub const ADD_CONVERSATION_INDEX_TO_CHAT_TURNS: &str =
+    include_str!("../database/migrations/0012_add_conversation_index_to_chat_turns.sql");
+
 /// Runs the `ALTER TABLE` in `migration` when a file made by an older version lacks `column` in `table`.
 ///
 /// `table` and `column` are fixed names written in this crate, never user input.

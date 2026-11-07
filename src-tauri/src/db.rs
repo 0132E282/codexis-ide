@@ -83,6 +83,7 @@ fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     add_archived_column(&connection)?;
     add_conversation_column(&connection)?;
     add_steps_column(&connection)?;
+    connection.execute_batch(migrations::ADD_CONVERSATION_INDEX_TO_CHAT_TURNS)?;
     group_old_turns(&connection)?;
 
     // The file may hold secrets: owner only.
@@ -226,6 +227,9 @@ pub fn in_memory() -> Connection {
     add_archived_column(&connection).expect("schema");
     add_conversation_column(&connection).expect("schema");
     add_steps_column(&connection).expect("schema");
+    connection
+        .execute_batch(migrations::ADD_CONVERSATION_INDEX_TO_CHAT_TURNS)
+        .expect("schema");
 
     connection
 }

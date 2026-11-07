@@ -225,6 +225,8 @@ pub struct Locator {
     pub path_dirs: Vec<PathBuf>,
     /// Install folders outside `$HOME` searched after `PATH` (a desktop app does not inherit the shell's `PATH`).
     pub fixed_dirs: Vec<PathBuf>,
+    /// What was read from the editors' extension folders; shared by the servers listed with this locator, so a listing reads them once.
+    pub extensions: vscode_extensions::ExtensionScan,
 }
 
 impl Locator {
@@ -241,6 +243,7 @@ impl Locator {
                 PathBuf::from("/opt/homebrew/bin"),
                 PathBuf::from("/usr/local/bin"),
             ],
+            extensions: vscode_extensions::ExtensionScan::default(),
         })
     }
 
@@ -379,9 +382,12 @@ pub fn candidates(spec: &ServerSpec, locator: &Locator, probe: bool) -> Vec<Cand
     let mut found = Vec::new();
 
     if let Some(server) = &spec.extension {
-        for extension in
-            vscode_extensions::find(&locator.home, server.extension_id, locator.platform)
-        {
+        for extension in vscode_extensions::find_in(
+            &locator.extensions,
+            &locator.home,
+            server.extension_id,
+            locator.platform,
+        ) {
             let base = Candidate {
                 origin: CandidateOrigin::from_extension(extension.origin),
                 label: extension.display_name.clone(),

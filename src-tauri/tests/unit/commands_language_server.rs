@@ -9,6 +9,7 @@ fn locator(home: &Path) -> Locator {
         platform: Some("darwin-arm64"),
         path_dirs: Vec::new(),
         fixed_dirs: Vec::new(),
+        extensions: Default::default(),
     }
 }
 
