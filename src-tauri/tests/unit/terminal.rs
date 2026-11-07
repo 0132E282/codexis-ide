@@ -13,48 +13,49 @@ fn complete_text_holds_back_a_cut_character() {
 #[cfg(unix)]
 #[test]
 fn a_shell_runs_in_a_pseudo_terminal() {
-    let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .unwrap();
-    let mut command = CommandBuilder::new("/bin/sh");
+    // * The whole exchange runs on a worker thread and the test only waits for its answer with a deadline: any step that never returns on some system (reading the end of a pseudo-terminal, waiting for the child, closing the master) must fail the test, not hang the whole run.
+    let (done, answer) = std::sync::mpsc::channel();
 
-    command.args(["-c", "echo hello"]);
-
-    let mut child = pair.slave.spawn_command(command).unwrap();
-    let mut reader = pair.master.try_clone_reader().unwrap();
-    let (sender, receiver) = std::sync::mpsc::channel();
-
-    drop(pair.slave);
-
-    // * The reader runs on its own thread and the test waits with a deadline: a read that never returns (the end of a pseudo-terminal differs between systems) must fail the test, not hang the whole run.
     std::thread::spawn(move || {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let mut command = CommandBuilder::new("/bin/sh");
+
+        command.args(["-c", "echo hello"]);
+
+        let mut child = pair.slave.spawn_command(command).unwrap();
+        let mut reader = pair.master.try_clone_reader().unwrap();
+
+        drop(pair.slave);
+
+        let mut output = String::new();
         let mut buffer = [0u8; 64];
 
-        while let Ok(read) = reader.read(&mut buffer) {
-            if read == 0 || sender.send(buffer[..read].to_vec()).is_err() {
-                break;
+        while !output.contains("hello") {
+            match reader.read(&mut buffer) {
+                Ok(read) if read > 0 => {
+                    output.push_str(&String::from_utf8_lossy(&buffer[..read]));
+                }
+                _ => break,
             }
         }
+
+        let _ = child.kill();
+        let _ = done.send(output);
+        // * The master is kept open until the answer is sent: closing it may block on some systems, and nothing waits for it.
+        drop(pair.master);
     });
 
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    let mut output = String::new();
+    let output = answer
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("the pseudo-terminal test did not finish in 20 seconds");
 
-    while !output.contains("hello") {
-        let left = deadline.saturating_duration_since(std::time::Instant::now());
-
-        match receiver.recv_timeout(left) {
-            Ok(bytes) => output.push_str(&String::from_utf8_lossy(&bytes)),
-            Err(_) => break,
-        }
-    }
-
-    child.wait().unwrap();
     assert!(output.contains("hello"), "output was {output:?}");
 }
 
