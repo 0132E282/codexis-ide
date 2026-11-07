@@ -2,11 +2,17 @@ import { ArrowUp, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { CommitFiles } from '@/components/shell/git-history-commit-files';
+import {
+    CommitAvatar,
+    isProfileAuthor,
+} from '@/components/shell/git-history-commit-row';
 import { Button } from '@/components/ui/button';
 import { requestErrorMessage } from '@/lib/ai-error';
 import { t } from '@/lib/i18n';
 import { ide } from '@/lib/ide';
 import type { GitCommit } from '@/lib/ide';
+import { ideAuth } from '@/lib/ide-auth';
+import type { GithubProfile } from '@/lib/ide-auth';
 
 /** The commits of the current branch that no remote has yet, with the button that pushes them. `refreshKey` changes whenever the repository may have (a commit was made). */
 export function OutgoingCommits({
@@ -21,6 +27,14 @@ export function OutgoingCommits({
     const [open, setOpen] = useState(false);
     const [expandedHash, setExpandedHash] = useState<string | null>(null);
     const [pushedTick, setPushedTick] = useState(0);
+    const [profile, setProfile] = useState<GithubProfile | null>(null);
+
+    useEffect(() => {
+        ideAuth
+            .githubProfile()
+            .then(setProfile)
+            .catch(() => setProfile(null));
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -120,6 +134,18 @@ export function OutgoingCommits({
                                         className="size-3 shrink-0"
                                     />
                                 )}
+                                <CommitAvatar
+                                    key={commit.authorEmail}
+                                    name={commit.authorName}
+                                    email={commit.authorEmail}
+                                    ownAvatar={
+                                        profile !== null &&
+                                        isProfileAuthor(commit, profile)
+                                            ? profile.avatar
+                                            : ''
+                                    }
+                                    sizeClassName="size-4"
+                                />
                                 <code className="shrink-0 text-muted-foreground">
                                     {commit.shortHash}
                                 </code>

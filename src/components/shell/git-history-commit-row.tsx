@@ -81,14 +81,16 @@ export function isProfileAuthor(
 }
 
 /** The author's GitHub picture (`ownAvatar` for the signed-in account), or the first letter of the name when there is none or it fails to load. */
-function CommitAvatar({
+export function CommitAvatar({
     name,
     email,
     ownAvatar,
+    sizeClassName = 'size-5',
 }: {
     name: string;
     email: string;
     ownAvatar: string;
+    sizeClassName?: string;
 }) {
     const url = ownAvatar !== '' ? ownAvatar : getGithubAvatarUrl(email);
     const [failed, setFailed] = useState(false);
@@ -101,7 +103,10 @@ function CommitAvatar({
                 loading="lazy"
                 referrerPolicy="no-referrer"
                 onError={() => setFailed(true)}
-                className="size-5 shrink-0 rounded-full bg-zinc-300 object-cover dark:bg-zinc-700"
+                className={cn(
+                    'shrink-0 rounded-full bg-zinc-300 object-cover dark:bg-zinc-700',
+                    sizeClassName,
+                )}
             />
         );
     }
@@ -109,7 +114,10 @@ function CommitAvatar({
     return (
         <span
             aria-hidden="true"
-            className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-300 text-[10px] font-medium uppercase dark:bg-zinc-700"
+            className={cn(
+                'flex shrink-0 items-center justify-center rounded-full bg-zinc-300 text-[10px] font-medium uppercase dark:bg-zinc-700',
+                sizeClassName,
+            )}
         >
             {name.charAt(0) || <GitCommitHorizontal className="size-3" />}
         </span>
