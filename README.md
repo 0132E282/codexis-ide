@@ -17,35 +17,105 @@
 
 ## Giới thiệu
 
-Codexis IDE là ứng dụng desktop độc lập, xây dựng trên Tauri 2 (backend Rust) và React 19. Ứng dụng gom trình soạn code, Git, terminal và AI agent vào một cửa sổ. Mọi thao tác của AI diễn ra trong thư mục dự án bạn chọn, thông qua các CLI `claude` hoặc `codex` đã cài sẵn và đăng nhập trên máy.
+Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rust) và React 19. Ứng dụng gom trình soạn code, Git, terminal thật và AI agent vào một cửa sổ. Agent không chạy trong tiến trình của IDE: mỗi lượt chat là một lần gọi CLI `claude` hoặc `codex` đã cài và đăng nhập trên máy, trong thư mục dự án bạn chọn. IDE lo phần giao diện, quyền truy cập tệp, lưu lịch sử và hiển thị luồng sự kiện của CLI.
 
 ## Tính năng
 
-**Soạn code và dự án**
+- **Trình soạn code**: Monaco, cây thư mục, tab tệp, đổi tên, lưu có kiểm tra xung đột bằng hash nội dung, diff thay đổi, mở nhanh tệp.
+- **Terminal thật**: shell chạy qua PTY ngay trong app.
+- **Git**: tệp thay đổi, commit, hoàn tác, lịch sử commit, lịch sử từng tệp, blame, nhánh (so sánh, checkout, merge, pull). IDE không push.
+- **AI agent**: điều khiển CLI `claude` và `codex`; lịch sử và mã phiên CLI được lưu theo thư mục dự án nên mở lại là tiếp tục đúng hội thoại. Có chế độ quyền, đính kèm ảnh/tệp, relay giữa hai AI (tối đa 6 lượt), tác vụ nền và sub-agent. CLI `gemini` chưa được hỗ trợ.
+- **Lưới chat và khung nổi**: đặt tối đa 4 chat cạnh nhau theo nhóm, chat song song (multichat), vùng tệp và panel ở chế độ nổi.
+- **Plans**: đọc `docs/plans/` của dự án thành danh sách thẻ (tiêu đề, trạng thái, tiến độ), chỉ đọc.
+- **Language server**: dùng lại language server có sẵn trong extension VS Code (VS Code, Insiders, Cursor, VSCodium) đã cài trên máy; IDE chỉ đọc manifest, không chạy script của extension.
+- **Giọng nói**: đọc câu trả lời bằng máy chủ TTS cục bộ (VieNeu-TTS) do người dùng tự chạy; chỉ kết nối địa chỉ loopback.
+- **Dữ liệu và dung lượng**: thống kê dung lượng dữ liệu của chính IDE, cảnh báo khi quá lớn, dọn dẹp khi người dùng xác nhận.
+- **Ứng dụng**: bố cục panel tuỳ chỉnh, giao diện Việt/Anh, tự cập nhật qua GitHub Releases, kết nối điện thoại từ xa.
 
-- **Trình soạn code** (Monaco) với cây thư mục, tab tệp, đổi tên tệp, lưu có kiểm tra xung đột và diff thay đổi.
-- **Git**: xem tệp đã thêm, sửa, xoá, nhánh hiện tại, hoàn tác và commit.
-- **Terminal thật** (PTY) ngay trong app.
-- **Dự án**: lưu danh sách dự án (tên, thư mục, biến môi trường), mỗi dự án giữ chat riêng và mở lại dự án dùng lần trước.
-- Mở tệp đang xem trong VS Code.
+## Kiến trúc
 
-**Làm việc với AI**
+Frontend không chứa logic nghiệp vụ: chỉ hiển thị và gọi lệnh Tauri. Mọi tính năng nằm ở backend Rust.
 
-- **Chat với AI**: mỗi tin nhắn là một lượt chạy `claude` hoặc `codex` trong thư mục dự án. Lịch sử và mã phiên của CLI được lưu theo từng thư mục, mở lại là tiếp tục đúng cuộc hội thoại. Dừng lượt đang chạy bằng nút dừng hoặc Ctrl+C.
-- **Lưới chat theo nhóm**: đặt tối đa 4 chat (từ nhiều dự án) cạnh nhau trong một nhóm, tạo được nhiều nhóm; nhóm được lưu trong `codexis.db`. Mở tệp thì vùng tệp nổi đè lên lưới (kéo đổi độ rộng), không làm các chat co lại.
-- **Multichat**: thêm một cuộc trò chuyện song song với chat chính, đặt dưới vùng tệp hoặc ở chế độ nổi.
-- **Relay giữa các AI**: `claude` và `codex` gọi nhau bằng khối `relay:<ai>` trong câu trả lời, tối đa 6 lượt, có nút dừng cả chuỗi (xem [docs/system/ai-relay.md](docs/system/ai-relay.md)).
-- **Kế hoạch, tác vụ nền và sub-agent**: xem plan AI viết, việc chạy nền và sub-agent gọi bằng `@`.
-- **Đính kèm**: dán ảnh hoặc tệp vào ô chat (hoặc nút `+`); tệp được gửi cho CLI dưới dạng `@đường-dẫn`. Dán code thành `tệp:dòng`.
-- **Thanh phiên**: popup trên ô chat gồm môi trường, kết nối MCP, tệp AI đã ghi, thống kê sử dụng và GitHub.
-- **Kết nối điện thoại từ xa** để nhắn tin cho AI từ điện thoại.
+```mermaid
+flowchart LR
+    UI["React 19<br/>Monaco, xterm, diff"] -->|invoke| Bridge["src/lib/ide*.ts<br/>api.ts"]
+    Bridge -->|lệnh Tauri| Cmd["commands/*"]
+    Cmd --> WS["workspace.rs<br/>sandbox thư mục dự án"]
+    Cmd --> Git["git.rs, git_history.rs"]
+    Cmd --> Term["terminal.rs (PTY)"]
+    Cmd --> Agent["agent.rs, relay.rs"]
+    Cmd --> LSP["language_server*.rs"]
+    Cmd --> DB[("SQLite<br/>codexis.db")]
+    Agent --> CLI["CLI claude / codex"]
+    LSP --> Ext["Language server<br/>từ extension VS Code"]
+    Cmd -.->|sự kiện| UI
+```
 
-**Ứng dụng**
+**Backend (`src-tauri/src`)**
 
-- **Bố cục tuỳ chỉnh**: kéo, di chuyển, lấp đầy từng panel; giao diện Việt/Anh.
-- **Tự cập nhật**: khi có bản mới trên GitHub Releases, app báo và cập nhật khi bấm (xem [docs/system/app-update.md](docs/system/app-update.md)).
+- `lib.rs`, `main.rs`: khai báo module và đăng ký lệnh Tauri; `commands/` là lớp lệnh mỏng gọi vào các module.
+- `workspace.rs`, `permission.rs`: sandbox thư mục dự án và chính sách đường dẫn.
+- `git.rs`, `git_history.rs`: Git qua lệnh `git`; lịch sử, blame, nhánh.
+- `terminal.rs`: PTY.
+- `agent.rs`, `agent/`, `relay.rs`, `background.rs`, `auth.rs`: chạy CLI, sự kiện luồng, relay, tác vụ nền, trạng thái đăng nhập.
+- `language_server*.rs`, `vscode_extensions.rs`: quét extension và quản lý vòng đời language server.
+- `plan_docs.rs`, `plan*.rs`: plans của dự án.
+- `db.rs`, `chats.rs`, `projects.rs`, `settings.rs`, `usage.rs`, `activity.rs`, `migrations.rs`: lưu trữ SQLite.
+- `storage.rs`, `run_log.rs`, `attachments.rs`: dung lượng, nhật ký lượt chat, tệp đính kèm.
+- `speech.rs`, `remote.rs`, `app_update.rs`, `validation.rs`: giọng nói, điện thoại từ xa, tự cập nhật, kiểm tra đầu vào.
 
-Chưa hỗ trợ: CLI `gemini`.
+**Frontend (`src`)**
+
+- `src/lib/ide.ts` cùng các tệp `src/lib/ide-*.ts` và `src/lib/api.ts` là lớp cầu nối duy nhất tới lệnh Tauri; đổi cách gọi backend chỉ sửa ở đây.
+- `src/components/shell/`: khung ứng dụng (sidebar, chat, lưới chat, panel, khung nổi); `src/components/file-manager/`: trình soạn code, diff, blame.
+- `src/hooks/`, `src/contexts/`, `src/css/`, `src/icons/`: hook, context, kiểu và biểu tượng dùng chung.
+
+Chi tiết thiết kế: [docs/system/architecture.md](docs/system/architecture.md).
+
+## Luồng hoạt động
+
+**Gửi tin cho agent**
+
+```mermaid
+sequenceDiagram
+    participant UI as Giao diện
+    participant BE as Backend Rust
+    participant CLI as CLI claude / codex
+    UI->>BE: agent_send (prompt, thư mục dự án)
+    BE->>CLI: chạy CLI trong thư mục dự án
+    CLI-->>BE: luồng JSON (văn bản, công cụ, lỗi)
+    BE-->>UI: sự kiện agent-event
+    BE->>BE: lưu lượt chat vào SQLite
+    UI->>BE: agent_stop (khi người dùng dừng)
+```
+
+**Mở tệp và language server**
+
+```mermaid
+sequenceDiagram
+    participant UI as Giao diện
+    participant WS as workspace.rs
+    participant LS as Language server
+    UI->>WS: workspace_read (đường dẫn tương đối)
+    WS->>WS: chuẩn hoá, kiểm tra deny list, đường dẫn thật nằm trong dự án
+    WS-->>UI: nội dung và hash
+    UI->>LS: language_server_document_open
+    LS-->>UI: sự kiện language-server-diagnostics
+```
+
+## Bảo mật và quyền riêng tư
+
+- **Sandbox workspace**: tệp được gọi bằng đường dẫn tương đối; mỗi đường dẫn được chuẩn hoá, đối chiếu deny list và phải phân giải về một đường dẫn thật nằm trong dự án (liên kết không thoát được ra ngoài). Thông báo lỗi không chứa đường dẫn của máy.
+- **Git**: chạy trên dự án đang mở, không push; tệp trong deny list không hiện và không bao giờ bị commit.
+- **Nhật ký lượt chat** (`run_log.rs`): chỉ ghi tên công cụ và mã lỗi, không ghi prompt, câu trả lời, khoá API hay biến môi trường; giữ 14 ngày.
+- **Giọng nói và language server**: giọng nói chỉ kết nối loopback qua HTTP và từ chối chuyển hướng; extension VS Code chỉ được đọc manifest.
+- **Xoá và dọn dẹp** chỉ thực hiện khi người dùng xác nhận; phần dọn dung lượng chỉ đụng tới dữ liệu của chính IDE, không chạm thư mục dự án.
+
+## Yêu cầu
+
+- [Node.js](https://nodejs.org) và [pnpm](https://pnpm.io).
+- [Rust](https://rustup.rs) (toolchain stable) và các thành phần hệ thống của Tauri 2: xem [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/). Trên macOS cần Xcode Command Line Tools (`xcode-select --install`).
+- Để chat với AI: cài ít nhất một CLI và đăng nhập sẵn, sao cho `claude` hoặc `codex` chạy được từ terminal. App tìm thêm trong `/opt/homebrew/bin`, `/usr/local/bin` và `~/.local/bin`.
 
 ## Tải về (macOS)
 
@@ -56,28 +126,23 @@ Tải tệp `.dmg` mới nhất tại [trang Releases](https://github.com/0132E2
 - Để chat với AI, cần cài sẵn và đăng nhập CLI `claude` hoặc `codex` (xem phần Yêu cầu).
 - Từ các bản sau, app tự kiểm tra bản mới trên GitHub Releases: khi có bản mới sẽ hiện thông báo ở góc dưới bên phải, bấm **Cập nhật** để tự tải, cài và khởi động lại (không cần tải `.dmg` lại). Chức năng này chưa được kiểm với một bản phát hành thật.
 
-## Yêu cầu
-
-- [Node.js](https://nodejs.org) và [pnpm](https://pnpm.io).
-- [Rust](https://rustup.rs) (toolchain stable) và các thành phần hệ thống của Tauri 2: xem [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/). Trên macOS cần Xcode Command Line Tools (`xcode-select --install`).
-- Để chat với AI: cài ít nhất một CLI và đăng nhập sẵn, sao cho `claude` hoặc `codex` chạy được từ terminal. App tìm thêm trong `/opt/homebrew/bin`, `/usr/local/bin` và `~/.local/bin`.
-
 ## Cài đặt và chạy
 
 ```sh
 pnpm install
-pnpm start        # chạy app đầy đủ (tauri dev, tự build lại khi sửa code)
+pnpm start        # chạy app đầy đủ (tauri dev)
 ```
 
 Các lệnh khác:
 
 ```sh
-pnpm dev          # chỉ Vite (không có Rust nên các lệnh backend không chạy)
+pnpm dev          # chỉ Vite (không có backend Tauri)
 pnpm build        # chỉ build frontend
-pnpm tauri build --bundles app,dmg  # đóng gói bản .app và .dmg (src-tauri/target/release/bundle/)
+pnpm tauri build --bundles app,dmg  # đóng gói .app và .dmg
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint (lint:fix để tự sửa)
-pnpm format:check # prettier (format để tự sửa)
+pnpm format       # prettier --write (format:check để kiểm tra)
+pnpm test:e2e     # Playwright, chạy trên Vite
 
 cargo fmt --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
@@ -127,14 +192,23 @@ Trên macOS:
 
 Nếu có file `projects.json` cũ trong thư mục dữ liệu, các dự án trong đó được nhập vào `codexis.db` một lần; file cũ không bị xoá.
 
-## Cấu trúc
+## Cấu trúc thư mục
 
-- `src-tauri/` — backend Rust: workspace sandbox, git, terminal PTY, agent CLI và relay, lưu trữ SQLite, đính kèm, kiểm tra đầu vào (garde), tự cập nhật. Migration và seeder nằm ở `src-tauri/database/{migrations,seeders}`, test ở `src-tauri/tests/unit/`.
-- `src/` — giao diện React 19 (Vite, Tailwind, Monaco). `src/lib/ide.ts` và `src/lib/api.ts` là nơi duy nhất gọi các Tauri command.
-- `prompts/` — prompt cho AI agent.
-- `docs/` — tài liệu hệ thống (`docs/system/`), kế hoạch (`docs/plans/`), testcase (`docs/repo/`) và thiết kế (`docs/design/`).
+- `src-tauri/`: backend Rust. Migration và seeder ở `src-tauri/database/{migrations,seeders}`, test ở `src-tauri/tests/unit/`.
+- `src/`: giao diện React 19 (Vite, Tailwind 4, Monaco, xterm).
+- `prompts/`: prompt Markdown cho AI agent.
+- `e2e/`: test Playwright.
+- `docs/`: tài liệu hệ thống [`docs/system/`](docs/system/), kế hoạch [`docs/plans/`](docs/plans/), testcase `docs/repo/` và thiết kế [`docs/design/`](docs/design/DESIGN.md).
 
-Quy ước làm việc với repo và các vấn đề đã biết nằm trong [AGENTS.md](AGENTS.md).
+Một số tài liệu hệ thống: [kiến trúc](docs/system/architecture.md), [language server](docs/system/language-servers.md), [relay AI](docs/system/ai-relay.md), [cơ sở dữ liệu](docs/system/database.md), [tác vụ nền](docs/system/background-tasks.md), [tự cập nhật](docs/system/app-update.md).
+
+## Đóng góp
+
+- Đọc [AGENTS.md](AGENTS.md) trước: lệnh, quy ước và các vấn đề đã biết.
+- Đặt tên: biến camelCase, lệnh Tauri snake_case, tệp TS/TSX kebab-case.
+- Test Rust đặt ở `src-tauri/tests/unit/`, không viết inline trong `src/`.
+- Đổi lệnh Tauri phía Rust thì đổi `src/lib/api.ts` hoặc `src/lib/ide*.ts` tương ứng.
+- Không đưa secret vào repo.
 
 ## Giấy phép
 
