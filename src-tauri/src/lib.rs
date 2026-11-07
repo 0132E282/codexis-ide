@@ -150,6 +150,7 @@ pub fn run() {
             commands::background::background_clear,
             commands::attachments::attachment_save,
             commands::attachments::attachment_read,
+            commands::attachments::chat_image_read,
             commands::auth::auth_status,
             commands::auth::auth_status_profile,
             commands::auth::claude_usage_profile,

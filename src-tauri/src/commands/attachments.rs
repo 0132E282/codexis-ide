@@ -77,6 +77,24 @@ pub fn attachment_read(app: AppHandle, path: String) -> Result<tauri::ipc::Respo
         .map_err(|error| error.to_string())
 }
 
+/// Bytes of a picture the AI saved to disk (the project, including `.playwright-mcp`, or a temp folder) so the chat can show it; any other path is refused.
+#[tauri::command]
+pub fn chat_image_read(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let project = state.workspace_for(root.as_deref())?.root().to_path_buf();
+    let roots: Vec<PathBuf> = [project.clone(), std::env::temp_dir(), PathBuf::from("/tmp")]
+        .iter()
+        .filter_map(|dir| std::fs::canonicalize(dir).ok())
+        .collect();
+
+    attachments::read_image(&roots, &project, Path::new(&path))
+        .map(tauri::ipc::Response::new)
+        .map_err(|error| error.to_string())
+}
+
 /// At most `limit` bytes of `text`, cut on a character boundary.
 fn truncate_to_boundary(text: &str, limit: usize) -> &str {
     let mut end = limit.min(text.len());

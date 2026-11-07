@@ -180,7 +180,7 @@ export function FileEventsTable({ root }: { root: string | undefined }) {
                     <option value="user">{t('data_pane.source_user')}</option>
                     <option value="ai">{t('data_pane.source_ai')}</option>
                 </select>
-                <span className="ml-auto flex flex-wrap items-center gap-2">
+                <span className="flex flex-wrap items-center gap-2">
                     <input
                         type="date"
                         aria-label={t('data_pane.before_date')}

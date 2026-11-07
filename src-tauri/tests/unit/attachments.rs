@@ -102,3 +102,22 @@ fn a_symlink_at_the_target_is_not_written_through() {
     );
     assert_eq!(fs::read(&victim).unwrap(), b"keep");
 }
+
+#[test]
+fn a_picture_is_read_only_inside_the_allowed_roots() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let roots = vec![fs::canonicalize(root.path()).unwrap()];
+
+    fs::write(root.path().join("a.png"), b"png").unwrap();
+    fs::write(root.path().join("notes.txt"), b"x").unwrap();
+    fs::write(outside.path().join("b.png"), b"png").unwrap();
+
+    assert_eq!(
+        read_image(&roots, root.path(), Path::new("a.png")).unwrap(),
+        b"png"
+    );
+    assert!(read_image(&roots, root.path(), Path::new("notes.txt")).is_err());
+    assert!(read_image(&roots, root.path(), &outside.path().join("b.png")).is_err());
+    assert!(read_image(&roots, root.path(), Path::new("../b.png")).is_err());
+}

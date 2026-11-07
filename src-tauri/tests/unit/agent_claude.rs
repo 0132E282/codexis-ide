@@ -303,3 +303,14 @@ fn a_result_without_usage_gives_no_context_and_an_error_result_stays_an_error() 
 fn lines_that_are_not_json_are_ignored() {
     assert!(ClaudeAgent.parse_line("not json").is_empty());
 }
+
+#[test]
+fn claude_tool_result_keeps_base64_pictures() {
+    let done = r#"{"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"p1","content":[{"type":"text","text":"shot"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}},{"type":"image","source":{"type":"base64","media_type":"image/svg+xml","data":"BBBB"}}]}]}}"#;
+    let events = ClaudeAgent.parse_line(done);
+
+    assert_eq!(
+        payload(&events[0])["images"],
+        serde_json::json!(["data:image/png;base64,AAAA"])
+    );
+}

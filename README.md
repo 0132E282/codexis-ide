@@ -96,13 +96,17 @@ RYNOX_WORKSPACE=~/code/my-app RYNOX_DB=~/rynox-dev.db pnpm start
 
 ## Phát hành (cho developers)
 
-App tự cập nhật đọc `https://github.com/0132E282/codexis-ide/releases/latest/download/latest.json`, nên mỗi lần phát hành cần:
+App tự cập nhật đọc `https://github.com/0132E282/codexis-ide/releases/latest/download/latest.json`.
 
-1. Tăng `version` trong `src-tauri/tauri.conf.json` (phải cao hơn bản người dùng đang cài).
-2. Build với biến môi trường `TAURI_SIGNING_PRIVATE_KEY` (nội dung khoá riêng ký bản cập nhật) và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (để trống nếu khoá không có mật khẩu). Khoá riêng không nằm trong repo; mất khoá thì các máy đã cài không nhận được bản mới nữa, phải đổi `plugins.updater.pubkey` và cài tay một lần. Phát hành bằng CI cần hai secret GitHub `TAURI_SIGNING_PRIVATE_KEY` và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-3. Publish release **chính thức** (không phải draft hay pre-release) gồm `latest.json`, gói `*.app.tar.gz` kèm chữ ký `.sig` và tệp `.dmg`. `tauri-apps/tauri-action` với `includeUpdaterJson: true` tạo đủ các tệp này.
+**Cấu hình một lần:** thêm secret `TAURI_SIGNING_PRIVATE_KEY` (nội dung khoá riêng `~/.tauri/codexis-ide-updater.key`, dán một dòng, không kèm dòng mới) ở Settings → Secrets and variables → Actions. Khoá không có mật khẩu nên không cần `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Không có secret thì release chỉ có `.dmg`/`.app`, không có `latest.json`, app không tự cập nhật. Mất khoá thì phải đổi `plugins.updater.pubkey` và cài tay lại một lần.
 
-Workflow CI hiện tại ([`build.yml`](.github/workflows/build.yml)) chỉ kiểm tra và upload artifact `.app`, chưa tự tạo release. Workflow [`tag.yml`](.github/workflows/tag.yml) chạy mỗi push lên nhánh chính nhưng chỉ khi code frontend hoặc backend đổi (cùng bộ lọc đường dẫn với `build.yml`; push chỉ đổi tài liệu, CI hay README thì bỏ qua): tạo tag `v<version>` trỏ vào commit vừa push, với version là PATCH kế tiếp của mức cao nhất giữa `version` trong `tauri.conf.json` (mức nền) và các tag `v<X.Y.Z>` đã có (0.1.0 → v0.1.1 → v0.1.2). Workflow không tạo commit hay push lên nhánh chính nên không cần bypass ruleset; chỉ cần `GITHUB_TOKEN` được tạo tag (tag ruleset có thể chặn). Muốn tăng minor/major thì sửa mức nền trong `tauri.conf.json` và `Cargo.toml` cho khớp. Tag này không kích hoạt workflow khác. Sau khi tạo tag mới, job `release` trong cùng workflow tự tạo GitHub Release (build với version của tag qua `--config`, không sửa file trong repo) (`latest.json`, `*.app.tar.gz`, `.sig`) bằng `tauri-apps/tauri-action`; cần chủ repo tự thêm hai secret `TAURI_SIGNING_PRIVATE_KEY` và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, thiếu secret thì release vẫn có `.dmg`/`.app` nhưng không có `latest.json` nên app chưa tự cập nhật; thêm hai secret để bật tự cập nhật. Tag đã có mà chưa có release thì chạy tay workflow với ô `release_tag` (ví dụ `v0.1.2`). Chi tiết luồng và giới hạn: [docs/system/app-update.md](docs/system/app-update.md).
+**Mỗi lần phát hành:**
+
+1. Push code frontend hoặc backend lên nhánh chính. [`tag.yml`](.github/workflows/tag.yml) tự tạo tag `v<PATCH kế tiếp>` (0.1.1 → v0.1.2) rồi build, ký và tạo GitHub Release (`latest.json`, `*.app.tar.gz`, `.sig`, `.dmg`). Push chỉ đổi tài liệu, CI hoặc README thì bỏ qua.
+2. Tag đã có mà chưa có release: chạy tay workflow **Tag** với ô `release_tag` (ví dụ `v0.1.2`).
+3. Tăng minor/major: sửa version nền trong `tauri.conf.json` và `Cargo.toml` cho khớp.
+
+[`build.yml`](.github/workflows/build.yml) chỉ kiểm tra build và upload artifact `.app`, không tạo release. Chi tiết và giới hạn: [`docs/system/app-update.md`](docs/system/app-update.md).
 
 ## Dữ liệu được lưu ở đâu
 

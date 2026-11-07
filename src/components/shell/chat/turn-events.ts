@@ -18,6 +18,8 @@ export type ToolResultEvent = {
     id: string;
     output: string;
     error: boolean;
+    /** Pictures the tool returned, as data URLs. */
+    images?: string[];
     parent?: string;
 };
 
@@ -148,6 +150,7 @@ export function withToolResult(turn: Turn, result: ToolResultEvent): Turn {
                 ? {
                       ...step,
                       output: result.output,
+                      images: result.images,
                       status: result.error
                           ? ('error' as const)
                           : ('ok' as const),

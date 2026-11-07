@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import type { Components, ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { LocalImage, isLocalImagePath } from '@/components/ai-chat/chat-image';
 import { ChoiceCard } from '@/components/ai-chat/choice-card';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { CodeBlock } from '@/components/ai-chat/code-block';
@@ -16,7 +17,12 @@ import { cn } from '@/lib/utils';
 const ALLOWED_URL = /^(https?:|mailto:)/i;
 
 /** * Only http/https/mailto links survive; anything else (relative, javascript:, data:, irc:...) is dropped. */
-function transformUrl(url: string): string {
+function transformUrl(url: string, key: string): string {
+    // * A picture path on this machine is shown through the backend (`LocalImage`), which only reads the project and temp folders.
+    if (key === 'src' && isLocalImagePath(url)) {
+        return url;
+    }
+
     const safe = defaultUrlTransform(url);
 
     return ALLOWED_URL.test(safe) ? safe : '';
@@ -166,7 +172,9 @@ const baseComponents: Components = {
     ),
     // * Remote images would auto-load (tracking/leaks): show the alt text as a plain link instead.
     img: ({ node: _node, src, alt }) =>
-        typeof src === 'string' && src !== '' ? (
+        typeof src === 'string' && isLocalImagePath(src) ? (
+            <LocalImage path={src} alt={alt ?? ''} />
+        ) : typeof src === 'string' && src !== '' ? (
             <a
                 href={src}
                 target="_blank"

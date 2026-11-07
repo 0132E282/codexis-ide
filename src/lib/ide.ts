@@ -32,6 +32,8 @@ export type Step =
           change?: { before: string; after: string };
           /** Null until the call returns. */
           output: string | null;
+          /** Pictures the call returned (a screenshot), as data URLs. */
+          images?: string[];
           status: 'running' | 'ok' | 'error';
       };
 /** A file with uncommitted changes in a git workspace. */

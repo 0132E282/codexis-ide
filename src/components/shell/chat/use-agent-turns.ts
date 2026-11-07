@@ -161,7 +161,10 @@ export function useAgentTurns({
                     error: turn.error,
                     steps:
                         turn.steps !== undefined && turn.steps.length > 0
-                            ? JSON.stringify(turn.steps)
+                            ? // * Pictures of tool results are shown live only: saved, they could pass the size limit of a turn.
+                              JSON.stringify(turn.steps, (key, value) =>
+                                  key === 'images' ? undefined : value,
+                              )
                             : null,
                 })
                 .then(() => notifyChanged())

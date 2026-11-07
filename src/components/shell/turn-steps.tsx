@@ -2,6 +2,7 @@ import { Asterisk, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
+import { ChatImage } from '@/components/ai-chat/chat-image';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
 import { ChangedFilesCard } from '@/components/shell/changed-files-card';
 import { UnifiedDiff } from '@/components/ai-chat/unified-diff';
@@ -105,6 +106,10 @@ function ToolView({ step }: { step: ToolStep }) {
                     {summary}
                 </span>
             </button>
+            {/* A picture the call returned (a screenshot) is shown at once, not hidden in the details. */}
+            {step.images?.map((source, index) => (
+                <ChatImage key={index} src={source} alt={step.name} />
+            ))}
             {open && hasDetail && (
                 <div className="mt-2 overflow-hidden rounded-lg border bg-card">
                     {step.change !== undefined ? (

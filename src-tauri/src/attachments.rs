@@ -94,6 +94,43 @@ pub fn read(dir: &Path, path: &Path) -> Result<Vec<u8>, AttachmentError> {
     fs::read(path).map_err(|_| AttachmentError::SaveFailed)
 }
 
+/// A picture the AI saved to disk and mentions in its answer: `path` (relative paths start at `base`) must be a picture file inside one of `roots` (the project, the temp folders), so this never serves another file of the machine.
+///
+/// # Errors
+/// Fails when the file is not a picture, lies outside every root, is too large, or cannot be read.
+pub fn read_image(roots: &[PathBuf], base: &Path, path: &Path) -> Result<Vec<u8>, AttachmentError> {
+    let is_picture = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "webp"
+            )
+        });
+
+    if !is_picture {
+        return Err(AttachmentError::SaveFailed);
+    }
+
+    let resolved = fs::canonicalize(base.join(path)).map_err(|_| AttachmentError::SaveFailed)?;
+
+    // * `Path::join` keeps an absolute `path` as it is; the real path (symlinks followed) must lie inside a root.
+    if !resolved.is_file() || !roots.iter().any(|root| resolved.starts_with(root)) {
+        return Err(AttachmentError::SaveFailed);
+    }
+
+    if fs::metadata(&resolved)
+        .map_err(|_| AttachmentError::SaveFailed)?
+        .len()
+        > MAX_BYTES as u64
+    {
+        return Err(AttachmentError::TooLarge);
+    }
+
+    fs::read(resolved).map_err(|_| AttachmentError::SaveFailed)
+}
+
 /// Only the last path segment, reduced to safe characters; `file` when nothing is left.
 fn safe_name(name: &str) -> String {
     let last = name.rsplit(['/', '\\']).next().unwrap_or_default();

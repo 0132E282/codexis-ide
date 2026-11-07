@@ -273,6 +273,8 @@ impl ClaudeAgent {
 const MAX_TOOL_DETAIL_CHARS: usize = 80;
 /// Longest tool output sent to the chat (the rest is cut).
 const MAX_TOOL_OUTPUT_CHARS: usize = 2000;
+/// Largest base64 picture of a tool result that is shown in the chat (about 6 MB of image).
+const MAX_TOOL_IMAGE_CHARS: usize = 8 * 1024 * 1024;
 
 /// The step for a `tool_use` part: tool name, the AI's own description of the call and what it works on (command, path, pattern...); an edit of a file also carries the text before and after, so the chat can show it as a diff.
 fn tool_started(part: &serde_json::Value, parent: Option<&str>) -> Event {
@@ -343,12 +345,37 @@ fn tool_finished(part: &serde_json::Value, parent: Option<&str>) -> Event {
         "output": cut(&output, MAX_TOOL_OUTPUT_CHARS),
         "error": part["is_error"] == true,
     });
+    let images = tool_images(&part["content"]);
+
+    if !images.is_empty() {
+        result["images"] = images.into();
+    }
 
     if let Some(parent) = parent {
         result["parent"] = parent.into();
     }
 
     Event::ToolResult(result.to_string())
+}
+
+/// The pictures a tool returned (`image` blocks with a base64 source) as `data:` URLs; a picture too large to send as an event, or not a known picture type, is left out.
+fn tool_images(content: &serde_json::Value) -> Vec<String> {
+    content
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|piece| piece["type"] == "image" && piece["source"]["type"] == "base64")
+        .filter_map(|piece| {
+            let media = piece["source"]["media_type"].as_str()?;
+            let data = piece["source"]["data"].as_str()?;
+
+            (matches!(
+                media,
+                "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+            ) && data.len() <= MAX_TOOL_IMAGE_CHARS)
+                .then(|| format!("data:{media};base64,{data}"))
+        })
+        .collect()
 }
 
 /// `text` cut to `limit` characters.
