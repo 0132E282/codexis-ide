@@ -202,9 +202,12 @@ export function AdvancedTab({
                             <option value="">
                                 {t('character_tab.system_default')}
                             </option>
-                            {voices.map((name) => (
-                                <option key={name} value={name}>
-                                    {name}
+                            {voices.map((voice) => (
+                                <option key={voice.name} value={voice.name}>
+                                    {voice.name} ({voice.lang})
+                                    {voice.quality === 'standard'
+                                        ? ''
+                                        : ` · ${t(`voice_quality.${voice.quality}`)}`}
                                 </option>
                             ))}
                         </select>
@@ -223,6 +226,15 @@ export function AdvancedTab({
                     <FieldDescription>
                         {t('character_tab.voices_available_on_this')}
                     </FieldDescription>
+                    {!voices.some(
+                        (voice) =>
+                            voice.lang.toLowerCase().startsWith('vi') &&
+                            voice.quality !== 'standard',
+                    ) && (
+                        <FieldDescription>
+                            {t('voice_quality.download_hint')}
+                        </FieldDescription>
+                    )}
                 </Field>
             )}
             <SpeechEngineSection settings={settings} onChange={onChange} />

@@ -1,0 +1,94 @@
+name: Tag
+
+on:
+    push:
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+concurrency:
+    group: tag
+    cancel-in-progress: false
+
+jobs:
+    # * Bumps the patch version (0.1.0 -> 0.1.1) on every push to the default branch, commits it and tags it as v<version>. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
+    release:
+        # * `on.push.branches` cannot read the default branch, so the branch is checked here.
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  fetch-depth: 0
+
+            - name: Bump patch version and tag
+              env:
+                  COMMIT_SHA: ${{ github.sha }}
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  # * Skip the release commit made by this workflow, so it never loops.
+                  subject=$(git log -1 --format=%s "$COMMIT_SHA")
+                  author=$(git log -1 --format=%ae "$COMMIT_SHA")
+                  if [ "$author" = "41898282+github-actions[bot]@users.noreply.github.com" ] && echo "$subject" | grep -qE '^chore: phát hành v[0-9]'; then
+                    echo "Release commit, skipping."
+                    exit 0
+                  fi
+
+                  semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+                  tauri_version=$(jq -r '.version' src-tauri/tauri.conf.json)
+                  cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' src-tauri/Cargo.toml | head -n 1)
+                  lock_version=$(awk '/^name = "codexis-ide"$/ { found = 1; next } found && /^version = / { gsub(/version = |"/, ""); print; exit }' src-tauri/Cargo.lock)
+
+                  # * Fail without changing anything when a version is not plain X.Y.Z or the three files disagree.
+                  for value in "$tauri_version" "$cargo_version" "$lock_version"; do
+                    if ! echo "$value" | grep -qE "$semver"; then
+                      echo "::error::Version '$value' is not plain X.Y.Z (no suffix allowed)."
+                      exit 1
+                    fi
+                  done
+
+                  if [ "$tauri_version" != "$cargo_version" ] || [ "$tauri_version" != "$lock_version" ]; then
+                    echo "::error::Version mismatch: tauri.conf.json '$tauri_version', Cargo.toml '$cargo_version', Cargo.lock '$lock_version'."
+                    exit 1
+                  fi
+
+                  major=${tauri_version%%.*}
+                  rest=${tauri_version#*.}
+                  minor=${rest%%.*}
+                  patch=${rest#*.}
+                  version="$major.$minor.$((patch + 1))"
+                  tag="v$version"
+
+                  # * An existing tag is left untouched: no error, no overwrite, no force.
+                  if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+                    echo "Tag $tag already exists, skipping."
+                    exit 0
+                  fi
+
+                  # * Edit only the version lines; Cargo.lock is patched by hand so no dependency changes.
+                  awk -v old="$tauri_version" -v new="$version" '!done && $0 == "  \"version\": \"" old "\"," { print "  \"version\": \"" new "\","; done = 1; next } { print }' src-tauri/tauri.conf.json > tauri.conf.tmp
+                  mv tauri.conf.tmp src-tauri/tauri.conf.json
+                  awk -v old="$cargo_version" -v new="$version" '!done && $0 == "version = \"" old "\"" { print "version = \"" new "\""; done = 1; next } { print }' src-tauri/Cargo.toml > Cargo.toml.tmp
+                  mv Cargo.toml.tmp src-tauri/Cargo.toml
+                  awk -v new="$version" '/^name = "codexis-ide"$/ { found = 1 } found && /^version = / { print "version = \"" new "\""; found = 0; next } { print }' src-tauri/Cargo.lock > Cargo.lock.tmp
+                  mv Cargo.lock.tmp src-tauri/Cargo.lock
+
+                  if [ "$(jq -r '.version' src-tauri/tauri.conf.json)" != "$version" ] || ! grep -q "^version = \"$version\"\$" src-tauri/Cargo.toml || ! grep -q "^version = \"$version\"\$" src-tauri/Cargo.lock; then
+                    echo "::error::Version files were not updated to $version."
+                    exit 1
+                  fi
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+                  git commit -m "chore: phát hành $tag [skip ci]"
+                  git tag -a "$tag" -m "Release $tag"
+
+                  # * One plain push of commit and tag (no force). If the branch moved or is protected, fail instead of retrying.
+                  if ! git push origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$tag"; then
+                    echo "::error::Push rejected (protected branch or newer commits on $DEFAULT_BRANCH). Nothing was retried."
+                    exit 1
+                  fi
+                  echo "Released $tag."

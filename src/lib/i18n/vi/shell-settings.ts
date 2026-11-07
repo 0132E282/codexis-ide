@@ -266,4 +266,9 @@ export const shellSettingsVietnamese: Record<string, string> = {
         'Không kiểm tra được phiên bản server.',
     'errors.language_server.path_name_rejected':
         'Tên tệp trong PATH không được chấp nhận.',
+    'voice_quality.premium': 'Chất lượng cao nhất',
+    'voice_quality.enhanced': 'Chất lượng cao',
+    'voice_quality.natural': 'Tự nhiên',
+    'voice_quality.download_hint':
+        'Giọng thường nghe còn máy móc. Tải giọng Enhanced/Premium tiếng Việt: Cài đặt hệ thống → Trợ năng → Nội dung được đọc → Giọng hệ thống → Quản lý giọng nói.',
 };

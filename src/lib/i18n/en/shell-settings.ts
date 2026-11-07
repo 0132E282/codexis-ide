@@ -279,4 +279,9 @@ export const shellSettingsEnglish: Record<string, string> = {
         'The server version could not be checked.',
     'errors.language_server.path_name_rejected':
         'The file name found on PATH is not accepted.',
+    'voice_quality.premium': 'Best quality',
+    'voice_quality.enhanced': 'High quality',
+    'voice_quality.natural': 'Natural',
+    'voice_quality.download_hint':
+        'Standard voices sound robotic. Download an Enhanced/Premium Vietnamese voice: System Settings → Accessibility → Spoken Content → System Voice → Manage Voices.',
 };
