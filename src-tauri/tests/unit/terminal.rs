@@ -108,3 +108,25 @@ fn a_write_over_the_limit_is_refused() {
         Err(TerminalError::Unknown(_))
     ));
 }
+
+#[test]
+fn take_text_keeps_only_a_cut_character_for_the_next_chunk() {
+    let bytes = "ab\u{1EA1}".as_bytes();
+    let mut pending = bytes[..bytes.len() - 1].to_vec();
+
+    assert_eq!(take_text(&mut pending), "ab");
+    assert_eq!(pending, &bytes[2..bytes.len() - 1]);
+
+    pending.push(bytes[bytes.len() - 1]);
+
+    assert_eq!(take_text(&mut pending), "\u{1EA1}");
+    assert!(pending.is_empty());
+}
+
+#[test]
+fn take_text_shows_bytes_that_are_not_text_with_replacement_characters() {
+    let mut pending = vec![0xFF, 0xFE, 0xFD, 0xFC, 0xFB];
+
+    assert_eq!(take_text(&mut pending), "\u{FFFD}".repeat(5));
+    assert!(pending.is_empty());
+}

@@ -225,20 +225,24 @@ pub struct RpcError {
 pub const METHOD_NOT_FOUND: i64 = -32601;
 
 /// Sorts a decoded message into request, notification or response; `None` for anything else (a response with an id we never used, a non-JSON-RPC object).
-pub fn classify(message: &Value) -> Option<Incoming> {
-    let method = message.get("method").and_then(Value::as_str);
-    let id = message.get("id").filter(|id| !id.is_null());
-    let params = message.get("params").cloned().unwrap_or(Value::Null);
+///
+/// Takes the message by value: the `params` or `result` (up to [`MAX_MESSAGE_BYTES`]) are moved out, not deep-copied.
+pub fn classify(mut message: Value) -> Option<Incoming> {
+    let method = message
+        .get("method")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let id = message.get("id").filter(|id| !id.is_null()).cloned();
 
     match (method, id) {
         (Some(method), Some(id)) => Some(Incoming::Request {
-            id: id.clone(),
-            method: method.to_string(),
-            params,
+            id,
+            method,
+            params: message["params"].take(),
         }),
         (Some(method), None) => Some(Incoming::Notification {
-            method: method.to_string(),
-            params,
+            method,
+            params: message["params"].take(),
         }),
         (None, Some(id)) => {
             let id = id.as_u64()?;
@@ -251,7 +255,7 @@ pub fn classify(message: &Value) -> Option<Incoming> {
                         .unwrap_or_default()
                         .to_string(),
                 }),
-                None => Ok(message.get("result").cloned().unwrap_or(Value::Null)),
+                None => Ok(message["result"].take()),
             };
 
             Some(Incoming::Response { id, result })

@@ -125,7 +125,18 @@ export function ManageAccountsPage({
     useEffect(() => {
         void load();
 
-        const timer = window.setInterval(() => void load(), POLL_MILLISECONDS);
+        // * A read spawns CLI processes and can outlast the interval: a new poll starts only when the last has ended, so slow reads never pile up.
+        let reading = false;
+        const timer = window.setInterval(() => {
+            if (reading) {
+                return;
+            }
+
+            reading = true;
+            void load().finally(() => {
+                reading = false;
+            });
+        }, POLL_MILLISECONDS);
 
         return () => window.clearInterval(timer);
     }, [load]);

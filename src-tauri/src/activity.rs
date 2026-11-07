@@ -8,7 +8,7 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::Path;
 use std::sync::Mutex;
@@ -586,8 +586,11 @@ impl ActivityStore {
                     .map_err(|_| ActivityError::SaveFailed)?
             };
 
+            // * A set of the kept paths makes the prune O(rows + plans) instead of O(rows * plans).
+            let kept: HashSet<&str> = plans.iter().map(|plan| plan.path.as_str()).collect();
+
             for path in known {
-                if !plans.iter().any(|plan| plan.path == path) {
+                if !kept.contains(path.as_str()) {
                     removed += transaction
                         .execute(
                             "DELETE FROM plan_records WHERE project_root = ?1 AND path = ?2",

@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AiChatActivityStep } from '@/types';
 import { lineChanges } from '@/lib/line-changes';
 import type { Hunk } from '@/lib/line-changes';
+import { revertEdit } from '@/components/ai-chat/hunk-revert';
 import {
     READ_ONLY_OPTIONS,
     languageOf,
@@ -61,9 +62,9 @@ export default function MonacoCode({
     revealLine?: { line: number; count: number; id: number } | null;
     onChange?: (value: string) => void;
     onSave?: () => void;
-    /** * Adds "Chat với AI" to the right-click menu: called with the selected lines. */
     /** * The file as it is in git HEAD: lines that differ get a mark in the margin. */
     baseline?: string | null;
+    /** * Adds "Chat với AI" to the right-click menu: called with the selected lines. */
     onAsk?: (selection: {
         startLine: number;
         endLine: number;
@@ -253,51 +254,7 @@ export default function MonacoCode({
                 return;
             }
 
-            const total = model.getLineCount();
-            const end = (line: number) => model.getLineMaxColumn(line);
-            const last = hunk.start + hunk.count;
-            const oldText = hunk.old.join('\n');
-            let range = {
-                startLineNumber: hunk.start + 1,
-                startColumn: 1,
-                endLineNumber: last,
-                endColumn: last >= 1 ? end(Math.min(last, total)) : 1,
-            };
-            let text = oldText;
-
-            if (hunk.count === 0) {
-                // * Only lines were removed: put them back where they were.
-                if (hunk.start < total) {
-                    range = {
-                        startLineNumber: hunk.start + 1,
-                        startColumn: 1,
-                        endLineNumber: hunk.start + 1,
-                        endColumn: 1,
-                    };
-                    text = `${oldText}\n`;
-                } else {
-                    range = {
-                        startLineNumber: total,
-                        startColumn: end(total),
-                        endLineNumber: total,
-                        endColumn: end(total),
-                    };
-                    text = `\n${oldText}`;
-                }
-            } else if (hunk.old.length === 0) {
-                // * Only lines were added: take them out with their line break.
-                if (last < total) {
-                    range.endLineNumber = last + 1;
-                    range.endColumn = 1;
-                } else if (hunk.start > 0) {
-                    range.startLineNumber = hunk.start;
-                    range.startColumn = end(hunk.start);
-                }
-
-                text = '';
-            }
-
-            instance.executeEdits('pm-revert', [{ range, text }]);
+            instance.executeEdits('pm-revert', [revertEdit(model, hunk)]);
             instance.pushUndoStop();
         };
 
@@ -731,6 +688,11 @@ export default function MonacoCode({
 
                     editor.onDidChangeCursorSelection(syncHint);
                     syncHintRef.current = syncHint;
+                    // * The avatar's React tree goes with the editor (not inside this call: React may be rendering).
+                    editor.onDidDispose(() => {
+                        syncHintRef.current = () => {};
+                        queueMicrotask(() => hintRoot.unmount());
+                    });
 
                     if (askTrigger) {
                         askTrigger.current = () => askSelection(editor);

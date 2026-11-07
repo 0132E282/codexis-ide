@@ -1,7 +1,11 @@
 use super::*;
-use crate::language_server_protocol::file_uri;
+use crate::language_server_protocol::{
+    error_response_message, file_uri, notification_message, request_message, response_message,
+    write_message, Range,
+};
 use std::fs;
 use std::sync::atomic::AtomicUsize;
+use std::sync::mpsc::{self, Sender};
 use tempfile::TempDir;
 
 const DEADLINE: Duration = Duration::from_secs(10);
@@ -188,7 +192,7 @@ fn serve(
     while let Some(message) = ends.receive() {
         record(received, &message);
 
-        match classify(&message) {
+        match classify(message) {
             Some(Incoming::Request { id, method, params }) => match method.as_str() {
                 "initialize" => ends.reply(&id, json!({ "capabilities": capabilities })),
                 "shutdown" => ends.reply(&id, Value::Null),
@@ -855,7 +859,7 @@ fn answers_are_matched_to_requests_by_id_even_when_they_arrive_in_reverse() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            let Some(Incoming::Request { id, method, .. }) = classify(&message) else {
+            let Some(Incoming::Request { id, method, .. }) = classify(message) else {
                 continue;
             };
 
@@ -945,7 +949,7 @@ fn a_server_error_is_a_failed_request_not_a_crash() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, method, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, method, .. }) = classify(message) {
                 match method.as_str() {
                     "initialize" => ends.reply(&id, json!({ "capabilities": everything() })),
                     "shutdown" => ends.reply(&id, Value::Null),
@@ -1446,7 +1450,7 @@ fn a_server_that_dies_is_restarted_with_its_open_documents() {
             while let Some(message) = ends.receive() {
                 record(&received, &message);
 
-                match classify(&message) {
+                match classify(message) {
                     Some(Incoming::Request { id, method, .. }) if method == "initialize" => {
                         ends.reply(&id, json!({ "capabilities": incremental() }));
                     }
@@ -1503,7 +1507,7 @@ fn a_server_that_keeps_dying_ends_in_error_after_three_restarts() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, method, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, method, .. }) = classify(message.clone()) {
                 if method == "initialize" {
                     ends.reply(&id, json!({ "capabilities": incremental() }));
                 }
@@ -1545,7 +1549,7 @@ fn a_failed_handshake_is_an_error_at_once_without_restarts() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, .. }) = classify(message) {
                 ends.send(&error_response_message(&id, -32603, "no"));
             }
         }
@@ -1565,7 +1569,7 @@ fn a_failed_handshake_is_an_error_at_once_without_restarts() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, .. }) = classify(message) {
                 ends.reply(&id, json!({ "nothing": true }));
             }
         }
@@ -1686,7 +1690,7 @@ fn a_server_that_ignores_shutdown_is_not_waited_for_longer_than_the_limit() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, method, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, method, .. }) = classify(message) {
                 if method == "initialize" {
                     ends.reply(&id, json!({ "capabilities": incremental() }));
                 }
@@ -1714,7 +1718,7 @@ fn stop_all_stops_every_server_at_the_same_time() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, method, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, method, .. }) = classify(message) {
                 if method == "initialize" {
                     ends.reply(&id, json!({ "capabilities": incremental() }));
                 }
@@ -2559,7 +2563,7 @@ fn a_cancelled_answer_and_a_superseded_request_are_cancelled() {
         while let Some(message) = ends.receive() {
             record(&received, &message);
 
-            if let Some(Incoming::Request { id, method, .. }) = classify(&message) {
+            if let Some(Incoming::Request { id, method, .. }) = classify(message) {
                 match method.as_str() {
                     "initialize" => ends.reply(&id, json!({ "capabilities": everything() })),
                     "shutdown" => ends.reply(&id, Value::Null),

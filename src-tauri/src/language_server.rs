@@ -4,26 +4,33 @@
 //!
 //! Safety rules kept in this module: only a [`LaunchPlan`] built by the catalog is run, never through a shell, always with the project folder as working directory; messages are limited to 16 MiB; every wait has a time limit; the server may not edit files (`workspace/applyEdit` is refused, a rename comes back as data and is applied only through [`apply_file_edits`] after the person confirmed); every URI in a result is turned back into a project-relative path.
 
+mod connection;
+mod edits;
+mod request;
+
 use crate::language_server_catalog::{self as catalog, joined_path, LaunchPlan};
 use crate::language_server_convert as convert;
 use crate::language_server_protocol::{
-    apply_change, apply_edits, classify, error_response_message, file_uri, notification_message,
-    path_to_uri, request_message, response_message, uri_to_path, uri_to_relative, write_message,
-    Incoming, MessageReader, Position, ProtocolError, Range, RpcError, METHOD_NOT_FOUND,
+    apply_change, classify, file_uri, path_to_uri, uri_to_path, uri_to_relative, Incoming,
+    MessageReader, Position, ProtocolError, METHOD_NOT_FOUND,
 };
 use crate::permission::Sandbox;
 use crate::workspace::{self, Workspace, MAX_WRITE_BYTES};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+
+use connection::Connection;
+pub use edits::{apply_file_edits, ApplyReport, FailedEdit, FileEdit, TextEditInput};
+pub use request::{ContentChange, RequestKind, RequestOptions};
 
 /// Servers running at the same time, over all projects.
 const MAX_SERVERS: usize = 8;
@@ -295,277 +302,6 @@ impl Launcher for ProcessLauncher {
             }
         }
     }
-}
-
-/// One process of a server: the way to talk to it and to end it.
-struct Connection {
-    outgoing: Sender<Option<Value>>,
-    pending: Mutex<HashMap<u64, Sender<std::result::Result<Value, RpcError>>>>,
-    next_id: AtomicU64,
-    /// The newest request of each `key` (see `request_keyed`): an older one still waiting is cancelled.
-    latest: Mutex<HashMap<String, u64>>,
-    closed: Arc<AtomicBool>,
-    child: Mutex<Option<Child>>,
-}
-
-impl Connection {
-    /// Starts the writer, reader and stderr threads. The receiver gets a message when the reader ends.
-    fn open(transport: Transport, server: &Arc<Server>) -> (Arc<Self>, Receiver<()>) {
-        let Transport {
-            reader,
-            mut writer,
-            stderr,
-            child,
-        } = transport;
-        let (outgoing, queue) = mpsc::channel::<Option<Value>>();
-        let closed = Arc::new(AtomicBool::new(false));
-        let connection = Arc::new(Self {
-            outgoing,
-            pending: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(0),
-            latest: Mutex::new(HashMap::new()),
-            closed: closed.clone(),
-            child: Mutex::new(child),
-        });
-
-        thread::spawn(move || {
-            while let Ok(Some(message)) = queue.recv() {
-                if write_message(&mut writer, &message).is_err() {
-                    closed.store(true, Ordering::SeqCst);
-
-                    break;
-                }
-            }
-        });
-
-        let (closed_signal, closed_receiver) = mpsc::channel();
-        let reader_server = server.clone();
-        let reader_connection = connection.clone();
-
-        thread::spawn(move || {
-            reader_server.read_loop(&reader_connection, reader);
-            reader_connection.close();
-
-            let _ = closed_signal.send(());
-        });
-
-        if let Some(stderr) = stderr {
-            let stderr_server = server.clone();
-
-            thread::spawn(move || stderr_server.pump_stderr(stderr));
-        }
-
-        (connection, closed_receiver)
-    }
-
-    fn is_closed(&self) -> bool {
-        self.closed.load(Ordering::SeqCst)
-    }
-
-    fn lock_pending(
-        &self,
-    ) -> MutexGuard<'_, HashMap<u64, Sender<std::result::Result<Value, RpcError>>>> {
-        self.pending
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    fn lock_child(&self) -> MutexGuard<'_, Option<Child>> {
-        self.child
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
-
-    /// Marks the connection ended: waiting requests fail at once and the writer stops.
-    fn close(&self) {
-        self.closed.store(true, Ordering::SeqCst);
-        self.lock_pending().clear();
-
-        let _ = self.outgoing.send(None);
-    }
-
-    fn send(&self, message: Value) {
-        if !self.is_closed() {
-            let _ = self.outgoing.send(Some(message));
-        }
-    }
-
-    fn notify(&self, method: &str, params: Value) {
-        self.send(notification_message(method, params));
-    }
-
-    fn respond(&self, id: &Value, result: Value) {
-        self.send(response_message(id, result));
-    }
-
-    fn respond_error(&self, id: &Value, code: i64, message: &str) {
-        self.send(error_response_message(id, code, message));
-    }
-
-    /// Sends a request and waits for its answer. After `timeout` the request is cancelled on the server and `Timeout` is returned.
-    fn request(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
-        self.request_keyed(method, params, timeout, None)
-    }
-
-    /// Like `request`; a newer request with the same `key` cancels this one (it returns `Cancelled`), so typing fast never queues answers nobody wants.
-    fn request_keyed(
-        &self,
-        method: &str,
-        params: Value,
-        timeout: Duration,
-        key: Option<&str>,
-    ) -> Result<Value> {
-        if self.is_closed() {
-            return Err(LanguageServerError::NotRunning);
-        }
-
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst) + 1;
-        let (answer, answered) = mpsc::channel();
-
-        self.lock_pending().insert(id, answer);
-
-        // * Checked again after registering: a connection that closed in between would never answer.
-        if self.is_closed() {
-            self.lock_pending().remove(&id);
-
-            return Err(LanguageServerError::NotRunning);
-        }
-
-        if let Some(key) = key {
-            let previous = lock(&self.latest).insert(key.to_string(), id);
-
-            if let Some(previous) = previous {
-                self.resolve(
-                    previous,
-                    Err(RpcError {
-                        code: REQUEST_CANCELLED,
-                        message: "superseded".to_string(),
-                    }),
-                );
-                self.notify("$/cancelRequest", json!({ "id": previous }));
-            }
-        }
-
-        self.send(request_message(id, method, params));
-
-        let outcome = answered.recv_timeout(timeout);
-
-        if let Some(key) = key {
-            let mut latest = lock(&self.latest);
-
-            if latest.get(key) == Some(&id) {
-                latest.remove(key);
-            }
-        }
-
-        match outcome {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(error)) => Err(if is_cancellation(error.code) {
-                LanguageServerError::Cancelled
-            } else {
-                LanguageServerError::RequestFailed
-            }),
-            Err(RecvTimeoutError::Timeout) => {
-                self.lock_pending().remove(&id);
-                self.notify("$/cancelRequest", json!({ "id": id }));
-
-                Err(LanguageServerError::Timeout)
-            }
-            Err(RecvTimeoutError::Disconnected) => Err(LanguageServerError::NotRunning),
-        }
-    }
-
-    fn resolve(&self, id: u64, result: std::result::Result<Value, RpcError>) {
-        let answer = self.lock_pending().remove(&id);
-
-        if let Some(answer) = answer {
-            let _ = answer.send(result);
-        }
-    }
-
-    /// Whether the process has exited (false when there is no process).
-    fn child_exited(&self) -> bool {
-        self.lock_child()
-            .as_mut()
-            .is_some_and(|child| matches!(child.try_wait(), Ok(Some(_))))
-    }
-
-    /// Asks the server to shut down (`shutdown`, then `exit`), gives it a moment, then kills whatever is left.
-    fn shutdown(&self, timeout: Duration) {
-        if !self.is_closed() {
-            let _ = self.request("shutdown", Value::Null, timeout);
-            self.notify("exit", Value::Null);
-        }
-
-        self.close();
-        self.reap(EXIT_GRACE);
-    }
-
-    /// Ends the process now.
-    fn kill(&self) {
-        self.close();
-        self.reap(Duration::ZERO);
-    }
-
-    /// Waits up to `grace` for the process to exit by itself, then kills its whole process group and collects it.
-    fn reap(&self, grace: Duration) {
-        let started = Instant::now();
-
-        loop {
-            {
-                let mut child = self.lock_child();
-                let Some(process) = child.as_mut() else {
-                    return;
-                };
-
-                if matches!(process.try_wait(), Ok(Some(_))) {
-                    child.take();
-
-                    return;
-                }
-            }
-
-            if started.elapsed() >= grace {
-                break;
-            }
-
-            thread::sleep(Duration::from_millis(10));
-        }
-
-        if let Some(mut process) = self.lock_child().take() {
-            kill_group(process.id());
-
-            let _ = process.kill();
-            let _ = process.wait();
-        }
-    }
-}
-
-/// LSP `RequestCancelled` and `ServerCancelled`.
-const REQUEST_CANCELLED: i64 = -32800;
-const SERVER_CANCELLED: i64 = -32802;
-const CONTENT_MODIFIED: i64 = -32801;
-
-fn is_cancellation(code: i64) -> bool {
-    matches!(
-        code,
-        REQUEST_CANCELLED | CONTENT_MODIFIED | SERVER_CANCELLED
-    )
-}
-
-/// Kills the process group the server leads (its helpers included). Best effort: the group may be gone already.
-fn kill_group(leader: u32) {
-    #[cfg(unix)]
-    {
-        let _ = Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{leader}")])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    }
-    #[cfg(not(unix))]
-    let _ = leader;
 }
 
 /// An open document as the server knows it.
@@ -915,7 +651,7 @@ impl Server {
         loop {
             match reader.next_message() {
                 Ok(Some(message)) => {
-                    if let Some(incoming) = classify(&message) {
+                    if let Some(incoming) = classify(message) {
                         self.handle(connection, incoming);
                     }
                 }
@@ -1223,7 +959,7 @@ impl Server {
         position: Option<Position>,
         options: &RequestOptions,
     ) -> Result<Value> {
-        let (connection, uri, capabilities, text, resolving) = {
+        let (connection, uri, without_prepare, text, resolving) = {
             let shared = lock(&self.shared);
             let connection = shared
                 .running_connection()
@@ -1232,6 +968,7 @@ impl Server {
                 .documents
                 .get(relative)
                 .ok_or(LanguageServerError::NotOpen)?;
+
             if !kind.is_supported(&shared.capabilities) {
                 return Err(LanguageServerError::Unsupported);
             }
@@ -1241,31 +978,27 @@ impl Server {
                 _ => None,
             };
             let text = (kind == RequestKind::PrepareRename).then(|| document.text.clone());
+            // * A server without `prepareProvider` cannot be asked; the word under the cursor is the answer.
+            let without_prepare = kind == RequestKind::PrepareRename
+                && shared
+                    .capabilities
+                    .pointer("/renameProvider/prepareProvider")
+                    != Some(&Value::Bool(true));
 
             (
                 connection,
                 document.uri.clone(),
-                shared.capabilities.clone(),
+                without_prepare,
                 text,
                 resolving,
             )
         };
 
-        if !kind.is_supported(&capabilities) {
-            return Err(LanguageServerError::Unsupported);
-        }
-
-        // * A server without `prepareProvider` cannot be asked; the word under the cursor is the answer.
-        if kind == RequestKind::PrepareRename
-            && capabilities.pointer("/renameProvider/prepareProvider") != Some(&Value::Bool(true))
-        {
+        if without_prepare {
             let position = position.ok_or(LanguageServerError::BadRequest)?;
 
             return Ok(convert::prepare_rename(
-                &Value::Object(serde_json::Map::from_iter([(
-                    "defaultBehavior".to_string(),
-                    Value::Bool(true),
-                )])),
+                &json!({ "defaultBehavior": true }),
                 text.as_deref().unwrap_or_default(),
                 position,
             ));
@@ -1283,7 +1016,7 @@ impl Server {
             .inspect_err(|error| self.log(format!("{method} failed: {}", error.key())))?;
 
         match kind {
-            RequestKind::Completion => Ok(self.completion_answer(relative, &result)),
+            RequestKind::Completion => Ok(self.completion_answer(relative, result)),
             RequestKind::CompletionResolve => {
                 convert::completion_item(&result, options.resolve_key.clone())
                     .ok_or(LanguageServerError::RequestFailed)
@@ -1302,7 +1035,7 @@ impl Server {
     }
 
     /// The completion answer for the editor; the original items are kept on the document under a new generation so one can be resolved later.
-    fn completion_answer(&self, relative: &str, result: &Value) -> Value {
+    fn completion_answer(&self, relative: &str, result: Value) -> Value {
         let generation = lock(&self.shared)
             .documents
             .get(relative)
@@ -1351,16 +1084,18 @@ impl Server {
 
     /// The edits of a rename grouped by project file: `{ files: [{ path, edits, expectedHash, editCount }], skipped: [{ display, reason }] }`. A file outside the project, closed to the AI (`.env`, `vendor/`, ...) or not readable as text is listed in `skipped` and never written. Creating, renaming and deleting files is not supported. `expectedHash` is the hash of the file on disk, to be sent back with the edits.
     fn rename_plan(&self, result: &Value) -> Result<Value> {
+        // * Files in the order the server first named them; `position_of` finds one in O(1) instead of scanning the list.
         let mut by_uri: Vec<(String, Vec<Value>)> = Vec::new();
+        let mut position_of: HashMap<String, usize> = HashMap::new();
         let mut add = |uri: &str, edits: &[Value]| {
-            let edits = edits
-                .iter()
-                .filter_map(convert::text_edit)
-                .collect::<Vec<_>>();
+            let edits = edits.iter().filter_map(convert::text_edit);
 
-            match by_uri.iter_mut().find(|(known, _)| known == uri) {
-                Some((_, existing)) => existing.extend(edits),
-                None => by_uri.push((uri.to_string(), edits)),
+            match position_of.get(uri) {
+                Some(&index) => by_uri[index].1.extend(edits),
+                None => {
+                    position_of.insert(uri.to_string(), by_uri.len());
+                    by_uri.push((uri.to_string(), edits.collect()));
+                }
             }
         };
 
@@ -1512,174 +1247,6 @@ fn did_change_params(document: &Document, changes: Vec<Value>) -> Value {
         "textDocument": { "uri": document.uri, "version": document.version },
         "contentChanges": changes,
     })
-}
-
-/// One change event from the editor: a range replaced by `text`, or the whole text when there is no range.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ContentChange {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub range: Option<Range>,
-    pub text: String,
-}
-
-/// What a request asks the server for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RequestKind {
-    Completion,
-    CompletionResolve,
-    Hover,
-    SignatureHelp,
-    Definition,
-    PrepareRename,
-    Rename,
-    Formatting,
-}
-
-/// The extra inputs of a request; only those of its kind are read.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct RequestOptions {
-    /// LSP `CompletionTriggerKind` / `SignatureHelpTriggerKind` (1 invoked, 2 trigger character, 3 content change or incomplete).
-    pub trigger_kind: Option<u8>,
-    pub trigger_character: Option<String>,
-    pub is_retrigger: bool,
-    /// Which item of the last completion to resolve.
-    pub resolve_key: Option<String>,
-    pub new_name: Option<String>,
-    pub tab_size: Option<u32>,
-    pub insert_spaces: Option<bool>,
-}
-
-impl RequestOptions {
-    /// The LSP context object for completion and signature help.
-    fn context(&self, signature: bool) -> Result<Option<Value>> {
-        let Some(kind) = self.trigger_kind else {
-            return Ok(None);
-        };
-
-        if !(1..=3).contains(&kind) {
-            return Err(LanguageServerError::BadRequest);
-        }
-
-        let mut context = json!({ "triggerKind": kind });
-
-        if let Some(character) = self.trigger_character.as_deref().filter(|c| !c.is_empty()) {
-            context["triggerCharacter"] = json!(character);
-        }
-
-        if signature {
-            context["isRetrigger"] = json!(self.is_retrigger);
-        }
-
-        Ok(Some(context))
-    }
-}
-
-impl RequestKind {
-    /// Whether the capabilities the server announced include what this request needs.
-    fn is_supported(self, capabilities: &Value) -> bool {
-        let provides = |name: &str| {
-            capabilities
-                .get(name)
-                .is_some_and(|value| !matches!(value, Value::Null | Value::Bool(false)))
-        };
-
-        match self {
-            Self::Completion => provides("completionProvider"),
-            Self::CompletionResolve => {
-                capabilities.pointer("/completionProvider/resolveProvider")
-                    == Some(&Value::Bool(true))
-            }
-            Self::Hover => provides("hoverProvider"),
-            Self::SignatureHelp => provides("signatureHelpProvider"),
-            Self::Definition => provides("definitionProvider"),
-            Self::PrepareRename | Self::Rename => provides("renameProvider"),
-            Self::Formatting => provides("documentFormattingProvider"),
-        }
-    }
-
-    /// The LSP method and parameters for a document at `uri`. `resolving` is the original completion item for `CompletionResolve`.
-    fn build(
-        self,
-        uri: &str,
-        position: Option<Position>,
-        options: &RequestOptions,
-        resolving: Option<Value>,
-    ) -> Result<(&'static str, Value)> {
-        let document = json!({ "uri": uri });
-        let at = || position.ok_or(LanguageServerError::BadRequest);
-
-        Ok(match self {
-            Self::Completion => {
-                let mut params = json!({ "textDocument": document, "position": at()? });
-
-                if let Some(context) = options.context(false)? {
-                    params["context"] = context;
-                }
-
-                ("textDocument/completion", params)
-            }
-            Self::CompletionResolve => (
-                "completionItem/resolve",
-                resolving.ok_or(LanguageServerError::BadRequest)?,
-            ),
-            Self::Hover => (
-                "textDocument/hover",
-                json!({ "textDocument": document, "position": at()? }),
-            ),
-            Self::SignatureHelp => {
-                let mut params = json!({ "textDocument": document, "position": at()? });
-
-                if let Some(context) = options.context(true)? {
-                    params["context"] = context;
-                }
-
-                ("textDocument/signatureHelp", params)
-            }
-            Self::Definition => (
-                "textDocument/definition",
-                json!({ "textDocument": document, "position": at()? }),
-            ),
-            Self::PrepareRename => (
-                "textDocument/prepareRename",
-                json!({ "textDocument": document, "position": at()? }),
-            ),
-            Self::Rename => {
-                let name = options
-                    .new_name
-                    .as_deref()
-                    .ok_or(LanguageServerError::BadRequest)?;
-
-                if name.is_empty()
-                    || name.chars().count() > MAX_NEW_NAME_CHARS
-                    || name.chars().any(char::is_control)
-                {
-                    return Err(LanguageServerError::BadRequest);
-                }
-
-                (
-                    "textDocument/rename",
-                    json!({ "textDocument": document, "position": at()?, "newName": name }),
-                )
-            }
-            Self::Formatting => {
-                let tab_size = options.tab_size.unwrap_or(4);
-
-                if !(1..=16).contains(&tab_size) {
-                    return Err(LanguageServerError::BadRequest);
-                }
-
-                (
-                    "textDocument/formatting",
-                    json!({
-                        "textDocument": document,
-                        "options": { "tabSize": tab_size, "insertSpaces": options.insert_spaces.unwrap_or(true) },
-                    }),
-                )
-            }
-        })
-    }
 }
 
 /// The sessions of every project, as one cheap-to-clone handle.
@@ -2020,89 +1587,6 @@ impl LanguageServers {
             }
         });
     }
-}
-
-/// Edits to one file of the project, with the hash of the file they were computed against (`None`: it could not be read then, nothing is written).
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileEdit {
-    pub path: String,
-    pub expected_hash: Option<String>,
-    pub edits: Vec<TextEditInput>,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct TextEditInput {
-    pub range: Range,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct FailedEdit {
-    pub path: String,
-    pub error: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
-pub struct ApplyReport {
-    pub written: Vec<String>,
-    pub failed: Vec<FailedEdit>,
-}
-
-/// Writes the confirmed edits of a rename to the files that are not open in the editor, through the workspace's guards and with the hash each file had when the edits were computed. A file that fails (rules, hash, overlapping edits, size) is reported and the others are still written: nothing is written to a file whose check failed.
-pub fn apply_file_edits(workspace: &Workspace, files: &[FileEdit]) -> ApplyReport {
-    let mut report = ApplyReport::default();
-
-    for file in files {
-        match prepare_edit(workspace, file) {
-            Ok((content, expected_hash)) => {
-                match workspace.write(&file.path, &content, Some(&expected_hash)) {
-                    Ok(_) => report.written.push(file.path.clone()),
-                    Err(error) => report.failed.push(FailedEdit {
-                        path: file.path.clone(),
-                        error: error.message(),
-                    }),
-                }
-            }
-            Err(error) => report.failed.push(FailedEdit {
-                path: file.path.clone(),
-                error,
-            }),
-        }
-    }
-
-    report
-}
-
-/// The changed text and the hash to write against.
-fn prepare_edit(
-    workspace: &Workspace,
-    file: &FileEdit,
-) -> std::result::Result<(String, String), &'static str> {
-    let expected_hash = file
-        .expected_hash
-        .clone()
-        .ok_or(workspace::WorkspaceError::NotFound.message())?;
-    let content = workspace
-        .read(&file.path)
-        .map_err(workspace::WorkspaceError::message)?;
-
-    if workspace::hash(&content) != expected_hash {
-        return Err(workspace::WorkspaceError::Conflict.message());
-    }
-
-    let edits: Vec<(Range, String)> = file
-        .edits
-        .iter()
-        .map(|edit| (edit.range, edit.text.clone()))
-        .collect();
-    let changed = apply_edits(&content, &edits).ok_or(LanguageServerError::BadRequest.key())?;
-
-    if changed.len() > MAX_WRITE_BYTES {
-        return Err(workspace::WorkspaceError::TooLarge.message());
-    }
-
-    Ok((changed, expected_hash))
 }
 
 #[cfg(test)]

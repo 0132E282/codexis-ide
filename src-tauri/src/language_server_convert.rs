@@ -75,9 +75,7 @@ impl EditorRange {
 
 /// The range of a protocol value (`{ start, end }`) in editor coordinates.
 pub fn editor_range(value: &Value) -> Option<EditorRange> {
-    serde_json::from_value::<Range>(value.clone())
-        .ok()
-        .map(EditorRange::from_lsp)
+    Range::deserialize(value).ok().map(EditorRange::from_lsp)
 }
 
 fn range_value(value: &Value) -> Value {
@@ -143,22 +141,24 @@ fn markdown_or_null(value: Option<&Value>) -> Value {
 }
 
 /// Completion answer: `{ isIncomplete, items }` and the original items, kept so one can be resolved later.
-pub fn completion(result: &Value, max_items: usize, generation: u64) -> (Value, Vec<Value>) {
-    let (is_incomplete, list): (bool, &[Value]) = match result {
+///
+/// Takes the answer by value: the kept items are moved out of it, not deep-copied (up to `max_items` of them).
+pub fn completion(result: Value, max_items: usize, generation: u64) -> (Value, Vec<Value>) {
+    let (is_incomplete, list) = match result {
         Value::Array(items) => (false, items),
-        Value::Object(object) => (
+        Value::Object(mut object) => (
             object
                 .get("isIncomplete")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
-            object
-                .get("items")
-                .and_then(Value::as_array)
-                .map_or(&[], Vec::as_slice),
+            match object.remove("items") {
+                Some(Value::Array(items)) => items,
+                _ => Vec::new(),
+            },
         ),
-        _ => (false, &[]),
+        _ => (false, Vec::new()),
     };
-    let originals: Vec<Value> = list.iter().take(max_items).cloned().collect();
+    let originals: Vec<Value> = list.into_iter().take(max_items).collect();
     let items: Vec<Value> = originals
         .iter()
         .enumerate()
@@ -384,8 +384,7 @@ pub fn prepare_rename(result: &Value, text: &str, position: Position) -> Value {
         .filter(|_| result.get("placeholder").is_some())
         .or_else(|| result.get("start").map(|_| result))
         .or_else(|| result.get("range"));
-    let Some(range) = range.and_then(|range| serde_json::from_value::<Range>(range.clone()).ok())
-    else {
+    let Some(range) = range.and_then(|range| Range::deserialize(range).ok()) else {
         return from_word();
     };
     let placeholder = result

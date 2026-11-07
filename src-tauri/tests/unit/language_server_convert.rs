@@ -84,7 +84,7 @@ fn markdown_covers_every_shape_a_server_uses() {
 #[test]
 fn a_completion_list_becomes_items_with_resolve_keys() {
     let (answer, originals) = completion(
-        &json!({
+        json!({
             "isIncomplete": true,
             "items": [
                 {
@@ -132,12 +132,12 @@ fn a_completion_list_becomes_items_with_resolve_keys() {
     assert_eq!(items[1]["range"], Value::Null);
     assert_eq!(items[1]["resolveKey"], "7:1");
 
-    let (array, _) = completion(&json!([{ "label": "a" }]), 10, 1);
+    let (array, _) = completion(json!([{ "label": "a" }]), 10, 1);
 
     assert_eq!(array["isIncomplete"], false);
-    assert_eq!(completion(&Value::Null, 10, 1).0["items"], json!([]));
+    assert_eq!(completion(Value::Null, 10, 1).0["items"], json!([]));
     assert_eq!(
-        completion(&json!([{ "label": "a" }, { "label": "b" }]), 1, 1)
+        completion(json!([{ "label": "a" }, { "label": "b" }]), 1, 1)
             .1
             .len(),
         1

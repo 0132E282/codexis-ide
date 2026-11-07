@@ -119,6 +119,29 @@ fn complete_text(bytes: &[u8]) -> (&str, &[u8]) {
     }
 }
 
+/// The text of `pending` that can be shown now; what stays in `pending` is the start of a character the next chunk completes.
+/// One `String` per chunk, and `pending` keeps its capacity between chunks (it used to be replaced by a new `Vec` each time).
+fn take_text(pending: &mut Vec<u8>) -> String {
+    let (text, rest) = complete_text(pending);
+    let is_binary = text.is_empty() && rest.len() >= 4;
+    let data = if is_binary {
+        String::from_utf8_lossy(rest).into_owned()
+    } else {
+        text.to_string()
+    };
+
+    // * Nothing is kept after bytes shown as replacement characters or when nothing could be shown.
+    if data.is_empty() || is_binary {
+        pending.clear();
+    } else {
+        let shown = text.len();
+
+        pending.drain(..shown);
+    }
+
+    data
+}
+
 impl Terminals {
     /// Starts a shell in `directory`; its output is sent as `terminal-data` events and `terminal-exit` ends it.
     pub fn open(
@@ -166,19 +189,7 @@ impl Terminals {
 
                 pending.extend_from_slice(&buffer[..read]);
 
-                let (text, rest) = complete_text(&pending);
-                let data = if text.is_empty() && !rest.is_empty() && rest.len() >= 4 {
-                    String::from_utf8_lossy(rest).into_owned()
-                } else {
-                    text.to_string()
-                };
-                let keep = if data.is_empty() || text.is_empty() && rest.len() >= 4 {
-                    Vec::new()
-                } else {
-                    rest.to_vec()
-                };
-
-                pending = keep;
+                let data = take_text(&mut pending);
 
                 if !data.is_empty() {
                     let _ = app.emit(

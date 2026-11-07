@@ -180,7 +180,7 @@ fn refuses_to_write_a_message_over_the_limit() {
 fn classifies_requests_notifications_and_responses() {
     assert_eq!(
         classify(
-            &json!({ "id": "a", "method": "workspace/configuration", "params": { "items": [] } })
+            json!({ "id": "a", "method": "workspace/configuration", "params": { "items": [] } })
         ),
         Some(Incoming::Request {
             id: json!("a"),
@@ -189,21 +189,21 @@ fn classifies_requests_notifications_and_responses() {
         })
     );
     assert_eq!(
-        classify(&json!({ "method": "window/logMessage" })),
+        classify(json!({ "method": "window/logMessage" })),
         Some(Incoming::Notification {
             method: "window/logMessage".into(),
             params: Value::Null,
         })
     );
     assert_eq!(
-        classify(&json!({ "id": 4, "result": { "ok": true } })),
+        classify(json!({ "id": 4, "result": { "ok": true } })),
         Some(Incoming::Response {
             id: 4,
             result: Ok(json!({ "ok": true })),
         })
     );
     assert_eq!(
-        classify(&json!({ "id": 5, "error": { "code": -32800, "message": "cancelled" } })),
+        classify(json!({ "id": 5, "error": { "code": -32800, "message": "cancelled" } })),
         Some(Incoming::Response {
             id: 5,
             result: Err(RpcError {
@@ -212,8 +212,8 @@ fn classifies_requests_notifications_and_responses() {
             }),
         })
     );
-    assert_eq!(classify(&json!({ "id": "x", "result": 1 })), None);
-    assert_eq!(classify(&json!({ "jsonrpc": "2.0" })), None);
+    assert_eq!(classify(json!({ "id": "x", "result": 1 })), None);
+    assert_eq!(classify(json!({ "jsonrpc": "2.0" })), None);
 }
 
 #[test]
