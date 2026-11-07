@@ -394,6 +394,8 @@ export const shellMainEnglish: Record<string, string> = {
     'composer.voice_reply': 'Voice replies',
     'composer.read_again': 'Read again',
     'composer.stop_reading': 'Stop reading',
+    'composer.waiting': 'Waiting ({count}): {text}',
+    'composer.clear_waiting': 'Drop waiting messages',
     'composer.spoken_code': 'there is a block of code.',
     'composer.spoken_link': 'link',
     'voice_transcript.listening': 'Listening…',

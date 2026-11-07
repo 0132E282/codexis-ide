@@ -391,6 +391,8 @@ export const shellMainVietnamese: Record<string, string> = {
     'composer.voice_reply': 'Trả lời bằng giọng nói',
     'composer.read_again': 'Đọc lại',
     'composer.stop_reading': 'Dừng đọc',
+    'composer.waiting': 'Đang chờ ({count}): {text}',
+    'composer.clear_waiting': 'Bỏ tin đang chờ',
     'composer.spoken_code': 'có một đoạn mã.',
     'composer.spoken_link': 'liên kết',
     'voice_transcript.listening': 'Đang nghe…',

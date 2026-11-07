@@ -37,6 +37,8 @@ export const Composer = memo(function Composer({
     onChange,
     onSubmit,
     busy,
+    waiting,
+    onClearWaiting,
     onStop,
     cli,
     model,
@@ -60,6 +62,9 @@ export const Composer = memo(function Composer({
     onSubmit: () => void;
     /** A turn is running: switching CLI and the other controls wait for it; sending does not (a message sent meanwhile starts its own turn if a sub-agent works, else it waits for the turn). */
     busy: boolean;
+    /** Messages sent while a turn runs that wait for it (shown above the box), and the button that drops them. */
+    waiting: string[];
+    onClearWaiting: () => void;
     /** Ctrl+C while a turn runs: stops it. */
     onStop: () => void;
     cli: AgentCli;
@@ -253,6 +258,24 @@ export const Composer = memo(function Composer({
                     attachError={attachError}
                     onRemove={onRemoveAttachment}
                 />
+                {waiting.length > 0 && (
+                    <div className="text-muted-foreground flex items-center gap-1 px-2 pt-1 text-xs">
+                        <span className="min-w-0 flex-1 truncate">
+                            {t('composer.waiting', {
+                                count: waiting.length,
+                                text: waiting.join(' / '),
+                            })}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={onClearWaiting}
+                            aria-label={t('composer.clear_waiting')}
+                            className="hover:text-foreground shrink-0 rounded"
+                        >
+                            <X className="size-3" />
+                        </button>
+                    </div>
+                )}
                 {menuOpen && (
                     <SuggestionList
                         prefix={prefix}

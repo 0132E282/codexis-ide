@@ -185,6 +185,8 @@ export function ChatPanel({
     useTooNarrow(section, !fill && !collapsed, onTooNarrow);
 
     const {
+        waiting,
+        clearWaiting,
         choose,
         sendFromComposer,
         switchAccount,
@@ -293,6 +295,11 @@ export function ChatPanel({
         },
         [],
     );
+    const waitingPrompts = useMemo(
+        () => waiting.map((item) => item.prompt),
+        [waiting],
+    );
+
     const projectName =
         projects.find((project) => project.root === root)?.name ??
         root.split('/').pop() ??
@@ -372,6 +379,8 @@ export function ChatPanel({
                 onChange={setText}
                 onSubmit={send}
                 busy={busy}
+                waiting={waitingPrompts}
+                onClearWaiting={clearWaiting}
                 onStop={stopTurns}
                 cli={cli}
                 model={models[cli] ?? null}

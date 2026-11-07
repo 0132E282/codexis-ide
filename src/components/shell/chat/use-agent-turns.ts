@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import {
@@ -29,6 +29,13 @@ import { ideSettings } from '@/lib/ide-settings';
 import { ideUsage } from '@/lib/ide-usage';
 import type { AgentCli, ChangedFile, Subagent } from '@/lib/ide';
 import { t, translateError } from '@/lib/i18n';
+
+/** A message that waits for the running turn: with the AI chosen when it was typed and the conversation it was typed in (null: not loaded yet). */
+type Waiting = {
+    prompt: string;
+    cli: AgentCli;
+    conversation: number | null;
+};
 
 // * Only sizes and the error text go to the statistics; the model is not known to the chat.
 const recordUsage = (turn: Turn): Promise<boolean> =>
@@ -139,8 +146,13 @@ export function useAgentTurns({
     const failover = useRef<((finished: Turn) => void) | null>(null);
     // * Sub-agents of the running turns that are not done yet: only while there are some does a message sent meanwhile start its own turn.
     const working = useRef(new Set<string>());
-    // * Messages sent while a turn runs without sub-agents: they wait and go as one message when the chat is free or a sub-agent starts.
-    const queued = useRef<string[]>([]);
+    // * Messages sent while a turn runs without sub-agents: they wait and go as one message when the chat is free or a sub-agent starts. Each keeps the AI chosen when it was typed and the conversation it belongs to; the ref is read at once, the state is what the box shows.
+    const queued = useRef<Waiting[]>([]);
+    const [waiting, setWaiting] = useState<Waiting[]>([]);
+    const keepQueue = (next: Waiting[]) => {
+        queued.current = next;
+        setWaiting(next);
+    };
     // * Set after each render (like `failover`): the events are listened to once, and sending needs the latest state.
     const flushQueue = useRef<(() => void) | null>(null);
     // * Turns waiting (a few seconds at most) for the session id of the turn that is still starting: a `session` event wakes them.
@@ -500,7 +512,10 @@ export function useAgentTurns({
     // * While a turn runs, a message goes at once (its own turn) only if that turn has sub-agents working; otherwise it waits in the queue.
     const send = (prompt: string) => {
         if (runs.current.size > 0 && working.current.size === 0) {
-            queued.current.push(prompt);
+            keepQueue([
+                ...queued.current,
+                { prompt, cli, conversation: conversation.current },
+            ]);
 
             return;
         }
@@ -514,15 +529,37 @@ export function useAgentTurns({
             queued.current.length > 0 &&
             (runs.current.size === 0 || working.current.size > 0)
         ) {
-            const prompt = queued.current.join('\n\n');
+            // * One AI per message: the first messages that share an AI go together, the rest wait for the next flush.
+            const [first] = queued.current;
+            const other = queued.current.findIndex(
+                (item) => item.cli !== first.cli,
+            );
+            const group = queued.current.slice(
+                0,
+                other === -1 ? undefined : other,
+            );
 
-            queued.current = [];
-            startTurn(prompt, cli, [], true);
+            keepQueue(queued.current.slice(group.length));
+            startTurn(
+                group.map((item) => item.prompt).join('\n\n'),
+                first.cli,
+                [],
+                true,
+            );
         }
     };
 
     useEffect(() => {
         flushQueue.current = flush;
+
+        // * Another conversation was opened or started: its messages are not for this one.
+        const stale = (item: Waiting) =>
+            item.conversation !== null &&
+            item.conversation !== conversation.current;
+
+        if (queued.current.some(stale)) {
+            keepQueue(queued.current.filter((item) => !stale(item)));
+        }
     });
 
     /** The message typed in the box (and its attachments) goes to the chosen AI: at once when the chat is free or a sub-agent works (each turn has its own run id, so their events never mix), else it waits for the running turn. */
@@ -531,6 +568,8 @@ export function useAgentTurns({
             send(prompt);
         }
     });
+
+    const clearWaiting = useStableCallback(() => keepQueue([]));
 
     // * A message from the phone app is sent as if it was typed here.
     const remoteSend = useStableCallback((prompt: string) => {
@@ -684,6 +723,8 @@ export function useAgentTurns({
     });
 
     return {
+        waiting,
+        clearWaiting,
         choose,
         sendFromComposer,
         switchAccount,
