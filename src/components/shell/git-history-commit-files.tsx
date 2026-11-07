@@ -100,7 +100,15 @@ function FileDiffView({
 }
 
 /** The files one commit changed; picking a file shows its diff under it. */
-export function CommitFiles({ root, hash }: { root: string; hash: string }) {
+export function CommitFiles({
+    root,
+    hash,
+    indentClassName = 'pl-9',
+}: {
+    root: string;
+    hash: string;
+    indentClassName?: string;
+}) {
     const cacheKey = `${root}\n${hash}`;
     const [request, setRequest] = useState<Request<GitCommitFile[]>>(() => {
         const cached = filesCache.get(cacheKey);
@@ -138,7 +146,7 @@ export function CommitFiles({ root, hash }: { root: string; hash: string }) {
 
     if (request.state === 'loading') {
         return (
-            <p className="py-1 pl-9 text-xs text-muted-foreground">
+            <p className={`py-1 ${indentClassName} text-xs text-muted-foreground`}>
                 {t('history.files_loading')}
             </p>
         );
@@ -146,7 +154,7 @@ export function CommitFiles({ root, hash }: { root: string; hash: string }) {
 
     if (request.state === 'failed') {
         return (
-            <p role="alert" className="py-1 pl-9 text-xs text-destructive">
+            <p role="alert" className={`py-1 ${indentClassName} text-xs text-destructive`}>
                 {t('history.error', { message: request.message })}
             </p>
         );
@@ -154,14 +162,14 @@ export function CommitFiles({ root, hash }: { root: string; hash: string }) {
 
     if (request.value.length === 0) {
         return (
-            <p className="py-1 pl-9 text-xs text-muted-foreground">
+            <p className={`py-1 ${indentClassName} text-xs text-muted-foreground`}>
                 {t('history.no_files')}
             </p>
         );
     }
 
     return (
-        <ul aria-label={t('history.files_label')} className="pb-1 pl-9">
+        <ul aria-label={t('history.files_label')} className={`pb-1 ${indentClassName}`}>
             {request.value.map((file) => (
                 <li key={file.path}>
                     <button

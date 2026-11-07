@@ -108,7 +108,7 @@ export function OutgoingCommits({
                 </Button>
             </div>
             {open && (
-                <ul className="max-h-64 space-y-0.5 overflow-y-auto px-3 pb-2 pl-5">
+                <ul className="max-h-64 space-y-0.5 overflow-y-auto px-2 pb-2">
                     {commits.map((commit) => (
                         <li key={commit.hash} className="min-w-0 text-xs">
                             <button
@@ -121,17 +121,17 @@ export function OutgoingCommits({
                                             : commit.hash,
                                     )
                                 }
-                                className="flex w-full min-w-0 items-center gap-1 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                className="flex w-full min-w-0 items-center gap-2 rounded-sm px-1 py-1 text-left transition-colors hover:bg-accent/50 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             >
                                 {expandedHash === commit.hash ? (
                                     <ChevronDown
                                         aria-hidden="true"
-                                        className="size-3 shrink-0"
+                                        className="size-4 shrink-0 text-muted-foreground"
                                     />
                                 ) : (
                                     <ChevronRight
                                         aria-hidden="true"
-                                        className="size-3 shrink-0"
+                                        className="size-4 shrink-0 text-muted-foreground"
                                     />
                                 )}
                                 <CommitAvatar
@@ -146,15 +146,24 @@ export function OutgoingCommits({
                                     }
                                     sizeClassName="size-4"
                                 />
-                                <code className="shrink-0 text-muted-foreground">
+                                <code className="w-[7ch] shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                                     {commit.shortHash}
                                 </code>
-                                <span className="min-w-0 truncate">
+                                <span
+                                    className="min-w-0 flex-1 truncate"
+                                    title={commit.subject}
+                                >
                                     {commit.subject}
                                 </span>
                             </button>
                             {expandedHash === commit.hash && (
-                                <CommitFiles root={root} hash={commit.hash} />
+                                <div className="ml-3 border-l pl-1">
+                                    <CommitFiles
+                                        root={root}
+                                        hash={commit.hash}
+                                        indentClassName="pl-1"
+                                    />
+                                </div>
                             )}
                         </li>
                     ))}
