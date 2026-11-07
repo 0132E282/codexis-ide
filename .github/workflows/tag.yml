@@ -80,10 +80,15 @@ jobs:
                   version="$major.$minor.$((patch + 1))"
                   tag="v$version"
 
-                  # * An existing tag is left untouched: no error, no overwrite, no force.
+                  # * An existing tag on the default branch is left untouched (no overwrite, no force). One outside its history is an orphan from a rejected push, so fail loudly.
                   if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
-                    echo "Tag $tag already exists, skipping."
-                    exit 0
+                    git fetch --quiet origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
+                    if git merge-base --is-ancestor "refs/tags/$tag^{commit}" "origin/$DEFAULT_BRANCH"; then
+                      echo "Tag $tag already exists, skipping."
+                      exit 0
+                    fi
+                    echo "::error::Tag $tag exists but is not in the history of $DEFAULT_BRANCH (orphan tag, likely from an earlier rejected push). Delete the tag, then run again."
+                    exit 1
                   fi
 
                   # * Edit only the version lines; Cargo.lock is patched by hand so no dependency changes.
@@ -105,9 +110,9 @@ jobs:
                   git commit -m "chore: phát hành $tag [skip ci]"
                   git tag -a "$tag" -m "Release $tag"
 
-                  # * One plain push of commit and tag (no force). If the branch moved or is protected, fail instead of retrying.
-                  if ! git push origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$tag"; then
-                    echo "::error::Push rejected (protected branch or newer commits on $DEFAULT_BRANCH). Nothing was retried."
+                  # * One atomic push of commit and tag (no force): if the branch is rejected, the tag is not created either. Fail instead of retrying.
+                  if ! git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$tag"; then
+                    echo "::error::Push rejected, nothing was pushed or retried. Common cause: a ruleset or branch protection on $DEFAULT_BRANCH requires a pull request, so add github-actions to its bypass list. Otherwise $DEFAULT_BRANCH has newer commits."
                     exit 1
                   fi
                   {
