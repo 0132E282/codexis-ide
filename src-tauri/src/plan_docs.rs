@@ -158,6 +158,7 @@ fn read_folder(workspace: &Workspace) -> PlanDocsList {
     names.truncate(MAX_FILES);
 
     let index = read_index(&sandbox, &folder);
+    let name_set: HashSet<&str> = names.iter().map(String::as_str).collect();
     let json_stems: HashSet<String> = names
         .iter()
         .filter(|name| format_of(name) == Some(PlanFormat::Json))
@@ -177,7 +178,8 @@ fn read_folder(workspace: &Workspace) -> PlanDocsList {
             continue;
         }
 
-        let has_markdown = format == PlanFormat::Json && names.contains(&format!("{stem}.md"));
+        let has_markdown =
+            format == PlanFormat::Json && name_set.contains(format!("{stem}.md").as_str());
 
         match read_plan(&sandbox, &folder, name, format, has_markdown, &index) {
             Some(plan) => plans.push(plan),

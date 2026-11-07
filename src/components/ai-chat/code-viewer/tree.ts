@@ -7,19 +7,32 @@ export type TreeNode = {
 // * Folders first, then files, each alphabetically.
 export function buildTree(paths: string[]): TreeNode[] {
     const root: TreeNode = { name: '', path: '', children: [] };
+    // * Child lookup by name per folder, so a wide folder is not scanned for every path.
+    const lookups = new Map<TreeNode, Map<string, TreeNode>>();
 
     for (const path of paths) {
         let node = root;
         const parts = path.split('/');
+        let nodePath = '';
 
         parts.forEach((name, index) => {
             const isFile = index === parts.length - 1;
-            const nodePath = parts.slice(0, index + 1).join('/');
-            let child = node.children?.find((item) => item.name === name);
+
+            nodePath = index === 0 ? name : `${nodePath}/${name}`;
+
+            let lookup = lookups.get(node);
+
+            if (lookup === undefined) {
+                lookup = new Map();
+                lookups.set(node, lookup);
+            }
+
+            let child = lookup.get(name);
 
             if (!child) {
                 child = { name, path: nodePath, children: isFile ? null : [] };
                 node.children?.push(child);
+                lookup.set(name, child);
             }
 
             node = child;

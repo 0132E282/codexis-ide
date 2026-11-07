@@ -2,6 +2,7 @@
 //!
 //! Nothing here writes. Files are read up to a size limit, and a symlink is followed only when its target stays inside the folder it was found under (the project root or the home folder). Secrets (env values, headers, tokens, arguments, URL queries) are never returned.
 
+use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -525,7 +526,7 @@ impl ToolScanner {
 
     pub fn skills(&self) -> Listing<ToolEntry> {
         let mut listing = Listing::new();
-        let mut seen = Vec::new();
+        let mut seen = HashSet::new();
 
         for base in &self.bases {
             for folder in [".claude/skills", ".agents/skills"] {
@@ -535,11 +536,9 @@ impl ToolScanner {
                         continue;
                     };
 
-                    if seen.contains(&real) {
+                    if !seen.insert(real) {
                         continue;
                     }
-
-                    seen.push(real);
 
                     let fallback = directory
                         .file_name()
@@ -557,7 +556,7 @@ impl ToolScanner {
 
     pub fn agents(&self) -> Listing<ToolEntry> {
         let mut listing = Listing::new();
-        let mut seen = Vec::new();
+        let mut seen = HashSet::new();
 
         for base in &self.bases {
             for folder in [".claude/agents", ".codex/agents"] {
@@ -572,11 +571,9 @@ impl ToolScanner {
                         continue;
                     };
 
-                    if seen.contains(&real) {
+                    if !seen.insert(real) {
                         continue;
                     }
-
-                    seen.push(real);
 
                     collect(&mut listing, base.read(&file, MAX_FILE_BYTES), |text| {
                         let meta = if extension == Some("toml") {
@@ -596,7 +593,7 @@ impl ToolScanner {
 
     pub fn rules(&self) -> Listing<RuleFile> {
         let mut listing = Listing::new();
-        let mut seen = Vec::new();
+        let mut seen = HashSet::new();
 
         for base in &self.bases {
             let mut files = vec![
@@ -619,11 +616,9 @@ impl ToolScanner {
                     continue;
                 };
 
-                if seen.contains(&real) {
+                if !seen.insert(real) {
                     continue;
                 }
-
-                seen.push(real);
 
                 collect(&mut listing, base.read(&file, MAX_FILE_BYTES), |text| {
                     vec![RuleFile {

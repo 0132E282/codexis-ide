@@ -165,9 +165,16 @@ export function ChatPanel({
     });
     const { turns, busy, context } = session;
     // * Only a finished answer: the speaker button reads it, and the message box is not redrawn for every streamed piece.
-    const lastAnswer =
-        [...turns].reverse().find((turn) => !turn.running && turn.answer !== '')
-            ?.answer ?? '';
+    let lastAnswer = '';
+
+    for (let index = turns.length - 1; index >= 0; index--) {
+        if (!turns[index].running && turns[index].answer !== '') {
+            lastAnswer = turns[index].answer;
+
+            break;
+        }
+    }
+
     const freshAnswer = useFreshAnswer(turns, chatId);
     const reportContext = useStableCallback((usage: ContextUsage | null) =>
         onContext?.(usage),
