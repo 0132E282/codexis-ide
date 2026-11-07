@@ -12,28 +12,47 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    # * Bumps the patch version (0.1.0 -> 0.1.1) on every push to the default branch, commits it and tags it as v<version>. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
-    release:
+    # * Bumps the patch version (0.1.0 -> 0.1.1) on a push to the default branch that changes frontend or backend code, commits it and tags it as v<version>. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
+    tag:
         # * `on.push.branches` cannot read the default branch, so the branch is checked here.
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         runs-on: ubuntu-latest
         timeout-minutes: 5
+        outputs:
+            released: ${{ steps.bump.outputs.released }}
+            tag: ${{ steps.bump.outputs.tag }}
+            version: ${{ steps.bump.outputs.version }}
         steps:
             - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
               with:
                   fetch-depth: 0
 
             - name: Bump patch version and tag
+              id: bump
               env:
                   COMMIT_SHA: ${{ github.sha }}
                   DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+                  EVENT: ${{ github.event_name }}
+                  BEFORE: ${{ github.event.before }}
               run: |
+                  echo "released=false" >> "$GITHUB_OUTPUT"
+
                   # * Skip the release commit made by this workflow, so it never loops.
                   subject=$(git log -1 --format=%s "$COMMIT_SHA")
                   author=$(git log -1 --format=%ae "$COMMIT_SHA")
                   if [ "$author" = "41898282+github-actions[bot]@users.noreply.github.com" ] && echo "$subject" | grep -qE '^chore: phát hành v[0-9]'; then
                     echo "Release commit, skipping."
                     exit 0
+                  fi
+
+                  # * Only frontend or backend code changes release (same path filter as build.yml). A manual run, a new branch or an unreadable base counts as changed.
+                  if [ "$EVENT" != "workflow_dispatch" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+                    files=$(git diff --name-only "$BEFORE" "$COMMIT_SHA")
+                    echo "$files"
+                    if ! echo "$files" | grep -qE '^(src/|public/|index\.html$|package\.json$|pnpm-lock\.yaml$|vite\.config\.ts$|tsconfig.*\.json$|eslint\.config\.js$|\.prettier)|^src-tauri/'; then
+                      echo "::notice::No frontend or backend code changed, so no new version."
+                      exit 0
+                    fi
                   fi
 
                   semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -91,4 +110,66 @@ jobs:
                     echo "::error::Push rejected (protected branch or newer commits on $DEFAULT_BRANCH). Nothing was retried."
                     exit 1
                   fi
-                  echo "Released $tag."
+                  {
+                    echo "released=true"
+                    echo "tag=$tag"
+                    echo "version=$version"
+                  } >> "$GITHUB_OUTPUT"
+                  echo "Tagged $tag."
+
+    # * Publishes the GitHub Release (updater files for the in-app update) only when a new tag was just created. It lives in this workflow because a tag pushed with GITHUB_TOKEN does not trigger others.
+    release:
+        needs: tag
+        if: needs.tag.outputs.released == 'true'
+        runs-on: macos-latest
+        timeout-minutes: 60
+        permissions:
+            contents: write
+        env:
+            # * Secrets cannot be read in `if:`, so the step conditions test this flag instead.
+            HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+            TAG: ${{ needs.tag.outputs.tag }}
+            VERSION: ${{ needs.tag.outputs.version }}
+        steps:
+            - if: env.HAS_SIGNING_KEY != 'true'
+              run: echo "::notice::No signing secret, so no release was created (only the tag)."
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  ref: ${{ needs.tag.outputs.tag }}
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+              with:
+                  version: 10
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+              with:
+                  workspaces: src-tauri
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              run: pnpm install --frozen-lockfile
+
+            - if: env.HAS_SIGNING_KEY == 'true'
+              uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+              with:
+                  tagName: ${{ needs.tag.outputs.tag }}
+                  releaseName: Codexis IDE v${{ needs.tag.outputs.version }}
+                  releaseDraft: false
+                  prerelease: false
+                  includeUpdaterJson: true
