@@ -13,7 +13,74 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    test:
+    # * Decides which side changed, so a frontend-only change does not run the Rust checks and a backend-only change does not run the frontend ones. A manual run, a new branch, the workflow file itself or an unreadable base run everything.
+    changes:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            frontend: ${{ steps.filter.outputs.frontend }}
+            backend: ${{ steps.filter.outputs.backend }}
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+              with:
+                  fetch-depth: 0
+
+            - id: filter
+              env:
+                  EVENT: ${{ github.event_name }}
+                  BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+                  HEAD: ${{ github.sha }}
+              run: |
+                  all() {
+                    echo "frontend=true" >> "$GITHUB_OUTPUT"
+                    echo "backend=true" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  }
+
+                  [ "$EVENT" = "workflow_dispatch" ] && all
+                  [ -z "$BASE" ] && all
+                  [ "$BASE" = "0000000000000000000000000000000000000000" ] && all
+                  git cat-file -e "$BASE^{commit}" 2>/dev/null || all
+
+                  files=$(git diff --name-only "$BASE" "$HEAD")
+                  echo "$files"
+
+                  echo "$files" | grep -qE '^\.github/workflows/build\.yml$' && all
+
+                  frontend=false
+                  backend=false
+                  echo "$files" | grep -qE '^(src/|public/|index\.html$|package\.json$|pnpm-lock\.yaml$|vite\.config\.ts$|tsconfig.*\.json$|eslint\.config\.js$|\.prettier)' && frontend=true
+                  echo "$files" | grep -qE '^src-tauri/' && backend=true
+
+                  echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+                  echo "backend=$backend" >> "$GITHUB_OUTPUT"
+
+    frontend:
+        needs: changes
+        if: needs.changes.outputs.frontend == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+            - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+              with:
+                  version: 10
+
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - run: pnpm install --frozen-lockfile
+
+            - run: pnpm lint
+
+            - run: pnpm build
+
+    backend:
+        needs: changes
+        if: needs.changes.outputs.backend == 'true'
         runs-on: macos-latest
         timeout-minutes: 30
         steps:
@@ -34,20 +101,21 @@ jobs:
               with:
                   workspaces: src-tauri
 
+            # * The Tauri build script needs the built frontend (frontendDist), so the backend job builds it too.
             - run: pnpm install --frozen-lockfile
 
-            - run: pnpm lint
+            - run: pnpm build
 
             - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
             - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
-            - run: pnpm build
-
             - run: cargo test --manifest-path src-tauri/Cargo.toml
 
     build:
-        needs: test
+        needs: [changes, frontend, backend]
+        # * The app is packaged when either side changed and no check failed (a skipped check is fine).
+        if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true') }}
         runs-on: macos-latest
         timeout-minutes: 60
         steps:

@@ -103,8 +103,10 @@ RYNOX_WORKSPACE=~/code/my-app RYNOX_DB=~/rynox-dev.db pnpm start
 
 Workflow [`.github/workflows/build.yml`](.github/workflows/build.yml) chạy mỗi lần push, pull request hoặc chạy tay:
 
-1. `test`: `pnpm lint`, `cargo fmt --check`, `cargo clippy -D warnings`, `pnpm build`, `cargo test`.
-2. `build`: chỉ chạy khi `test` qua; chạy `pnpm tauri build` và upload bản `.app` thành artifact `codexis-ide-macos` (tải ở trang của lần chạy trong tab Actions).
+1. `changes`: so sánh với commit nền để biết thay đổi nằm ở frontend (`src/`, `package.json`, `pnpm-lock.yaml`, cấu hình Vite/TypeScript/ESLint…) hay backend (`src-tauri/`). Chạy tay, nhánh mới hoặc sửa chính workflow thì chạy cả hai.
+2. `frontend`: chỉ chạy khi frontend đổi: `pnpm lint`, `pnpm build`.
+3. `backend`: chỉ chạy khi `src-tauri/` đổi: `pnpm build` (Tauri cần frontend đã build), `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`.
+4. `build`: chạy khi một trong hai phía đổi và không có job nào fail; chạy `pnpm tauri build` và upload bản `.app` thành artifact `codexis-ide-macos` (tải ở trang của lần chạy trong tab Actions). Chỉ đổi tài liệu thì không job nào ngoài `changes` chạy.
 
 ## Phát hành (cho developers)
 
