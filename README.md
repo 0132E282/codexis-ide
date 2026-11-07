@@ -1,31 +1,51 @@
 <h1 align="center">
-  <img src="docs/logo.png" alt="codexis-ide" width="64" height="64" align="absmiddle" />
+  <img src="src-tauri/icons/128x128.png" alt="Codexis IDE" width="64" height="64" align="absmiddle" />
   Codexis IDE
 </h1>
 
 <p align="center">
-  IDE desktop độc lập (Tauri 2 + Rust): soạn code, xem thay đổi git và trò chuyện với AI agent điều khiển các CLI <code>claude</code> / <code>codex</code> ngay trong thư mục dự án.
+  <strong>Trình soạn code desktop có AI agent tích hợp.</strong><br />
+  Soạn code, theo dõi thay đổi Git, chạy terminal và làm việc cùng <code>claude</code> / <code>codex</code> ngay trong thư mục dự án của bạn.
 </p>
+
+<p align="center">
+  <a href="https://github.com/0132E282/codexis-ide/actions/workflows/build.yml"><img src="https://github.com/0132E282/codexis-ide/actions/workflows/build.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="Giấy phép MIT" /></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-lightgrey.svg" alt="Nền tảng macOS" />
+  <img src="https://img.shields.io/badge/Tauri-2-24C8DB.svg" alt="Tauri 2" />
+</p>
+
+## Giới thiệu
+
+Codexis IDE là ứng dụng desktop độc lập, xây dựng trên Tauri 2 (backend Rust) và React 19. Ứng dụng gom trình soạn code, Git, terminal và AI agent vào một cửa sổ. Mọi thao tác của AI diễn ra trong thư mục dự án bạn chọn, thông qua các CLI `claude` hoặc `codex` đã cài sẵn và đăng nhập trên máy.
 
 ## Tính năng
 
+**Soạn code và dự án**
+
 - **Trình soạn code** (Monaco) với cây thư mục, tab tệp, đổi tên tệp, lưu có kiểm tra xung đột và diff thay đổi.
-- **Git**: xem tệp đã thêm/sửa/xoá, nhánh hiện tại, hoàn tác và commit.
+- **Git**: xem tệp đã thêm, sửa, xoá, nhánh hiện tại, hoàn tác và commit.
 - **Terminal thật** (PTY) ngay trong app.
-- **Chat với AI**: mỗi tin nhắn là một lượt chạy `claude` hoặc `codex` trong thư mục dự án; lịch sử và mã phiên của CLI được lưu theo từng thư mục, nên mở lại là tiếp tục đúng cuộc hội thoại. Dừng lượt đang chạy bằng nút dừng hoặc Ctrl+C.
-- **Multichat**: chat thêm một cuộc trò chuyện song song với chat chính, đặt dưới vùng tệp hoặc ở chế độ nổi.
-- **Lưới chat theo nhóm**: đặt tối đa 4 chat (từ nhiều dự án) cạnh nhau trong một nhóm, tạo được nhiều nhóm; nhóm được lưu trong `codexis.db`. Mở tệp thì vùng tệp nổi đè lên lưới (kéo đổi độ rộng), không làm các chat co lại.
-- **Relay giữa các AI**: `claude` và `codex` gọi nhau bằng khối `relay:<ai>` trong câu trả lời, tối đa 6 lượt, có nút dừng cả chuỗi (xem [docs/system/ai-relay.md](docs/system/ai-relay.md)).
-- **Thanh phiên**: popup trên ô chat gồm môi trường, kết nối MCP, tệp AI đã ghi, thống kê sử dụng và GitHub.
-- **Kế hoạch, tác vụ nền và sub-agent**: xem plan AI viết, việc chạy nền và sub-agent gọi bằng `@`.
-- **Đính kèm**: dán ảnh hoặc tệp vào ô chat (hoặc nút `+`); tệp được gửi cho CLI dưới dạng `@đường-dẫn`. Dán code thành `tệp:dòng`.
 - **Dự án**: lưu danh sách dự án (tên, thư mục, biến môi trường), mỗi dự án giữ chat riêng và mở lại dự án dùng lần trước.
-- **Kết nối điện thoại từ xa** để nhắn tin cho AI từ điện thoại.
-- **Bố cục tuỳ chỉnh**: kéo, di chuyển, lấp đầy từng panel; giao diện Việt/Anh.
-- **Tự cập nhật**: khi có bản mới trên GitHub Releases, app báo và cập nhật khi bấm (xem [docs/system/app-update.md](docs/system/app-update.md)).
 - Mở tệp đang xem trong VS Code.
 
-Chưa có: CLI `gemini`.
+**Làm việc với AI**
+
+- **Chat với AI**: mỗi tin nhắn là một lượt chạy `claude` hoặc `codex` trong thư mục dự án. Lịch sử và mã phiên của CLI được lưu theo từng thư mục, mở lại là tiếp tục đúng cuộc hội thoại. Dừng lượt đang chạy bằng nút dừng hoặc Ctrl+C.
+- **Lưới chat theo nhóm**: đặt tối đa 4 chat (từ nhiều dự án) cạnh nhau trong một nhóm, tạo được nhiều nhóm; nhóm được lưu trong `codexis.db`. Mở tệp thì vùng tệp nổi đè lên lưới (kéo đổi độ rộng), không làm các chat co lại.
+- **Multichat**: thêm một cuộc trò chuyện song song với chat chính, đặt dưới vùng tệp hoặc ở chế độ nổi.
+- **Relay giữa các AI**: `claude` và `codex` gọi nhau bằng khối `relay:<ai>` trong câu trả lời, tối đa 6 lượt, có nút dừng cả chuỗi (xem [docs/system/ai-relay.md](docs/system/ai-relay.md)).
+- **Kế hoạch, tác vụ nền và sub-agent**: xem plan AI viết, việc chạy nền và sub-agent gọi bằng `@`.
+- **Đính kèm**: dán ảnh hoặc tệp vào ô chat (hoặc nút `+`); tệp được gửi cho CLI dưới dạng `@đường-dẫn`. Dán code thành `tệp:dòng`.
+- **Thanh phiên**: popup trên ô chat gồm môi trường, kết nối MCP, tệp AI đã ghi, thống kê sử dụng và GitHub.
+- **Kết nối điện thoại từ xa** để nhắn tin cho AI từ điện thoại.
+
+**Ứng dụng**
+
+- **Bố cục tuỳ chỉnh**: kéo, di chuyển, lấp đầy từng panel; giao diện Việt/Anh.
+- **Tự cập nhật**: khi có bản mới trên GitHub Releases, app báo và cập nhật khi bấm (xem [docs/system/app-update.md](docs/system/app-update.md)).
+
+Chưa hỗ trợ: CLI `gemini`.
 
 ## Tải về (macOS)
 
