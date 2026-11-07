@@ -1,15 +1,10 @@
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
+      "command": "sh",
       "args": [
-        "@playwright/mcp@latest",
-        "--output-dir",
-        ".agents/storage/playwright-mcp",
-        "--viewport-size",
-        "1440x900",
-        "--caps",
-        "devtools"
+        "-c",
+        "exec npx @playwright/mcp@latest --output-dir \"$HOME/Library/Application Support/ai.geteasy.rynox-ide/playwright-mcp/$(basename \"$PWD\")\" --viewport-size 1440x900 --caps devtools"
       ]
     }
   }
