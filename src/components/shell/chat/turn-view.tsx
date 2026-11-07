@@ -101,7 +101,7 @@ export const TurnView = memo(function TurnView({
                     </ul>
                 )}
                 {text !== '' && (
-                    <p className="rounded-2xl bg-muted px-4 py-2.5 break-words whitespace-pre-wrap [overflow-wrap:anywhere]">
+                    <p className="max-w-full min-w-0 rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap [overflow-wrap:anywhere]">
                         <HighlightedText text={text} />
                     </p>
                 )}

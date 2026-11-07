@@ -49,6 +49,8 @@ pub enum Event {
     Background(String),
     /// The AI that speaks from now on in a relayed turn (`claude`, `codex`): the chat shows it as a label before that AI's steps.
     Speaker(String),
+    /// The CLI printed the final result of the turn: the answer is complete, even if the process lingers (sub-agents, background tasks). The chat ends the turn here and ignores the `Done` that follows.
+    Result(String),
     /// The CLI exited; always the last event of a turn.
     Done(String),
 }
@@ -63,6 +65,8 @@ pub struct TurnOptions<'a> {
     pub mode: Option<&'a str>,
     /// More project folders the CLI may work in, next to the one it runs in.
     pub add_dirs: &'a [String],
+    /// Resume `session` into a new session id (Claude only: `--fork-session`), so a turn started while another one still runs on the same session does not write into its file.
+    pub fork: bool,
 }
 
 impl TurnOptions<'_> {
@@ -462,10 +466,10 @@ impl TurnRequest<'_> {
             let line = buffer.strip_suffix('\n').unwrap_or(&buffer);
             let line = line.strip_suffix('\r').unwrap_or(line);
 
-            if let Some(responder) = self.responder {
-                if is_result_line(line) {
-                    responder.close();
-                }
+            let is_result = is_result_line(line);
+
+            if let (true, Some(responder)) = (is_result, self.responder) {
+                responder.close();
             }
 
             if let Some(change) = self.cli.background_change(line) {
@@ -483,6 +487,11 @@ impl TurnRequest<'_> {
 
                     observer.event(event);
                 }
+            }
+
+            // * After the result's own events (error, context), so the chat has them all before it ends the turn.
+            if is_result {
+                observer.event(Event::Result(String::new()));
             }
         }
     }

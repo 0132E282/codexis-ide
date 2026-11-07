@@ -20,6 +20,7 @@ import type {
     ToolResultEvent,
 } from '@/components/shell/chat/turn-events';
 import type { PlanData } from '@/components/shell/plan-pane';
+import { waitForSession } from '@/components/shell/chat/session-wait';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent, onRemoteSend } from '@/lib/ide';
 import { ideAuth } from '@/lib/ide-auth';
@@ -136,6 +137,14 @@ export function useAgentTurns({
     const accountChains = useRef(new Map<string, number[]>());
     // * Set after each render: the agent events are listened to once, and the move to the next AI needs the latest state.
     const failover = useRef<((finished: Turn) => void) | null>(null);
+    // * Sub-agents of the running turns that are not done yet: only while there are some does a message sent meanwhile start its own turn.
+    const working = useRef(new Set<string>());
+    // * Messages sent while a turn runs without sub-agents: they wait and go as one message when the chat is free or a sub-agent starts.
+    const queued = useRef<string[]>([]);
+    // * Set after each render (like `failover`): the events are listened to once, and sending needs the latest state.
+    const flushQueue = useRef<(() => void) | null>(null);
+    // * Turns waiting (a few seconds at most) for the session id of the turn that is still starting: a `session` event wakes them.
+    const sessionWaiters = useRef(new Set<() => void>());
     const counter = useRef(0);
     // * What git said was changed when each turn started, by turn id: the turn's own changes are the difference.
     const readChanges = useStableCallback(() => ide.localChanges(root));
@@ -184,6 +193,10 @@ export function useAgentTurns({
             switch (kind) {
                 case 'session':
                     sessions.current[runCli] = payload;
+
+                    for (const resume of sessionWaiters.current) {
+                        resume();
+                    }
 
                     if (
                         workspace.current !== null &&
@@ -237,6 +250,8 @@ export function useAgentTurns({
                     const started = parsePayload<SubagentEvent>(payload);
 
                     if (started !== null) {
+                        working.current.add(started.id);
+                        flushQueue.current?.();
                         setSubagents((current) =>
                             current.some((agent) => agent.id === started.id)
                                 ? current
@@ -247,6 +262,7 @@ export function useAgentTurns({
                     break;
                 }
                 case 'subagentdone':
+                    working.current.delete(payload);
                     setSubagents((current) =>
                         current.map((agent) =>
                             agent.id === payload
@@ -300,8 +316,11 @@ export function useAgentTurns({
                 case 'background':
                     // * Announced mid-turn (handled by the background-tasks hook); it must not end the turn.
                     break;
+                // * `result`: the answer is complete, so the chat is free even if the CLI process lingers for sub-agents or background tasks; the `done` after it is ignored.
+                case 'result':
                 default: {
                     runs.current.delete(runId);
+                    working.current.clear();
                     // * They stay listed (done) until the next message starts; a turn that ends cannot leave one "working".
                     setSubagents((current) =>
                         current.map((agent) => ({ ...agent, done: true })),
@@ -341,11 +360,14 @@ export function useAgentTurns({
 
                     if (finished !== undefined) {
                         persist(finished);
-                        void recordUsage(finished).then(
-                            (limited) =>
-                                limited && failover.current?.(finished),
+                        void recordUsage(finished).then((limited) =>
+                            limited
+                                ? failover.current?.(finished)
+                                : flushQueue.current?.(),
                         );
                         drafts.current.delete(runId);
+                    } else {
+                        flushQueue.current?.();
                     }
                 }
             }
@@ -370,7 +392,14 @@ export function useAgentTurns({
         fromComposer: boolean,
         triedAccounts: number[] = [],
     ) => {
-        setSubagents([]);
+        // * Another turn is already running: this one forks its session and does not attribute file changes.
+        const overlapping = runs.current.size > 0;
+
+        // * Not while another turn runs: it would wipe the sub-agents that turn started.
+        if (!overlapping) {
+            setSubagents([]);
+        }
+
         // * Unique across restarts: saved turns keep their ids.
         const id = `run-${Date.now().toString(36)}-${counter.current++}`;
         const turn: Turn = {
@@ -392,71 +421,118 @@ export function useAgentTurns({
         }
 
         setTurns((current) => [...current, turn]);
-        void readChanges()
-            .then((files) =>
-                before.current.set(
-                    id,
-                    new Map(
-                        files.map((file) => [file.path, changeSignature(file)]),
+
+        // * Overlapping turns edit the same files: no baseline, so none of them claims the other's changes.
+        if (!overlapping) {
+            void readChanges()
+                .then((files) =>
+                    before.current.set(
+                        id,
+                        new Map(
+                            files.map((file) => [
+                                file.path,
+                                changeSignature(file),
+                            ]),
+                        ),
                     ),
-                ),
-            )
-            .catch(() => undefined);
+                )
+                .catch(() => undefined);
+        }
         // * Saved at once, then again when the turn ends: a message is not lost when the answer never finishes (the app is closed, the CLI stalls).
         persist(turn);
-        ide.agentSend(
-            id,
-            target,
-            prompt,
-            sessions.current[target] ?? null,
-            models[target] ?? null,
-            target === 'claude' ? mode : null,
-            target === 'claude' && agentTeam,
-            root,
-            extraRoots.filter((extra) =>
-                projects.some((project) => project.root === extra),
-            ),
-            worktree && conversation.current !== null
-                ? `c${conversation.current}`
-                : undefined,
-        ).catch((caught) => {
-            runs.current.delete(id);
-            drafts.current.delete(id);
+        // * The first turn has no session id yet: wait for it up to 3 seconds, then start a new session.
+        const sessionKnown = waitForSession(
+            sessionWaiters.current,
+            () => !overlapping || sessions.current[target] !== undefined,
+        );
 
-            const failed = {
-                ...turn,
-                error: errorText(caught),
-                running: false,
-            };
+        void sessionKnown
+            .then(() => {
+                const session = sessions.current[target] ?? null;
 
-            setTurns((current) =>
-                current.map((item) => (item.id === id ? failed : item)),
-            );
-            persist(failed);
-            recordUsage(failed);
-        });
+                return ide.agentSend(
+                    id,
+                    target,
+                    prompt,
+                    session,
+                    models[target] ?? null,
+                    target === 'claude' ? mode : null,
+                    target === 'claude' && agentTeam,
+                    root,
+                    extraRoots.filter((extra) =>
+                        projects.some((project) => project.root === extra),
+                    ),
+                    worktree && conversation.current !== null
+                        ? `c${conversation.current}`
+                        : undefined,
+                    // * Only Claude can fork; another turn running (besides this one) means the session is in use.
+                    target === 'claude' &&
+                        session !== null &&
+                        runs.current.size > 1,
+                );
+            })
+            .catch((caught) => {
+                runs.current.delete(id);
+                drafts.current.delete(id);
+
+                const failed = {
+                    ...turn,
+                    error: errorText(caught),
+                    running: false,
+                };
+
+                setTurns((current) =>
+                    current.map((item) => (item.id === id ? failed : item)),
+                );
+                persist(failed);
+                recordUsage(failed);
+            });
     };
 
     // * A picked option (or the typed "Khác…" answer) is the next message; `choose` stays the same function so the memoised turns do not re-render.
     const choose = useStableCallback((picked: string) => {
-        if (!busy) {
-            startTurn(picked, cli, [], false);
-        }
+        startTurn(picked, cli, [], false);
     });
 
-    /** The message typed in the box (and its attachments) goes to the chosen AI; ignored while a turn runs. */
-    const sendFromComposer = useStableCallback((prompt: string) => {
-        if (prompt === '' || busy) {
+    // * While a turn runs, a message goes at once (its own turn) only if that turn has sub-agents working; otherwise it waits in the queue.
+    const send = (prompt: string) => {
+        if (runs.current.size > 0 && working.current.size === 0) {
+            queued.current.push(prompt);
+
             return;
         }
 
         startTurn(prompt, cli, [], true);
+    };
+
+    // * Sends the waiting messages as one: when the chat is free or a sub-agent starts.
+    const flush = () => {
+        if (
+            queued.current.length > 0 &&
+            (runs.current.size === 0 || working.current.size > 0)
+        ) {
+            const prompt = queued.current.join('\n\n');
+
+            queued.current = [];
+            startTurn(prompt, cli, [], true);
+        }
+    };
+
+    useEffect(() => {
+        flushQueue.current = flush;
     });
 
-    // * A message from the phone app is sent as if it was typed here; one that arrives while a turn runs is ignored.
+    /** The message typed in the box (and its attachments) goes to the chosen AI: at once when the chat is free or a sub-agent works (each turn has its own run id, so their events never mix), else it waits for the running turn. */
+    const sendFromComposer = useStableCallback((prompt: string) => {
+        if (prompt !== '') {
+            send(prompt);
+        }
+    });
+
+    // * A message from the phone app is sent as if it was typed here.
     const remoteSend = useStableCallback((prompt: string) => {
-        if (acceptsRemote && !busy && prompt.trim() !== '') {
-            startTurn(prompt.trim(), cli, [], true);
+        if (acceptsRemote && prompt.trim() !== '') {
+            send(prompt.trim());
         }
     });
 
@@ -568,11 +644,7 @@ export function useAgentTurns({
                 .catch(() => false)
                 .then((switched) => (switched ? undefined : ideSettings.get()))
                 .then((settings) => {
-                    if (
-                        settings === undefined ||
-                        !settings.fallbackEnabled ||
-                        busy
-                    ) {
+                    if (settings === undefined || !settings.fallbackEnabled) {
                         return;
                     }
 

@@ -466,7 +466,8 @@ impl TurnObserver for HopObserver<'_> {
                 }
             }
             agent::Event::Error(_) => self.failed.store(true, Ordering::Relaxed),
-            agent::Event::Done(_) => return,
+            // * The relay ends the turn itself (its own `Done`), not at the result of one hop.
+            agent::Event::Done(_) | agent::Event::Result(_) => return,
             _ => {}
         }
 
@@ -530,6 +531,7 @@ impl HopRunner for TauriHopRunner<'_> {
                 model: if own { self.model } else { None },
                 mode: mode_for_hop(self.mode),
                 add_dirs: self.add_dirs,
+                fork: false,
             },
             language: self.language,
             environment: &environment,
@@ -567,6 +569,7 @@ pub async fn agent_send(
     root: Option<String>,
     extra_roots: Option<Vec<String>>,
     worktree: Option<String>,
+    fork: bool,
 ) -> Result<(), String> {
     let cli = CliKind::parse_agent(&cli)
         .and_then(CliKind::agent)
@@ -587,6 +590,7 @@ pub async fn agent_send(
         model: model.as_deref(),
         mode: mode.as_deref(),
         add_dirs: &[],
+        fork,
     }
     .validate()?;
 
@@ -671,6 +675,7 @@ pub async fn agent_send(
                 model: model.as_deref(),
                 mode: mode.as_deref(),
                 add_dirs: &add_dirs,
+                fork,
             },
             language: &language,
             environment: &environment,

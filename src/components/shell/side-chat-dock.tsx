@@ -70,7 +70,7 @@ export function SideChatDock({
     }, [turns, chat.active.id, open]);
 
     const submit = () => {
-        if (question.trim() === '' || chat.active.running) {
+        if (question.trim() === '') {
             return;
         }
 

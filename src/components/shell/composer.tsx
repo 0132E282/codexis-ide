@@ -58,7 +58,7 @@ export const Composer = memo(function Composer({
     value: string;
     onChange: (value: string) => void;
     onSubmit: () => void;
-    /** A turn is running: sending and switching CLI wait for it. */
+    /** A turn is running: switching CLI and the other controls wait for it; sending does not (a message sent meanwhile starts its own turn if a sub-agent works, else it waits for the turn). */
     busy: boolean;
     /** Ctrl+C while a turn runs: stops it. */
     onStop: () => void;
@@ -158,7 +158,7 @@ export const Composer = memo(function Composer({
     const submit = (event: FormEvent) => {
         event.preventDefault();
 
-        if ((value.trim() !== '' || attachments.length > 0) && !busy) {
+        if (value.trim() !== '' || attachments.length > 0) {
             dictation.stop();
             // * A new message ends the reading of the old answer.
             stopReading();
@@ -451,9 +451,7 @@ export const Composer = memo(function Composer({
                             type="submit"
                             size="icon-sm"
                             disabled={
-                                busy ||
-                                (value.trim() === '' &&
-                                    attachments.length === 0)
+                                value.trim() === '' && attachments.length === 0
                             }
                             aria-label={t('common.send')}
                             className="rounded-full"

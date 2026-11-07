@@ -48,6 +48,7 @@ fn codex_arguments_follow_the_documented_order() {
         model: Some("gpt-5"),
         mode: Some("plan"),
         add_dirs: &dirs,
+        fork: false,
     });
 
     assert_eq!(

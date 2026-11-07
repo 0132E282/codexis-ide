@@ -349,7 +349,7 @@ export function PlansPane({
                         {body}
                     </p>
                 ) : (
-                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(16rem,22rem))] gap-3">
                         {visible.map((plan) => (
                             <PlanCard
                                 key={plan.id}

@@ -41,9 +41,11 @@ export function DataPane({ root }: { root: string | undefined }) {
                 ))}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-                {tab === 'events' && <FileEventsTable root={root} />}
-                {tab === 'images' && <ChatImagesGrid root={root} />}
-                {tab === 'plans' && <PlanRecordsTable root={root} />}
+                <div className="max-w-6xl min-w-0">
+                    {tab === 'events' && <FileEventsTable root={root} />}
+                    {tab === 'images' && <ChatImagesGrid root={root} />}
+                    {tab === 'plans' && <PlanRecordsTable root={root} />}
+                </div>
             </div>
         </div>
     );

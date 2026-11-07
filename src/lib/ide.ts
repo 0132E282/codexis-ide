@@ -261,8 +261,11 @@ export const ide = {
         extraRoots?: string[],
         /** Runs the turn in a git worktree of this name (own branch, project untouched). */
         worktree?: string,
+        /** Resumes the session into a new one (Claude's `--fork-session`): for a turn that starts while another still runs on the same session. */
+        fork = false,
     ) =>
         invoke<void>('agent_send', {
+            fork,
             runId,
             cli,
             prompt,
@@ -420,6 +423,7 @@ export type AgentEvent = {
         | 'background'
         | 'speaker'
         | 'error'
+        | 'result'
         | 'done';
     text: string;
 };

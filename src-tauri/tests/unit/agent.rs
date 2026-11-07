@@ -6,6 +6,7 @@ fn options(session: Option<&str>) -> TurnOptions<'_> {
         model: None,
         mode: None,
         add_dirs: &[],
+        fork: false,
     }
 }
 
@@ -107,6 +108,7 @@ fn args(
         model,
         mode,
         add_dirs,
+        fork: false,
     })
 }
 
@@ -258,6 +260,7 @@ fn options_are_validated_model_first_then_mode() {
         model,
         mode,
         add_dirs: &[],
+        fork: false,
     };
 
     assert_eq!(

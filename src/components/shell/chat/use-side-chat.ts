@@ -13,6 +13,7 @@ import type {
     ToolCallEvent,
     ToolResultEvent,
 } from '@/components/shell/chat/turn-events';
+import { waitForSession } from '@/components/shell/chat/session-wait';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent } from '@/lib/ide';
 import { translateError } from '@/lib/i18n';
@@ -48,6 +49,10 @@ export function useSideChat(root: string) {
     const [activeId, setActiveId] = useState<string | null>(() => tabs[0].id);
     // * Runs being answered: run id → tab id. Events of any other run (the main chat's) are not ours.
     const runs = useRef(new Map<string, string>());
+    // * Questions waiting (a few seconds at most) for the session id of the one still starting: a `session` event wakes them.
+    const sessionWaiters = useRef(new Set<() => void>());
+    // * Session id of each tab by tab id, set the moment it arrives (state is only updated at the next render): a waiting question reads it here.
+    const sessionIds = useRef(new Map<string, string>());
 
     useEffect(() => {
         const updateTab = (tabId: string, change: (tab: SideTab) => SideTab) =>
@@ -74,6 +79,12 @@ export function useSideChat(root: string) {
 
             switch (kind) {
                 case 'session':
+                    sessionIds.current.set(tabId, payload);
+
+                    for (const resume of sessionWaiters.current) {
+                        resume();
+                    }
+
                     updateTab(tabId, (tab) => ({
                         ...tab,
                         sessionId: payload,
@@ -132,13 +143,18 @@ export function useSideChat(root: string) {
                 case 'context':
                     // * Sub-agents, permission questions and context levels are out of scope for the side chat.
                     break;
+                case 'result':
                 case 'done':
                     runs.current.delete(runId);
                     updateTurn(runId, tabId, (turn) => ({
                         ...turn,
                         running: false,
                     }));
-                    updateTab(tabId, (tab) => ({ ...tab, running: false }));
+                    // * Questions of one tab may run side by side: the tab is still answering while another of its runs is.
+                    updateTab(tabId, (tab) => ({
+                        ...tab,
+                        running: [...runs.current.values()].includes(tabId),
+                    }));
                     break;
                 default:
                     // * A kind this code does not know never ends the turn: only `done` does.
@@ -202,66 +218,92 @@ export function useSideChat(root: string) {
         return wasLast;
     });
 
-    /** Asks the question in the open tab; ignored while that tab is answering. */
-    const send = useStableCallback((prompt: string) => {
-        const question = prompt.trim();
+    /** Starts the run of a question in a tab. */
+    const ask = useStableCallback(
+        (tabId: string, question: string, sessionId: string | null) => {
+            // * Another question of this tab is running: this one forks its session.
+            const overlapping = [...runs.current.values()].includes(tabId);
+            const runId = `${RUN_PREFIX}${crypto.randomUUID()}`;
+            const turn: Turn = {
+                id: runId,
+                prompt: question,
+                answer: '',
+                error: null,
+                running: true,
+                cli: 'claude',
+            };
 
-        if (question === '' || active.running) {
-            return;
-        }
-
-        const tabId = active.id;
-        const runId = `${RUN_PREFIX}${crypto.randomUUID()}`;
-        const turn: Turn = {
-            id: runId,
-            prompt: question,
-            answer: '',
-            error: null,
-            running: true,
-            cli: 'claude',
-        };
-
-        runs.current.set(runId, tabId);
-        setTabs((current) =>
-            current.map((tab) =>
-                tab.id === tabId
-                    ? { ...tab, turns: [...tab.turns, turn], running: true }
-                    : tab,
-            ),
-        );
-        ide.agentSend(
-            runId,
-            'claude',
-            question,
-            active.sessionId,
-            null,
-            READ_ONLY_MODE,
-            false,
-            root,
-            [],
-            undefined,
-        ).catch((caught) => {
-            runs.current.delete(runId);
+            runs.current.set(runId, tabId);
             setTabs((current) =>
                 current.map((tab) =>
                     tab.id === tabId
-                        ? {
-                              ...tab,
-                              running: false,
-                              turns: tab.turns.map((item) =>
-                                  item.id === runId
-                                      ? {
-                                            ...item,
-                                            error: errorText(caught),
-                                            running: false,
-                                        }
-                                      : item,
-                              ),
-                          }
+                        ? { ...tab, turns: [...tab.turns, turn], running: true }
                         : tab,
                 ),
             );
-        });
+
+            // * The first question has no session id yet: wait for it up to 3 seconds, then start a new session.
+            const sessionKnown = waitForSession(
+                sessionWaiters.current,
+                () =>
+                    !overlapping ||
+                    sessionId !== null ||
+                    sessionIds.current.has(tabId),
+            );
+
+            void sessionKnown
+                .then(() => {
+                    const session =
+                        sessionId ?? sessionIds.current.get(tabId) ?? null;
+
+                    return ide.agentSend(
+                        runId,
+                        'claude',
+                        question,
+                        session,
+                        null,
+                        READ_ONLY_MODE,
+                        false,
+                        root,
+                        [],
+                        undefined,
+                        session !== null && overlapping,
+                    );
+                })
+                .catch((caught) => {
+                    runs.current.delete(runId);
+                    setTabs((current) =>
+                        current.map((tab) =>
+                            tab.id === tabId
+                                ? {
+                                      ...tab,
+                                      running: [
+                                          ...runs.current.values(),
+                                      ].includes(tabId),
+                                      turns: tab.turns.map((item) =>
+                                          item.id === runId
+                                              ? {
+                                                    ...item,
+                                                    error: errorText(caught),
+                                                    running: false,
+                                                }
+                                              : item,
+                                      ),
+                                  }
+                                : tab,
+                        ),
+                    );
+                });
+        },
+    );
+
+    /** Asks the question in the open tab at once, also while that tab is answering: each question is its own run, so their events never mix. */
+    const send = useStableCallback((prompt: string) => {
+        const question = prompt.trim();
+
+        if (question !== '') {
+            ask(active.id, question, active.sessionId);
+        }
     });
 
     /** Stops the running question of the open tab; the turn finishes with what it had. */

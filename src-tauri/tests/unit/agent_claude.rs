@@ -7,6 +7,7 @@ fn mode_args(mode: Option<&str>) -> Vec<String> {
         model: None,
         mode,
         add_dirs: &[],
+        fork: false,
     })
 }
 
@@ -18,6 +19,7 @@ fn claude_arguments_follow_the_documented_order() {
         model: Some("opus"),
         mode: Some(ASK_MODE),
         add_dirs: &dirs,
+        fork: false,
     });
 
     assert_eq!(

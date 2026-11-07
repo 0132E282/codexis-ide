@@ -456,6 +456,7 @@ export function GitHistoryPane({
                         </p>
                     )}
                 <ul
+                    className="max-w-5xl min-w-0"
                     style={{
                         paddingTop: offsetOf(first),
                         paddingBottom: Math.max(

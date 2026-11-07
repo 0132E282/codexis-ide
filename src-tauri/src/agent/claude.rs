@@ -40,6 +40,10 @@ impl AgentCli for ClaudeAgent {
         if let Some(id) = options.session {
             args.push("--resume".to_string());
             args.push(id.to_string());
+
+            if options.fork {
+                args.push("--fork-session".to_string());
+            }
         }
 
         if let Some(mode) = options.mode {
