@@ -64,6 +64,7 @@ export function WorkspacePane({
     plansOpen,
     sidebarCollapsed,
     sidebarToggle,
+    bottomPanel,
     onToggleTerminal,
     onToggleBackground,
     onTogglePlans,
@@ -85,6 +86,8 @@ export function WorkspacePane({
     phoneOpen: boolean;
     sidebarCollapsed: boolean;
     sidebarToggle: ReactNode;
+    /** The bottom panel when it sits under the work area: drawn under the file area only, never under the main chat. */
+    bottomPanel: ReactNode;
     onToggleTerminal: () => void;
     onToggleBackground: () => void;
     onTogglePlans: () => void;
@@ -246,6 +249,14 @@ export function WorkspacePane({
         ) : null;
 
     const dockPanels: DockPanel[] = [
+        {
+            id: 'bottom-panel',
+            placement: 'bottom',
+            open: bottomPanel !== null,
+            underTrailing: true,
+            size: 256,
+            content: bottomPanel,
+        },
         {
             id: 'side-chat',
             // * Alone: the side chat takes the whole area, whatever edge it was set to.

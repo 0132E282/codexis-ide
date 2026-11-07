@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, GitCommitHorizontal } from 'lucide-react';
 import { memo, useState } from 'react';
 import { getLanguage } from '@/lib/i18n';
 import type { GitCommit } from '@/lib/ide';
+import type { GithubProfile } from '@/lib/ide-auth';
 import { cn } from '@/lib/utils';
 
 // * Fixed row height (px) so the list can show only the rows in view.
@@ -62,9 +63,34 @@ function getGithubAvatarUrl(email: string): string | null {
         : `https://github.com/${author.login}.png?size=40`;
 }
 
-/** The author's GitHub picture, or the first letter of the name when the email is not a GitHub one or the picture fails to load. */
-function CommitAvatar({ name, email }: { name: string; email: string }) {
-    const url = getGithubAvatarUrl(email);
+/** Whether the commit was written by the signed-in GitHub account (same email, display name or login). */
+export function isProfileAuthor(
+    commit: GitCommit,
+    profile: GithubProfile,
+): boolean {
+    const email = commit.authorEmail.trim().toLowerCase();
+    const name = commit.authorName.trim().toLowerCase();
+
+    return (
+        (profile.email !== '' && email === profile.email.toLowerCase()) ||
+        (profile.name !== '' && name === profile.name.toLowerCase()) ||
+        name === profile.login.toLowerCase() ||
+        parseGithubAuthor(email)?.login.toLowerCase() ===
+            profile.login.toLowerCase()
+    );
+}
+
+/** The author's GitHub picture (`ownAvatar` for the signed-in account), or the first letter of the name when there is none or it fails to load. */
+function CommitAvatar({
+    name,
+    email,
+    ownAvatar,
+}: {
+    name: string;
+    email: string;
+    ownAvatar: string;
+}) {
+    const url = ownAvatar !== '' ? ownAvatar : getGithubAvatarUrl(email);
     const [failed, setFailed] = useState(false);
 
     if (url !== null && !failed) {
@@ -93,10 +119,12 @@ function CommitAvatar({ name, email }: { name: string; email: string }) {
 /** One commit row. Memoized: scrolling or typing in the filter re-renders only the rows whose props changed. */
 export const CommitRow = memo(function CommitRow({
     commit,
+    ownAvatar,
     isOpen,
     onToggle,
 }: {
     commit: GitCommit;
+    ownAvatar: string;
     isOpen: boolean;
     onToggle: (hash: string) => void;
 }) {
@@ -123,6 +151,7 @@ export const CommitRow = memo(function CommitRow({
                 key={commit.authorEmail}
                 name={commit.authorName}
                 email={commit.authorEmail}
+                ownAvatar={ownAvatar}
             />
             <span className="min-w-0 flex-1 truncate">{commit.subject}</span>
             {commit.refs.map((ref) => (

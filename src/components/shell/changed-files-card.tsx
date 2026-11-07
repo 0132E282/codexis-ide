@@ -1,5 +1,5 @@
 import { Eye, HardDrive, Undo2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FileIcon } from '@/components/ai-chat/file-icon';
 import { UnifiedDiff } from '@/components/ai-chat/unified-diff';
@@ -31,6 +31,54 @@ function changesByPath(steps: Step[]) {
     }
 
     return changes;
+}
+
+/** Diff of a file whose edit the turn did not record (a shell command wrote it): read from git `HEAD` and from the disk. */
+function GitFileDiff({ file }: { file: ChangedFile }) {
+    const [sides, setSides] = useState<{
+        before: string;
+        after: string;
+    } | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        const head =
+            file.status === 'A'
+                ? Promise.resolve('')
+                : api
+                      .get<{ content?: string }>('/ai-chat/local/head', {
+                          params: { path: file.path },
+                      })
+                      .then(({ data }) => data.content ?? '');
+        const current =
+            file.status === 'D'
+                ? Promise.resolve('')
+                : api
+                      .get<{ content?: string }>('/ai-chat/local/file', {
+                          params: { path: file.path },
+                      })
+                      .then(({ data }) => data.content ?? '');
+
+        Promise.all([head, current])
+            .then(([before, after]) => {
+                if (!cancelled) {
+                    setSides({ before, after });
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setSides({ before: '', after: '' });
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [file.path, file.status]);
+
+    return sides === null ? null : (
+        <UnifiedDiff before={sides.before} after={sides.after} />
+    );
 }
 
 /** The card after a turn: the files the AI changed, each with what happened to it, and the actions to review or undo them. */
@@ -126,12 +174,16 @@ export function ChangedFilesCard({
                                         : t('changed_files.applied')}
                                 </span>
                             </div>
-                            {reviewing && change !== undefined && (
+                            {reviewing && (
                                 <div className="max-h-72 overflow-auto border-t">
-                                    <UnifiedDiff
-                                        before={change.before}
-                                        after={change.after}
-                                    />
+                                    {change !== undefined ? (
+                                        <UnifiedDiff
+                                            before={change.before}
+                                            after={change.after}
+                                        />
+                                    ) : (
+                                        <GitFileDiff file={file} />
+                                    )}
                                 </div>
                             )}
                         </li>

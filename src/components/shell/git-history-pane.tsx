@@ -12,11 +12,14 @@ import {
 import { CommitFiles } from '@/components/shell/git-history-commit-files';
 import {
     CommitRow,
+    isProfileAuthor,
     ROW_HEIGHT,
     parseGithubAuthor,
 } from '@/components/shell/git-history-commit-row';
 import { Button } from '@/components/ui/button';
 import { InputSelect } from '@/components/ui/input-select';
+import { ideAuth } from '@/lib/ide-auth';
+import type { GithubProfile } from '@/lib/ide-auth';
 import { t } from '@/lib/i18n';
 import { ide } from '@/lib/ide';
 import type { GitBranchCompare, GitBranchesInfo, GitCommit } from '@/lib/ide';
@@ -58,10 +61,19 @@ export function GitHistoryPane({
     const [viewportHeight, setViewportHeight] = useState(0);
     // * Bumped when a checkout, merge or pull dropped the caches: the lists are read again.
     const [refreshTick, setRefreshTick] = useState(0);
+    // * Signed-in GitHub profile: its picture stands in for commits of that person whose email is not a GitHub one.
+    const [profile, setProfile] = useState<GithubProfile | null>(null);
     // * Bumped on every new query so a slow answer of an earlier one is dropped.
     const generation = useRef(0);
     const scroller = useRef<HTMLDivElement>(null);
     const expandedObserver = useRef<ResizeObserver | null>(null);
+
+    useEffect(() => {
+        ideAuth
+            .githubProfile()
+            .then(setProfile)
+            .catch(() => setProfile(null));
+    }, []);
 
     useEffect(() => {
         const refresh = () => setRefreshTick((tick) => tick + 1);
@@ -459,6 +471,12 @@ export function GitHistoryPane({
                             <li key={commit.hash}>
                                 <CommitRow
                                     commit={commit}
+                                    ownAvatar={
+                                        profile !== null &&
+                                        isProfileAuthor(commit, profile)
+                                            ? profile.avatar
+                                            : ''
+                                    }
                                     isOpen={isOpen}
                                     onToggle={toggleCommit}
                                 />

@@ -105,6 +105,13 @@ export function DockLayout({
         (panel) => panel.open !== false && panel.placement === 'fill',
     );
 
+    // * Under a file area that is only the tree, the panel keeps a usable width (the chat gives way) instead of the tree's.
+    const scopedBottomOpen = effective.some(
+        (panel) =>
+            panel.open !== false &&
+            panel.placement === 'bottom' &&
+            panel.underTrailing === true,
+    );
     const floating = effective.filter((panel) => panel.placement === 'float');
 
     const docked = (placement: DockedPlacement, scoped = false) =>
@@ -159,7 +166,10 @@ export function DockLayout({
                             {trailing != null && (
                                 <div
                                     className={cn(
-                                        'flex min-h-0 min-w-0 flex-col',
+                                        'flex min-h-0 flex-col',
+                                        !trailingGrows && scopedBottomOpen
+                                            ? 'min-w-96'
+                                            : 'min-w-0',
                                         // * Drawn first, it is the chat's border that is no longer beside it, so it carries the line itself.
                                         trailingFirst && 'order-first border-r',
                                         trailingGrows

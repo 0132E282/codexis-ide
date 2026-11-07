@@ -243,17 +243,17 @@ export const TurnSteps = memo(function TurnSteps({
                     )}
                 </ol>
             )}
+            {result !== null && (
+                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
+                    <MarkdownContent content={result} choices={choices} />
+                </div>
+            )}
             {edited.length > 0 && (
                 <ChangedFilesCard
                     files={edited}
                     steps={steps}
                     projectName={projectName}
                 />
-            )}
-            {result !== null && (
-                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                    <MarkdownContent content={result} choices={choices} />
-                </div>
             )}
         </div>
     );

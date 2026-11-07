@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { BottomPanel } from '@/components/shell/bottom-panel';
 import { FloatingFrame } from '@/components/shell/floating-frame';
 import type { BottomTab } from '@/components/shell/bottom-panel';
@@ -50,14 +49,6 @@ export default function App() {
     useActivityEvents();
     const isFullscreen = useFullscreen();
 
-    // * The terminal is sized by dragging its top edge up (or down); the height is kept for next time.
-    const terminalHeight = useResizableWidth(
-        'ide.height.terminal',
-        256,
-        96,
-        window.innerHeight,
-        'y',
-    );
     // * Open (256) or folded (1) state of the sidebar, kept between visits; the hook only stores it.
     const sidebarWidth = useResizableWidth(
         'ide.width.sidebar',
@@ -203,6 +194,34 @@ export default function App() {
             .catch((caught) => console.error(errorText(caught)));
 
     const showPanel = selected && activePane !== null;
+    // * The bottom panel; under the work area it is drawn inside the active pane (under the editor, never under the chat); floating or filling it stays here.
+    const bottomPanel =
+        bottomTab !== null && activePane !== null ? (
+            <BottomPanel
+                tab={bottomTab}
+                root={activePane.root}
+                placement={bottomPlacement.placement}
+                dockedPlacement={bottomPlacement.dockedPlacement}
+                onPlacementChange={bottomPlacement.setPlacement}
+                historyPath={historyPath}
+                onClearHistoryPath={() => setHistoryPath(null)}
+                onTabChange={setBottomTab}
+                onClose={() => setBottomTab(null)}
+                onOpenFile={(path) =>
+                    patchPane(activeKey, {
+                        openFile: {
+                            path,
+                            n: (paneStates[activeKey]?.openFile?.n ?? 0) + 1,
+                        },
+                    })
+                }
+                onOpenSubagent={(id) =>
+                    patchPane(activeKey, {
+                        viewSubagent: id,
+                    })
+                }
+            />
+        ) : null;
     // * Full file: the chat is folded away and the editor is shown; the sidebar then floats over the editor instead of pushing it.
     const sidebarOverlay =
         activeState.chatCollapsed && activeState.editorVisible;
@@ -431,6 +450,13 @@ export default function App() {
                                             phoneOpen={phoneOpen}
                                             sidebarCollapsed={sidebarCollapsed}
                                             sidebarToggle={foldedSidebarToggle}
+                                            bottomPanel={
+                                                pane.key === activeKey &&
+                                                bottomPlacement.placement ===
+                                                    'bottom'
+                                                    ? bottomPanel
+                                                    : null
+                                            }
                                             onToggleTerminal={() =>
                                                 toggleBottomTab('terminal')
                                             }
@@ -458,72 +484,27 @@ export default function App() {
                                     </div>
                                 ))}
                             </div>
-                            {bottomTab !== null && activePane !== null && (
-                                <FloatingFrame
-                                    storageKey="ide.float.bottom"
-                                    enabled={
-                                        bottomPlacement.placement === 'float'
-                                    }
-                                    style={
-                                        bottomPlacement.placement === 'bottom'
-                                            ? { height: terminalHeight.width }
-                                            : undefined
-                                    }
-                                    className={cn(
-                                        'relative',
-                                        bottomPlacement.placement === 'float' &&
-                                            'absolute right-3 bottom-3 z-30 h-80 max-h-[80%] w-[min(48rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border shadow-xl',
-                                        bottomPlacement.placement ===
-                                            'bottom' &&
-                                            'max-h-[80%] shrink-0 border-t',
-                                        bottomPlacement.placement === 'fill' &&
-                                            'min-h-0 flex-1',
-                                    )}
-                                >
-                                    {bottomPlacement.placement === 'bottom' && (
-                                        <ResizeHandle
-                                            horizontal
-                                            label={t(
-                                                'app.resize_terminal_height',
-                                            )}
-                                            {...terminalHeight.handleProps}
-                                        />
-                                    )}
-                                    <BottomPanel
-                                        tab={bottomTab}
-                                        root={activePane.root}
-                                        placement={bottomPlacement.placement}
-                                        dockedPlacement={
-                                            bottomPlacement.dockedPlacement
+                            {bottomTab !== null &&
+                                activePane !== null &&
+                                bottomPlacement.placement !== 'bottom' && (
+                                    <FloatingFrame
+                                        storageKey="ide.float.bottom"
+                                        enabled={
+                                            bottomPlacement.placement ===
+                                            'float'
                                         }
-                                        onPlacementChange={
-                                            bottomPlacement.setPlacement
-                                        }
-                                        historyPath={historyPath}
-                                        onClearHistoryPath={() =>
-                                            setHistoryPath(null)
-                                        }
-                                        onTabChange={setBottomTab}
-                                        onClose={() => setBottomTab(null)}
-                                        onOpenFile={(path) =>
-                                            patchPane(activeKey, {
-                                                openFile: {
-                                                    path,
-                                                    n:
-                                                        (paneStates[activeKey]
-                                                            ?.openFile?.n ??
-                                                            0) + 1,
-                                                },
-                                            })
-                                        }
-                                        onOpenSubagent={(id) =>
-                                            patchPane(activeKey, {
-                                                viewSubagent: id,
-                                            })
-                                        }
-                                    />
-                                </FloatingFrame>
-                            )}
+                                        className={cn(
+                                            'relative',
+                                            bottomPlacement.placement ===
+                                                'float' &&
+                                                'absolute right-3 bottom-3 z-30 h-80 max-h-[80%] w-[min(48rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border shadow-xl',
+                                            bottomPlacement.placement ===
+                                                'fill' && 'min-h-0 flex-1',
+                                        )}
+                                    >
+                                        {bottomPanel}
+                                    </FloatingFrame>
+                                )}
                         </div>
                     )}
                 </main>
