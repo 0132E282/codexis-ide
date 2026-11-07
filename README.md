@@ -32,77 +32,6 @@ Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rus
 - **Dữ liệu và dung lượng**: thống kê dung lượng dữ liệu của chính IDE, cảnh báo khi quá lớn, dọn dẹp khi người dùng xác nhận.
 - **Ứng dụng**: bố cục panel tuỳ chỉnh, giao diện Việt/Anh, tự cập nhật qua GitHub Releases, kết nối điện thoại từ xa.
 
-## Kiến trúc
-
-Frontend không chứa logic nghiệp vụ: chỉ hiển thị và gọi lệnh Tauri. Mọi tính năng nằm ở backend Rust.
-
-```mermaid
-flowchart LR
-    UI["React 19<br/>Monaco, xterm, diff"] -->|invoke| Bridge["src/lib/ide*.ts<br/>api.ts"]
-    Bridge -->|lệnh Tauri| Cmd["commands/*"]
-    Cmd --> WS["workspace.rs<br/>sandbox thư mục dự án"]
-    Cmd --> Git["git.rs, git_history.rs"]
-    Cmd --> Term["terminal.rs (PTY)"]
-    Cmd --> Agent["agent.rs, relay.rs"]
-    Cmd --> LSP["language_server*.rs"]
-    Cmd --> DB[("SQLite<br/>codexis.db")]
-    Agent --> CLI["CLI claude / codex"]
-    LSP --> Ext["Language server<br/>từ extension VS Code"]
-    Cmd -.->|sự kiện| UI
-```
-
-**Backend (`src-tauri/src`)**
-
-- `lib.rs`, `main.rs`: khai báo module và đăng ký lệnh Tauri; `commands/` là lớp lệnh mỏng gọi vào các module.
-- `workspace.rs`, `permission.rs`: sandbox thư mục dự án và chính sách đường dẫn.
-- `git.rs`, `git_history.rs`: Git qua lệnh `git`; lịch sử, blame, nhánh.
-- `terminal.rs`: PTY.
-- `agent.rs`, `agent/`, `relay.rs`, `background.rs`, `auth.rs`: chạy CLI, sự kiện luồng, relay, tác vụ nền, trạng thái đăng nhập.
-- `language_server*.rs`, `vscode_extensions.rs`: quét extension và quản lý vòng đời language server.
-- `plan_docs.rs`, `plan*.rs`: plans của dự án.
-- `db.rs`, `chats.rs`, `projects.rs`, `settings.rs`, `usage.rs`, `activity.rs`, `migrations.rs`: lưu trữ SQLite.
-- `storage.rs`, `run_log.rs`, `attachments.rs`: dung lượng, nhật ký lượt chat, tệp đính kèm.
-- `speech.rs`, `remote.rs`, `app_update.rs`, `validation.rs`: giọng nói, điện thoại từ xa, tự cập nhật, kiểm tra đầu vào.
-
-**Frontend (`src`)**
-
-- `src/lib/ide.ts` cùng các tệp `src/lib/ide-*.ts` và `src/lib/api.ts` là lớp cầu nối duy nhất tới lệnh Tauri; đổi cách gọi backend chỉ sửa ở đây.
-- `src/components/shell/`: khung ứng dụng (sidebar, chat, lưới chat, panel, khung nổi); `src/components/file-manager/`: trình soạn code, diff, blame.
-- `src/hooks/`, `src/contexts/`, `src/css/`, `src/icons/`: hook, context, kiểu và biểu tượng dùng chung.
-
-Chi tiết thiết kế: [docs/system/architecture.md](docs/system/architecture.md).
-
-## Luồng hoạt động
-
-**Gửi tin cho agent**
-
-```mermaid
-sequenceDiagram
-    participant UI as Giao diện
-    participant BE as Backend Rust
-    participant CLI as CLI claude / codex
-    UI->>BE: agent_send (prompt, thư mục dự án)
-    BE->>CLI: chạy CLI trong thư mục dự án
-    CLI-->>BE: luồng JSON (văn bản, công cụ, lỗi)
-    BE-->>UI: sự kiện agent-event
-    BE->>BE: lưu lượt chat vào SQLite
-    UI->>BE: agent_stop (khi người dùng dừng)
-```
-
-**Mở tệp và language server**
-
-```mermaid
-sequenceDiagram
-    participant UI as Giao diện
-    participant WS as workspace.rs
-    participant LS as Language server
-    UI->>WS: workspace_read (đường dẫn tương đối)
-    WS->>WS: chuẩn hoá, kiểm tra deny list, đường dẫn thật nằm trong dự án
-    WS-->>UI: nội dung và hash
-    UI->>LS: language_server_document_open
-    LS-->>UI: sự kiện language-server-diagnostics
-```
-
 ## Bảo mật và quyền riêng tư
 
 - **Sandbox workspace**: tệp được gọi bằng đường dẫn tương đối; mỗi đường dẫn được chuẩn hoá, đối chiếu deny list và phải phân giải về một đường dẫn thật nằm trong dự án (liên kết không thoát được ra ngoài). Thông báo lỗi không chứa đường dẫn của máy.
@@ -163,15 +92,6 @@ RYNOX_WORKSPACE=~/code/my-app RYNOX_DB=~/rynox-dev.db pnpm start
 ```
 
 `.env.example` là file mẫu (`DB_CONNECTION=sqlite` và các biến `DB_*`); chép thành `.env` để dùng riêng, `.env` đã được git bỏ qua. App chưa tự đọc `.env`, hiện chỉ các biến trong bảng trên có tác dụng.
-
-## CI
-
-Workflow [`.github/workflows/build.yml`](.github/workflows/build.yml) chạy mỗi lần push, pull request hoặc chạy tay:
-
-1. `changes`: so sánh với commit nền để biết thay đổi nằm ở frontend (`src/`, `package.json`, `pnpm-lock.yaml`, cấu hình Vite/TypeScript/ESLint…) hay backend (`src-tauri/`). Chạy tay, nhánh mới hoặc sửa chính workflow thì chạy cả hai.
-2. `frontend`: chỉ chạy khi frontend đổi: `pnpm lint`, `pnpm build`.
-3. `backend`: chỉ chạy khi `src-tauri/` đổi: `pnpm build` (Tauri cần frontend đã build), `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`.
-4. `build`: chạy khi một trong hai phía đổi và không có job nào fail; chạy `pnpm tauri build` và upload bản `.app` thành artifact `codexis-ide-macos` (tải ở trang của lần chạy trong tab Actions). Chỉ đổi tài liệu thì không job nào ngoài `changes` chạy. Khi repo chưa có secret `TAURI_SIGNING_PRIVATE_KEY`, job build bỏ qua bản cập nhật và chỉ build `.app` không ký.
 
 ## Phát hành (cho developers)
 
