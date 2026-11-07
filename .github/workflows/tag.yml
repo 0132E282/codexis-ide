@@ -12,7 +12,7 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    # * Bumps the patch version (0.1.0 -> 0.1.1) on a push to the default branch that changes frontend or backend code, commits it and tags it as v<version>. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
+    # * Tags the pushed commit as v<next patch> (0.1.0 -> v0.1.1) when a push to the default branch changes frontend or backend code. It creates no commit, only a tag. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
     tag:
         # * `on.push.branches` cannot read the default branch, so the branch is checked here.
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -27,7 +27,7 @@ jobs:
               with:
                   fetch-depth: 0
 
-            - name: Bump patch version and tag
+            - name: Create next version tag
               id: bump
               env:
                   COMMIT_SHA: ${{ github.sha }}
@@ -36,14 +36,6 @@ jobs:
                   BEFORE: ${{ github.event.before }}
               run: |
                   echo "released=false" >> "$GITHUB_OUTPUT"
-
-                  # * Skip the release commit made by this workflow, so it never loops.
-                  subject=$(git log -1 --format=%s "$COMMIT_SHA")
-                  author=$(git log -1 --format=%ae "$COMMIT_SHA")
-                  if [ "$author" = "41898282+github-actions[bot]@users.noreply.github.com" ] && echo "$subject" | grep -qE '^chore: phát hành v[0-9]'; then
-                    echo "Release commit, skipping."
-                    exit 0
-                  fi
 
                   # * Only frontend or backend code changes release (same path filter as build.yml). A manual run, a new branch or an unreadable base counts as changed.
                   if [ "$EVENT" != "workflow_dispatch" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
@@ -56,63 +48,37 @@ jobs:
                   fi
 
                   semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-                  tauri_version=$(jq -r '.version' src-tauri/tauri.conf.json)
-                  cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' src-tauri/Cargo.toml | head -n 1)
-                  lock_version=$(awk '/^name = "codexis-ide"$/ { found = 1; next } found && /^version = / { gsub(/version = |"/, ""); print; exit }' src-tauri/Cargo.lock)
 
-                  # * Fail without changing anything when a version is not plain X.Y.Z or the three files disagree.
-                  for value in "$tauri_version" "$cargo_version" "$lock_version"; do
-                    if ! echo "$value" | grep -qE "$semver"; then
-                      echo "::error::Version '$value' is not plain X.Y.Z (no suffix allowed)."
-                      exit 1
-                    fi
-                  done
+                  # * This commit already has a release tag (a re-run): stop quietly.
+                  existing=$(git tag --points-at "$COMMIT_SHA" | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | head -n 1 || true)
+                  if [ -n "$existing" ]; then
+                    echo "Commit already tagged $existing, skipping."
+                    exit 0
+                  fi
 
-                  if [ "$tauri_version" != "$cargo_version" ] || [ "$tauri_version" != "$lock_version" ]; then
-                    echo "::error::Version mismatch: tauri.conf.json '$tauri_version', Cargo.toml '$cargo_version', Cargo.lock '$lock_version'."
+                  # * The base version in tauri.conf.json is the floor; the next patch comes from the highest v<X.Y.Z> tag. Other tag names are ignored and versions are compared as numbers.
+                  base_version=$(jq -r '.version' src-tauri/tauri.conf.json)
+                  if ! echo "$base_version" | grep -qE "$semver"; then
+                    echo "::error::Version '$base_version' in src-tauri/tauri.conf.json is not plain X.Y.Z (no suffix allowed)."
                     exit 1
                   fi
 
-                  major=${tauri_version%%.*}
-                  rest=${tauri_version#*.}
+                  tag_versions=$(git ls-remote --tags --refs origin 'refs/tags/v*' | sed 's|.*refs/tags/v||' | grep -E "$semver" || true)
+                  highest=$(printf '%s\n%s\n' "$base_version" "$tag_versions" | grep -E "$semver" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+
+                  major=${highest%%.*}
+                  rest=${highest#*.}
                   minor=${rest%%.*}
                   patch=${rest#*.}
                   version="$major.$minor.$((patch + 1))"
                   tag="v$version"
 
-                  # * An existing tag on the default branch is left untouched (no overwrite, no force). One outside its history is an orphan from a rejected push, so fail loudly.
-                  if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
-                    git fetch --quiet origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
-                    if git merge-base --is-ancestor "refs/tags/$tag^{commit}" "origin/$DEFAULT_BRANCH"; then
-                      echo "Tag $tag already exists, skipping."
-                      exit 0
-                    fi
-                    echo "::error::Tag $tag exists but is not in the history of $DEFAULT_BRANCH (orphan tag, likely from an earlier rejected push). Delete the tag, then run again."
-                    exit 1
-                  fi
-
-                  # * Edit only the version lines; Cargo.lock is patched by hand so no dependency changes.
-                  awk -v old="$tauri_version" -v new="$version" '!done && $0 == "  \"version\": \"" old "\"," { print "  \"version\": \"" new "\","; done = 1; next } { print }' src-tauri/tauri.conf.json > tauri.conf.tmp
-                  mv tauri.conf.tmp src-tauri/tauri.conf.json
-                  awk -v old="$cargo_version" -v new="$version" '!done && $0 == "version = \"" old "\"" { print "version = \"" new "\""; done = 1; next } { print }' src-tauri/Cargo.toml > Cargo.toml.tmp
-                  mv Cargo.toml.tmp src-tauri/Cargo.toml
-                  awk -v new="$version" '/^name = "codexis-ide"$/ { found = 1 } found && /^version = / { print "version = \"" new "\""; found = 0; next } { print }' src-tauri/Cargo.lock > Cargo.lock.tmp
-                  mv Cargo.lock.tmp src-tauri/Cargo.lock
-
-                  if [ "$(jq -r '.version' src-tauri/tauri.conf.json)" != "$version" ] || ! grep -q "^version = \"$version\"\$" src-tauri/Cargo.toml || ! grep -q "^version = \"$version\"\$" src-tauri/Cargo.lock; then
-                    echo "::error::Version files were not updated to $version."
-                    exit 1
-                  fi
-
+                  # * Only a tag is pushed, never a commit, so branch rulesets that require pull requests do not block it. No force: an existing tag makes the push fail.
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
-                  git commit -m "chore: phát hành $tag [skip ci]"
-                  git tag -a "$tag" -m "Release $tag"
-
-                  # * One atomic push of commit and tag (no force): if the branch is rejected, the tag is not created either. Fail instead of retrying.
-                  if ! git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$tag"; then
-                    echo "::error::Push rejected, nothing was pushed or retried. Common cause: a ruleset or branch protection on $DEFAULT_BRANCH requires a pull request, so add github-actions to its bypass list. Otherwise $DEFAULT_BRANCH has newer commits."
+                  git tag -a "$tag" "$COMMIT_SHA" -m "Release $tag"
+                  if ! git push origin "refs/tags/$tag"; then
+                    echo "::error::Could not push tag $tag. Check that the token may create tags (a tag ruleset can block it) and that the tag does not already exist."
                     exit 1
                   fi
                   {
@@ -120,7 +86,7 @@ jobs:
                     echo "tag=$tag"
                     echo "version=$version"
                   } >> "$GITHUB_OUTPUT"
-                  echo "Tagged $tag."
+                  echo "Tagged $tag on $COMMIT_SHA."
 
     # * Publishes the GitHub Release (updater files for the in-app update) only when a new tag was just created. It lives in this workflow because a tag pushed with GITHUB_TOKEN does not trigger others.
     release:
@@ -166,6 +132,11 @@ jobs:
             - if: env.HAS_SIGNING_KEY == 'true'
               run: pnpm install --frozen-lockfile
 
+            # * The tag version is passed to the build as a config override, so no file in the repo changes.
+            - if: env.HAS_SIGNING_KEY == 'true'
+              run: |
+                  jq -n --arg version "$VERSION" '{version: $version}' > "$RUNNER_TEMP/version.json"
+
             - if: env.HAS_SIGNING_KEY == 'true'
               uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
               env:
@@ -178,3 +149,4 @@ jobs:
                   releaseDraft: false
                   prerelease: false
                   includeUpdaterJson: true
+                  args: --config ${{ runner.temp }}/version.json
