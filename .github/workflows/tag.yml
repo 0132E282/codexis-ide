@@ -3,6 +3,11 @@ name: Tag
 on:
     push:
     workflow_dispatch:
+        inputs:
+            release_tag:
+                description: Existing tag (vX.Y.Z) to build and publish a release for. Leave empty to tag the latest commit as usual.
+                required: false
+                default: ''
 
 permissions:
     contents: write
@@ -15,7 +20,7 @@ jobs:
     # * Tags the pushed commit as v<next patch> (0.1.0 -> v0.1.1) when a push to the default branch changes frontend or backend code. It creates no commit, only a tag. It does not create a GitHub Release (that needs signing and latest.json). Pushes made with GITHUB_TOKEN do not trigger other workflows.
     tag:
         # * `on.push.branches` cannot read the default branch, so the branch is checked here.
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && inputs.release_tag == ''
         runs-on: ubuntu-latest
         timeout-minutes: 5
         outputs:
@@ -88,65 +93,69 @@ jobs:
                   } >> "$GITHUB_OUTPUT"
                   echo "Tagged $tag on $COMMIT_SHA."
 
-    # * Publishes the GitHub Release (updater files for the in-app update) only when a new tag was just created. It lives in this workflow because a tag pushed with GITHUB_TOKEN does not trigger others.
+    # * Publishes the GitHub Release when a new tag was just created, or for an existing tag given as `release_tag` on a manual run. It lives in this workflow because a tag pushed with GITHUB_TOKEN does not trigger others. Without the signing secret the release has the .dmg/.app only (no updater files).
     release:
         needs: tag
-        if: needs.tag.outputs.released == 'true'
+        if: ${{ !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (needs.tag.outputs.released == 'true' || inputs.release_tag != '') }}
         runs-on: macos-latest
         timeout-minutes: 60
         permissions:
             contents: write
         env:
-            # * Secrets cannot be read in `if:`, so the step conditions test this flag instead.
+            # * Secrets cannot be read in `if:`, so the steps test this flag instead.
             HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
-            TAG: ${{ needs.tag.outputs.tag }}
-            VERSION: ${{ needs.tag.outputs.version }}
+            NEW_TAG: ${{ needs.tag.outputs.tag }}
+            INPUT_TAG: ${{ inputs.release_tag }}
         steps:
+            - id: resolve
+              run: |
+                  tag="${INPUT_TAG:-$NEW_TAG}"
+                  if ! echo "$tag" | grep -qE '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+                    echo "::error::Tag '$tag' is not in the form vX.Y.Z."
+                    exit 1
+                  fi
+                  echo "tag=$tag" >> "$GITHUB_OUTPUT"
+                  echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
             - if: env.HAS_SIGNING_KEY != 'true'
-              run: echo "::notice::No signing secret, so no release was created (only the tag)."
+              run: echo "::notice::No signing secret, so the release has only the .dmg/.app and the in-app update does not work yet."
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
               with:
-                  ref: ${{ needs.tag.outputs.tag }}
+                  ref: ${{ steps.resolve.outputs.tag }}
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+            - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
               with:
                   version: 10
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
               with:
                   node-version: 22
                   cache: pnpm
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+            - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+            - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
               with:
                   workspaces: src-tauri
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              run: pnpm install --frozen-lockfile
+            - run: pnpm install --frozen-lockfile
 
-            # * The tag version is passed to the build as a config override, so no file in the repo changes.
-            - if: env.HAS_SIGNING_KEY == 'true'
+            # * The tag version (and, without a signing key, no updater files) is passed as a config override, so no file in the repo changes.
+            - env:
+                  VERSION: ${{ steps.resolve.outputs.version }}
               run: |
-                  jq -n --arg version "$VERSION" '{version: $version}' > "$RUNNER_TEMP/version.json"
+                  jq -n --arg version "$VERSION" --arg signed "$HAS_SIGNING_KEY" 'if $signed == "true" then {version: $version} else {version: $version, bundle: {createUpdaterArtifacts: false}} end' > "$RUNNER_TEMP/version.json"
 
-            - if: env.HAS_SIGNING_KEY == 'true'
-              uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+            - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
               with:
-                  tagName: ${{ needs.tag.outputs.tag }}
-                  releaseName: Codexis IDE v${{ needs.tag.outputs.version }}
+                  tagName: ${{ steps.resolve.outputs.tag }}
+                  releaseName: Codexis IDE v${{ steps.resolve.outputs.version }}
                   releaseDraft: false
                   prerelease: false
-                  includeUpdaterJson: true
+                  includeUpdaterJson: ${{ env.HAS_SIGNING_KEY == 'true' }}
                   args: --config ${{ runner.temp }}/version.json
