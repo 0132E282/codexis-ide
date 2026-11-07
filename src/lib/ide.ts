@@ -319,6 +319,11 @@ export const ide = {
         invoke<string>('git_merge', { root, branch }),
     /** Fast-forward pull of the current branch; resolves to the current branch. */
     gitPull: (root?: string) => invoke<string>('git_pull', { root }),
+    /** Commits of the current branch that no remote has yet, newest first. */
+    gitOutgoing: (root?: string) =>
+        invoke<GitCommit[]>('git_outgoing', { root }),
+    /** Pushes the current branch (publishing it to `origin` when it has no upstream); resolves to the branch name. */
+    gitPush: (root?: string) => invoke<string>('git_push', { root }),
     /** Stops a running turn: the CLI is ended and the turn finishes with what it had. */
     agentStop: (runId: string) => invoke<void>('agent_stop', { runId }),
     /** Answers a permission question of a running turn ("Hỏi từng việc"): `allow` lets the tool run with `input`, otherwise it is denied. */

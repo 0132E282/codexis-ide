@@ -376,6 +376,8 @@ export const shellMainVietnamese: Record<string, string> = {
     'errors.git.pull_failed':
         'Không pull được. Nhánh không thể fast-forward hoặc lỗi mạng.',
     'errors.git.no_upstream': 'Nhánh này chưa có nhánh upstream để pull.',
+    'errors.git.push_failed':
+        'Không push được. Hãy kiểm tra mạng, quyền ghi hoặc pull trước.',
     'errors.speech.bad_url':
         'Địa chỉ VieNeu-TTS không hợp lệ: chỉ nhận http://127.0.0.1, http://localhost hoặc http://[::1].',
     'errors.speech.unreachable':

@@ -1,3 +1,4 @@
+import { OutgoingCommits } from '@/components/ai-chat/code-viewer/outgoing-commits';
 import { t } from '@/lib/i18n';
 import { CommitActions } from '@/components/ai-chat/commit-box';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
@@ -46,6 +47,7 @@ export function ChangesPanel({
                     onCommitted={localChanges.refresh}
                 />
             </div>
+            <OutgoingCommits root={localRoot} refreshKey={localChanges.files} />
             <LocalChanges
                 root={localRoot}
                 list={localChanges}

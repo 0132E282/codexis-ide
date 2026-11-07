@@ -338,3 +338,30 @@ pub async fn git_pull(state: State<'_, AppState>, root: Option<String>) -> Resul
     })
     .await
 }
+
+#[tauri::command]
+pub async fn git_outgoing(
+    state: State<'_, AppState>,
+    root: Option<String>,
+) -> Result<Vec<CommitInfo>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::new(&workspace)
+            .outgoing()
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_push(state: State<'_, AppState>, root: Option<String>) -> Result<String, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("git.push_failed", move || {
+        GitHistory::new(&workspace)
+            .push()
+            .map_err(|error| error.to_string())
+    })
+    .await
+}

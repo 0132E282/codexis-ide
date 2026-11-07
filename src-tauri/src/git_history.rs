@@ -132,6 +132,7 @@ pub enum GitHistoryError {
     MergeConflict,
     MergeFailed,
     PullFailed,
+    PushFailed,
     NoUpstream,
 }
 
@@ -152,6 +153,7 @@ impl GitHistoryError {
             Self::MergeConflict => "git.merge_conflict",
             Self::MergeFailed => "git.merge_failed",
             Self::PullFailed => "git.pull_failed",
+            Self::PushFailed => "git.push_failed",
             Self::NoUpstream => "git.no_upstream",
         }
     }
@@ -1144,6 +1146,60 @@ impl<'a> GitHistory<'a> {
         }
 
         self.current_branch()
+    }
+
+    /// Commits of `HEAD` that no remote branch has yet (what a push would send), newest first; empty without commits.
+    pub fn outgoing(&self) -> Result<Vec<CommitInfo>> {
+        let root = self.root();
+
+        ensure_repository(root)?;
+
+        if run(root, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
+            return Ok(Vec::new());
+        }
+
+        let format = log_format();
+        let output = run(
+            root,
+            &[
+                "log",
+                "--decorate=full",
+                "--max-count",
+                &MAX_LOG_LIMIT.to_string(),
+                &format,
+                "HEAD",
+                "--not",
+                "--remotes",
+            ],
+        )?;
+
+        Ok(parse_commits(&output))
+    }
+
+    /// Pushes the current branch; a branch without an upstream is published to `origin` and tracked from then on.
+    pub fn push(&self) -> Result<String> {
+        let root = self.root();
+
+        ensure_repository(root)?;
+
+        let branch = self.current_branch()?;
+        let has_upstream = run(
+            root,
+            &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        )
+        .is_ok();
+        let args: Vec<&str> = if has_upstream {
+            vec!["push", "--quiet"]
+        } else {
+            validation::branch_name(&branch).map_err(|_| GitHistoryError::BadRef)?;
+            vec!["push", "--quiet", "--set-upstream", "origin", &branch]
+        };
+
+        if !run_status(root, &args, PULL_TIMEOUT_SECONDS)?.success() {
+            return Err(GitHistoryError::PushFailed);
+        }
+
+        Ok(branch)
     }
 
     /// Commits `head` is ahead of and behind `base`: one `rev-list --left-right --count`.

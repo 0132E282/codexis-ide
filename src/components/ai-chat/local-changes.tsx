@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
+import { ArrowUpRight, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FileContextMenu } from '@/components/ai-chat/file-context-menu';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
@@ -112,18 +112,9 @@ export function LocalChanges({
     onOpenFile: (path: string) => void;
     actions: FileActions;
 }) {
-    const [open, setOpen] = useState<Set<string>>(new Set());
-
-    const toggle = (path: string) =>
-        setOpen((current) => {
-            const next = new Set(current);
-
-            if (!next.delete(path)) {
-                next.add(path);
-            }
-
-            return next;
-        });
+    // * The file whose diff fills the lower half; the first of the list until one is picked (or when the picked one is gone).
+    const [picked, setPicked] = useState<string | null>(null);
+    const selected = files?.find((file) => file.path === picked) ?? files?.[0];
 
     const { confirm, dialog } = useConfirm();
 
@@ -192,11 +183,11 @@ export function LocalChanges({
     return (
         <>
             {dialog}
-            <ul className="min-h-0 flex-1 animate-in overflow-auto duration-200 fade-in motion-reduce:animate-none">
+            <ul className="max-h-[40%] min-h-16 shrink-0 animate-in overflow-auto border-b duration-200 fade-in motion-reduce:animate-none">
                 {files.map((file) => {
                     const name = file.path.split('/').pop() ?? file.path;
                     const dir = file.path.split('/').slice(0, -1).join('/');
-                    const expanded = open.has(file.path);
+                    const isSelected = selected?.path === file.path;
 
                     return (
                         <li
@@ -208,10 +199,8 @@ export function LocalChanges({
                                 actions={actions}
                                 items={[
                                     {
-                                        label: expanded
-                                            ? t('local_changes.hide_changes')
-                                            : t('local_changes.show_changes'),
-                                        onSelect: () => toggle(file.path),
+                                        label: t('local_changes.show_changes'),
+                                        onSelect: () => setPicked(file.path),
                                     },
                                     {
                                         label: t('common.open_file'),
@@ -226,24 +215,18 @@ export function LocalChanges({
                                     },
                                 ]}
                             >
-                                <div className="flex items-center gap-1 pr-2 hover:bg-accent/50">
+                                <div
+                                    className={cn(
+                                        'flex items-center gap-1 pr-2 hover:bg-accent/50',
+                                        isSelected && 'bg-accent/60',
+                                    )}
+                                >
                                     <button
                                         type="button"
-                                        aria-expanded={expanded}
-                                        onClick={() => toggle(file.path)}
+                                        aria-pressed={isSelected}
+                                        onClick={() => setPicked(file.path)}
                                         className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     >
-                                        {expanded ? (
-                                            <ChevronDown
-                                                aria-hidden="true"
-                                                className="size-4 shrink-0 text-muted-foreground"
-                                            />
-                                        ) : (
-                                            <ChevronRight
-                                                aria-hidden="true"
-                                                className="size-4 shrink-0 text-muted-foreground"
-                                            />
-                                        )}
                                         <FileIcon
                                             name={name}
                                             className="size-4"
@@ -321,13 +304,19 @@ export function LocalChanges({
                                     )}
                                 </div>
                             </FileContextMenu>
-                            {expanded && (
-                                <ChangeDiff root={root} change={file} />
-                            )}
                         </li>
                     );
                 })}
             </ul>
+            <div className="min-h-0 flex-1 overflow-auto">
+                {selected !== undefined && (
+                    <ChangeDiff
+                        key={selected.path}
+                        root={root}
+                        change={selected}
+                    />
+                )}
+            </div>
         </>
     );
 }

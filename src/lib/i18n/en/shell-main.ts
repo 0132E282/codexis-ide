@@ -379,6 +379,8 @@ export const shellMainEnglish: Record<string, string> = {
         'Could not pull. The branch cannot be fast-forwarded or the network failed.',
     'errors.git.no_upstream':
         'This branch has no upstream branch to pull from.',
+    'errors.git.push_failed':
+        'Could not push. Check the network and your write access, or pull first.',
     'errors.speech.bad_url':
         'The VieNeu-TTS address is not valid: only http://127.0.0.1, http://localhost or http://[::1] is accepted.',
     'errors.speech.unreachable':

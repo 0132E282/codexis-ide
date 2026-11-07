@@ -37,6 +37,7 @@ export function buildTree(paths: string[]): TreeNode[] {
 
             node = child;
         });
+
     }
 
     const sort = (nodes: TreeNode[]) => {

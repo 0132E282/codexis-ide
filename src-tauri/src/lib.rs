@@ -128,6 +128,8 @@ pub fn run() {
             commands::git::git_checkout,
             commands::git::git_merge,
             commands::git::git_pull,
+            commands::git::git_outgoing,
+            commands::git::git_push,
             commands::inline_ask::inline_ask,
             commands::language_server::language_server_list,
             commands::language_server::language_server_configure,
