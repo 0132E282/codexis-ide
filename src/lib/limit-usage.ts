@@ -1,3 +1,5 @@
+import { t } from '@/lib/i18n';
+
 const MONTHS = [
     'Jan',
     'Feb',
@@ -41,4 +43,17 @@ export const limitColor = (percent: number): string =>
 export const LIMIT_LABELS: Record<string, string> = {
     'Current session': 'limit_usage.session',
     'Current week (all models)': 'limit_usage.week',
+};
+
+/** The limit's name as the user reads it: the CLI prints it in English ("Current week (Fable)"), so the known ones are translated. */
+export const limitLabel = (label: string): string => {
+    const key = LIMIT_LABELS[label];
+
+    if (key !== undefined) {
+        return t(key);
+    }
+
+    const model = /^Current week \((.+)\)$/.exec(label)?.[1];
+
+    return model === undefined ? label : t('limit_usage.week_model', { model });
 };

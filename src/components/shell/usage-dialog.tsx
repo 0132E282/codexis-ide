@@ -12,7 +12,7 @@ import { ClaudeIcon, CodexIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type LimitUsage } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
-import { LIMIT_LABELS, formatReset, limitColor } from '@/lib/limit-usage';
+import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -298,7 +298,7 @@ function UsageRow({
                         >
                             <div className="flex items-baseline justify-between gap-3">
                                 <span className="min-w-0 font-medium">
-                                    {LIMIT_LABELS[limit.label] ?? limit.label}
+                                    {limitLabel(limit.label)}
                                 </span>
                                 <span className="shrink-0 text-muted-foreground tabular-nums">
                                     <span className="font-medium text-foreground">

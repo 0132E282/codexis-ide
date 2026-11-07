@@ -1,6 +1,7 @@
 import { t } from '@/lib/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { FolderOpen } from 'lucide-react';
 import { QuickOpen } from '@/components/ai-chat/quick-open';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
@@ -52,6 +53,7 @@ export function CodeViewer({
     treePlacement,
     treeClosed,
     onTreeClosedChange,
+    alwaysShowEditor = false,
     onAttachFile,
     onMarkedFiles,
 }: {
@@ -95,6 +97,8 @@ export function CodeViewer({
     /** The host holds whether the file tree is closed (and draws the button that opens it). */
     treeClosed?: boolean;
     onTreeClosedChange?: (closed: boolean) => void;
+    /** The editor column is always there: with no file open it shows an empty state instead of hiding. */
+    alwaysShowEditor?: boolean;
     /** Double click on a file of the tree: the chat attaches it (path inside the project). */
     onAttachFile?: (path: string) => void;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
@@ -241,6 +245,8 @@ export function CodeViewer({
 
     const showChanges = localRoot !== null && view === 'changes';
     const editorVisible = selected !== null || showChanges;
+    // * No file open: the editor column stays as a small empty state; the chat keeps the rest of the width.
+    const showEmpty = alwaysShowEditor && !editorVisible && treeClosed !== true;
 
     useEffect(() => {
         onEditorVisible?.(editorVisible);
@@ -560,6 +566,33 @@ export function CodeViewer({
                             onInlineAsk={onInlineAsk}
                             onAsk={askFromEditor}
                         />
+                    </div>
+                </section>
+            )}
+            {showEmpty && (
+                <section
+                    aria-label={t('code_viewer.file_content')}
+                    className="relative hidden min-h-0 w-96 max-w-full shrink-0 flex-col overflow-hidden lg:flex"
+                >
+                    {(tabsStart !== undefined || tabsEnd !== undefined) && (
+                        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">
+                            <div className="flex items-center">{tabsStart}</div>
+                            <div className="flex items-center gap-1">
+                                {tabsEnd}
+                            </div>
+                        </div>
+                    )}
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+                        <FolderOpen
+                            aria-hidden="true"
+                            className="size-10 text-muted-foreground/60"
+                        />
+                        <p className="text-sm font-medium">
+                            {t('code_viewer.empty_title')}
+                        </p>
+                        <p className="max-w-xs text-xs text-muted-foreground">
+                            {t('code_viewer.empty_hint')}
+                        </p>
                     </div>
                 </section>
             )}

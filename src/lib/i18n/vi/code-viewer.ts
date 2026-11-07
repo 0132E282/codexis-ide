@@ -10,6 +10,9 @@ export const codeViewerVietnamese: Record<string, string> = {
     'changes_panel.push': 'Push {count} commit',
     'changes_panel.pushed': 'Đã push lên remote.',
     'changes_panel.could_not_push': 'Không push được.',
+    'code_viewer.empty_title': 'Tệp đang mở sẽ hiện ở đây',
+    'code_viewer.empty_hint':
+        'Chọn một tệp trong cây, hoặc bấm đường dẫn tệp trong cuộc trò chuyện.',
     'code_viewer.file_content': 'Nội dung tệp',
     'common.apply': 'Áp dụng',
     'common.changes': 'Thay đổi',

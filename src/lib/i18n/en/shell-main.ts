@@ -21,6 +21,10 @@ export const shellMainEnglish: Record<string, string> = {
     'plans.title': 'Plans',
     'plans.back': 'Back to plans',
     'plans.open_file': 'Open file',
+    'plans.do_tasks': 'Do tasks',
+    'plans.continue': 'Continue',
+    'plans.continue_prompt':
+        'Do the unfinished tasks of the plan {path}: {tasks}. Read the plan file, hand each task to a subagent and let it work right away (independent tasks in parallel, dependent ones in sequence), update the task status in the file after each task and report which tasks are done and which are left.',
     'plans.detail_loading': 'Loading the plan…',
     'plans.section_requirements': 'Requirements',
     'plans.section_tasks': 'Tasks',
@@ -333,6 +337,8 @@ export const shellMainEnglish: Record<string, string> = {
     'usage_dialog.which_clis_are_in':
         'Which CLIs are in use and which stopped because of their limit.',
     'workspace_pane.open_chat_panel': 'Open chat panel',
+    'workspace_pane.show_files': 'Show files',
+    'workspace_pane.hide_files': 'Hide files',
     'errors.vscode.not_installed':
         "Could not open VS Code. Install VS Code and run “Shell Command: Install 'code' command in PATH”.",
     'errors.remote.pairing_code_failed': 'Could not create the pairing code.',

@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthStatus, type LimitUsage } from '@/lib/ide-auth';
-import { LIMIT_LABELS, formatReset, limitColor } from '@/lib/limit-usage';
+import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { ideProfiles, type Profile, type ProfileCli } from '@/lib/ide-profiles';
 import type { ReactNode } from 'react';
@@ -389,11 +389,9 @@ export function ManageAccountsPage({
                                                                           limit.label
                                                                       }
                                                                   >
-                                                                      {LIMIT_LABELS[
-                                                                          limit
-                                                                              .label
-                                                                      ] ??
-                                                                          limit.label}
+                                                                      {limitLabel(
+                                                                          limit.label,
+                                                                      )}
                                                                   </span>
                                                                   <span
                                                                       role="progressbar"

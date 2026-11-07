@@ -215,6 +215,14 @@ export default function App() {
                         },
                     })
                 }
+                onSendPrompt={(text) =>
+                    patchPane(activeKey, {
+                        sendPrompt: {
+                            text,
+                            n: (paneStates[activeKey]?.sendPrompt?.n ?? 0) + 1,
+                        },
+                    })
+                }
                 onOpenSubagent={(id) =>
                     patchPane(activeKey, {
                         viewSubagent: id,

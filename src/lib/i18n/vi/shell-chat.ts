@@ -42,6 +42,7 @@ export const shellChatVietnamese: Record<string, string> = {
         'Chưa có trong IDE: chưa có trợ lý AI.',
     'limit_usage.session': 'Phiên',
     'limit_usage.week': 'Tuần',
+    'limit_usage.week_model': 'Tuần ({model})',
     'message_list.send_amessage_to':
         'Nhắn tin để làm việc với AI trong dự án này.',
     'model_menu.choose_ai_and_model': 'Chọn AI và model',

@@ -1,4 +1,5 @@
-import type { PlanDocStatus } from '@/lib/ide';
+import { t } from '@/lib/i18n';
+import type { PlanDocStatus, PlanTask } from '@/lib/ide';
 
 /** Texts and colours of the plan statuses, shared by the card list and the detail view. */
 export const STATUS_TEXT: Record<PlanDocStatus, string> = {
@@ -27,3 +28,21 @@ export const BAR_STYLE: Record<PlanDocStatus, string> = {
     todo: 'bg-zinc-300 dark:bg-zinc-600',
     unknown: 'bg-zinc-300 dark:bg-zinc-600',
 };
+
+/** The message that hands the tasks that are not done (any status but done) of a plan to the AI; null when none is left. */
+export function continuePrompt(path: string, tasks: PlanTask[]): string | null {
+    const open = tasks.filter((task) => task.status !== 'done');
+
+    return open.length === 0
+        ? null
+        : t('plans.continue_prompt', {
+              path,
+              tasks: open
+                  .map((task) =>
+                      [task.id, task.title]
+                          .filter((part) => part !== null)
+                          .join(' '),
+                  )
+                  .join('; '),
+          });
+}

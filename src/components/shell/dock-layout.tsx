@@ -83,6 +83,7 @@ export function DockLayout({
     trailing,
     trailingGrows = true,
     trailingFirst = false,
+    trailingHidden = false,
 }: {
     panels: DockPanel[];
     children?: ReactNode;
@@ -92,6 +93,8 @@ export function DockLayout({
     trailingGrows?: boolean;
     /** The trailing area is drawn before `children` (the file area moved to the left of the main chat). */
     trailingFirst?: boolean;
+    /** The trailing area is folded away (hidden, not unmounted, so its state survives). */
+    trailingHidden?: boolean;
 }) {
     const alone =
         panels.filter((panel) => panel.open !== false).length === 1 &&
@@ -167,11 +170,17 @@ export function DockLayout({
                                 <div
                                     className={cn(
                                         'flex min-h-0 flex-col',
+                                        trailingHidden && 'hidden',
                                         !trailingGrows && scopedBottomOpen
                                             ? 'min-w-96'
                                             : 'min-w-0',
                                         // * Drawn first, it is the chat's border that is no longer beside it, so it carries the line itself.
                                         trailingFirst && 'order-first border-r',
+                                        // * Tree only, with the bottom panel under it wider than the tree: the line runs the column's full height (the tree's own edge stops at the tree); -ml-px lays it over the chat's border so the two are not doubled.
+                                        !trailingFirst &&
+                                            !trailingGrows &&
+                                            scopedBottomOpen &&
+                                            '-ml-px border-l',
                                         trailingGrows
                                             ? 'flex-1'
                                             : // * The file tree is as wide as itself: any width kept for it would show as an empty column between the tree and the chat.

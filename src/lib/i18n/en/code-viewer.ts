@@ -11,6 +11,9 @@ export const codeViewerEnglish: Record<string, string> = {
     'changes_panel.push': 'Push {count} commits',
     'changes_panel.pushed': 'Pushed to the remote.',
     'changes_panel.could_not_push': 'Could not push.',
+    'code_viewer.empty_title': 'Open files appear here',
+    'code_viewer.empty_hint':
+        'Pick a file in the tree, or click a file path in the conversation.',
     'code_viewer.file_content': 'File content',
     'common.apply': 'Apply',
     'common.changes': 'Changes',

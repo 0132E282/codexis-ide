@@ -42,6 +42,7 @@ export const shellChatEnglish: Record<string, string> = {
         'Not available in the IDE: no AI assistant yet.',
     'limit_usage.session': 'Session',
     'limit_usage.week': 'Week',
+    'limit_usage.week_model': 'Week ({model})',
     'message_list.send_amessage_to':
         'Send a message to work with the AI in this project.',
     'model_menu.choose_ai_and_model': 'Choose AI and model',

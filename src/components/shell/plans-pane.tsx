@@ -1,15 +1,16 @@
-import { FileJson, FileText, RefreshCw } from 'lucide-react';
+import { FileJson, FileText, Play, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Field } from '@/components/form';
 import { PlanDetail } from '@/components/shell/plan-detail';
 import {
     BAR_STYLE,
+    continuePrompt,
     STATUS_STYLE,
     STATUS_TEXT,
 } from '@/components/shell/plan-status';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
-import { ide } from '@/lib/ide';
+import { errorText, ide } from '@/lib/ide';
 import type { PlanDoc, PlanDocStatus, PlanDocsList } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
@@ -71,9 +72,11 @@ function formatDate(plan: PlanDoc): string {
 function PlanCard({
     plan,
     onOpen,
+    onContinue,
 }: {
     plan: PlanDoc;
     onOpen: (path: string) => void;
+    onContinue: (plan: PlanDoc) => void;
 }) {
     const percent =
         plan.tasksTotal > 0
@@ -82,12 +85,12 @@ function PlanCard({
     const FormatIcon = plan.format === 'json' ? FileJson : FileText;
 
     return (
-        <li>
+        <li className="flex h-full flex-col rounded-lg border bg-card text-card-foreground shadow-xs hover:bg-accent/40">
             <button
                 type="button"
                 data-testid="plan-card"
                 onClick={() => onOpen(plan.path)}
-                className="flex h-full w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm text-card-foreground shadow-xs hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex w-full flex-1 flex-col gap-2 rounded-lg p-3 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
                 <span className="flex items-start justify-between gap-2">
                     <span className="min-w-0 font-medium break-words">
@@ -165,6 +168,26 @@ function PlanCard({
                     </span>
                 </span>
             </button>
+            <div className="flex px-3 pb-3">
+                <Button
+                    type="button"
+                    size="xs"
+                    data-testid="plan-continue"
+                    disabled={
+                        plan.tasksTotal === 0 ||
+                        plan.tasksDone >= plan.tasksTotal
+                    }
+                    onClick={() => onContinue(plan)}
+                    className="ml-auto"
+                >
+                    <Play aria-hidden="true" />
+                    {t(
+                        plan.tasksDone > 0
+                            ? 'plans.continue'
+                            : 'plans.do_tasks',
+                    )}
+                </Button>
+            </div>
         </li>
     );
 }
@@ -173,11 +196,14 @@ function PlanCard({
 export function PlansPane({
     root,
     onOpenFile,
+    onSendPrompt,
 }: {
     /** Folder of the open project. */
     root: string | undefined;
     /** Opens a file of the project (path relative to it) in the editor. */
     onOpenFile: (path: string) => void;
+    /** Sends a message to the chat of the project. */
+    onSendPrompt: (text: string) => void;
 }) {
     const [load, setLoad] = useState<Load>({ state: 'loading' });
     const [filter, setFilter] = useState<PlanFilter>(readFilter);
@@ -218,6 +244,19 @@ export function PlansPane({
         setLoad({ state: 'loading' });
         setReload((count) => count + 1);
     };
+
+    // * The card only knows the counts: the tasks are read when the button is pressed.
+    const continuePlan = (plan: PlanDoc) =>
+        void ide
+            .planDocRead(plan.path, root)
+            .then((detail) => {
+                const prompt = continuePrompt(plan.path, detail.tasks);
+
+                if (prompt !== null) {
+                    onSendPrompt(prompt);
+                }
+            })
+            .catch((error: unknown) => console.error(errorText(error)));
 
     const chooseFilter = (next: PlanFilter) => {
         setFilter(next);
@@ -287,6 +326,7 @@ export function PlansPane({
                 path={selected}
                 onBack={() => setSelected(null)}
                 onOpenFile={onOpenFile}
+                onSendPrompt={onSendPrompt}
             />
         );
     }
@@ -349,12 +389,13 @@ export function PlansPane({
                         {body}
                     </p>
                 ) : (
-                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(16rem,22rem))] gap-3">
+                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(max(16rem,calc((100%-2.25rem)/4)),1fr))] gap-3">
                         {visible.map((plan) => (
                             <PlanCard
                                 key={plan.id}
                                 plan={plan}
                                 onOpen={setSelected}
+                                onContinue={continuePlan}
                             />
                         ))}
                     </ul>

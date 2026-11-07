@@ -19,16 +19,21 @@ export type PaneState = {
     subagents: Subagent[];
     /** The chat was closed by dragging the editor columns over it. */
     chatCollapsed: boolean;
+    /** The file area (tree and editor) is folded away by its header button; the chat takes the whole width. */
+    filesHidden: boolean;
     /** The sub-agent picked in the sidebar (`n` changes on every pick). */
     viewSubagent: string | null;
     /** A file double-clicked in the tree, for the chat to attach (`n` changes on every click). */
     attachFile: { path: string; n: number } | null;
     /** A file the plans list asked the editor to open (`n` changes on every click). */
     openFile: { path: string; n: number } | null;
+    /** A message a button of the plans list asked the chat to send (`n` changes on every click). */
+    sendPrompt: { text: string; n: number } | null;
 };
 
 export const FRESH: PaneState = {
     chatCollapsed: false,
+    filesHidden: false,
     editorVisible: false,
     activeFile: null,
     newChat: 0,
@@ -38,6 +43,7 @@ export const FRESH: PaneState = {
     viewSubagent: null,
     attachFile: null,
     openFile: null,
+    sendPrompt: null,
 };
 
 /** The per-pane state, keyed by pane; `patchPane` changes some fields of one pane and does nothing when nothing differs. */

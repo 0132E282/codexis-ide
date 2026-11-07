@@ -5,6 +5,10 @@ import {
     ListChecks,
     MessageSquare,
     MessagesSquare,
+    PanelLeftClose,
+    PanelLeftOpen,
+    PanelRightClose,
+    PanelRightOpen,
     SquareMenu,
     Terminal,
 } from 'lucide-react';
@@ -132,6 +136,25 @@ export function WorkspacePane({
         }
     }
 
+    // * The whole file area (tree and editor) is folded away: it stays mounted, so its tabs and unsaved edits come back as they were.
+    const filesHidden = state.filesHidden;
+    const filesOnLeft = treePlacement.placement === 'left';
+    const FilesIcon = filesOnLeft
+        ? filesHidden
+            ? PanelLeftOpen
+            : PanelLeftClose
+        : filesHidden
+          ? PanelRightOpen
+          : PanelRightClose;
+    const filesLabel = t(
+        filesHidden ? 'workspace_pane.show_files' : 'workspace_pane.hide_files',
+    );
+    const toggleFiles = () =>
+        onPatch(pane.key, {
+            filesHidden: !filesHidden,
+            // * With the files hidden the chat must stay on screen.
+            ...(filesHidden ? {} : { chatCollapsed: false }),
+        });
     const toggleRail = () => setRailOpen((open) => !open);
     // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
     const sideChatAlone =
@@ -309,9 +332,11 @@ export function WorkspacePane({
             <DockLayout
                 panels={dockPanels}
                 trailingGrows={state.editorVisible}
+                trailingHidden={filesHidden}
                 trailingFirst={treePlacement.placement === 'left'}
                 trailing={
                     <CodeViewer
+                        alwaysShowEditor
                         chatCollapsed={state.chatCollapsed}
                         treePlacement={treePlacement}
                         tabsStart={
@@ -377,7 +402,7 @@ export function WorkspacePane({
                     root={pane.root}
                     acceptsRemote={active}
                     projects={projects}
-                    fill={!state.editorVisible}
+                    fill={!state.editorVisible || filesHidden}
                     headerStart={sidebarCollapsed ? sidebarToggle : null}
                     headerActions={
                         <>
@@ -390,7 +415,7 @@ export function WorkspacePane({
                                 onClick={onOpenInVscode}
                                 className="text-muted-foreground"
                             >
-                                <Code2 aria-hidden="true" className="size-5" />
+                                <Code2 aria-hidden="true" className="size-4" />
                             </Button>
                             <Button
                                 type="button"
@@ -407,7 +432,7 @@ export function WorkspacePane({
                             >
                                 <Terminal
                                     aria-hidden="true"
-                                    className="size-5"
+                                    className="size-4"
                                 />
                             </Button>
                             <Button
@@ -434,8 +459,23 @@ export function WorkspacePane({
                                         'bg-accent text-accent-foreground',
                                 )}
                             >
-                                {/* * A box fills its whole square, so it is drawn smaller (16px against 20px) to look as big as the open icons beside it. */}
+                                {/* * A box fills its whole square, so it is drawn smaller (14px against 16px) to look as big as the open icons beside it. */}
                                 <SquareMenu
+                                    aria-hidden="true"
+                                    className="size-3.5"
+                                />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={filesLabel}
+                                title={filesLabel}
+                                aria-pressed={!filesHidden}
+                                onClick={toggleFiles}
+                                className="text-muted-foreground"
+                            >
+                                <FilesIcon
                                     aria-hidden="true"
                                     className="size-4"
                                 />
@@ -447,6 +487,7 @@ export function WorkspacePane({
                         onPatch(pane.key, { chatCollapsed: true })
                     }
                     attachFile={state.attachFile}
+                    sendRequest={state.sendPrompt}
                     selectedFile={state.activeFile}
                     viewSubagent={state.viewSubagent}
                     onLeaveSubagent={() =>
@@ -455,6 +496,7 @@ export function WorkspacePane({
                     popup={railPopup}
                     collapsed={
                         state.chatCollapsed &&
+                        !filesHidden &&
                         (state.editorVisible || sideChatOpen)
                     }
                     newChat={state.newChat}

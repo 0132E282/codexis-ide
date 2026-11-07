@@ -149,7 +149,7 @@ export function BackgroundTasksPane({
                     </p>
                 </div>
             ) : (
-                <ul className="max-w-5xl min-h-0 min-w-0 flex-1 overflow-y-auto">
+                <ul className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                     {tasks.map((task) => (
                         <TaskRow
                             key={task.id}

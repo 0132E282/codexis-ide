@@ -1,8 +1,9 @@
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft, FileText, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
     BAR_STYLE,
+    continuePrompt,
     STATUS_STYLE,
     STATUS_TEXT,
 } from '@/components/shell/plan-status';
@@ -113,12 +114,15 @@ export function PlanDetail({
     path,
     onBack,
     onOpenFile,
+    onSendPrompt,
 }: {
     root: string | undefined;
     /** Path of the plan file, relative to the project. */
     path: string;
     onBack: () => void;
     onOpenFile: (path: string) => void;
+    /** Sends a message to the chat of the project. */
+    onSendPrompt: (text: string) => void;
 }) {
     const [load, setLoad] = useState<Load>({ state: 'loading' });
 
@@ -149,6 +153,9 @@ export function PlanDetail({
     }, [root, path]);
 
     const plan = load.state === 'done' ? load.plan : null;
+    // * The tasks that are not done (any status but done): what "Làm task / Tiếp tục" hands to the AI.
+    const prompt = plan === null ? null : continuePrompt(path, plan.tasks);
+    const continuePlan = () => prompt !== null && onSendPrompt(prompt);
     const percent =
         plan !== null && plan.tasksTotal > 0
             ? Math.round((plan.tasksDone / plan.tasksTotal) * 100)
@@ -176,10 +183,24 @@ export function PlanDetail({
                 </Button>
                 <Button
                     type="button"
+                    variant="default"
+                    size="sm"
+                    disabled={prompt === null}
+                    onClick={continuePlan}
+                    className="ml-auto"
+                >
+                    <Play aria-hidden="true" />
+                    {t(
+                        plan !== null && plan.tasksDone > 0
+                            ? 'plans.continue'
+                            : 'plans.do_tasks',
+                    )}
+                </Button>
+                <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => onOpenFile(path)}
-                    className="ml-auto"
                 >
                     <FileText aria-hidden="true" />
                     {t('plans.open_file')}

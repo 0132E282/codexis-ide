@@ -60,6 +60,7 @@ export function ChatPanel({
     viewSubagent,
     onLeaveSubagent,
     attachFile,
+    sendRequest = null,
     selectedFile = null,
     headerStart,
     headerActions,
@@ -99,6 +100,8 @@ export function ChatPanel({
     viewSubagent: string | null;
     /** A file double-clicked in the tree: it joins the attachments of the message. */
     attachFile: { path: string; n: number } | null;
+    /** A message a button outside the chat asked it to send (`n` changes on every request). */
+    sendRequest?: { text: string; n: number } | null;
     /** The file selected in the file tree (path inside the project): it shows as a chip above the message box and goes with the message. */
     selectedFile?: string | null;
     /** Back from the view of a sub-agent to the conversation. */
@@ -189,6 +192,7 @@ export function ChatPanel({
         clearWaiting,
         choose,
         sendFromComposer,
+        sendPrompt,
         switchAccount,
         answerPermission,
         stopTurns,
@@ -269,6 +273,16 @@ export function ChatPanel({
             }),
         [],
     );
+
+    // * A message asked for from outside (the plans list) is sent once per request; one that was already there when the chat mounted is not.
+    const seenSendRequest = useRef(sendRequest);
+
+    useEffect(() => {
+        if (sendRequest !== null && sendRequest !== seenSendRequest.current) {
+            seenSendRequest.current = sendRequest;
+            sendPrompt(sendRequest.text);
+        }
+    }, [sendRequest, sendPrompt]);
 
     // * Stable, so the message box (memoised) does not re-render on every streamed piece of an answer.
     const send = useStableCallback(() => {

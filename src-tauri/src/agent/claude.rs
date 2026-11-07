@@ -17,6 +17,9 @@ const CHAT_ROLE: &str = concat!(
     include_str!("../../../prompts/chat/choices.md")
 );
 
+/// What plan mode adds to the chat prompt (`prompts/chat/plan.md`): once the plan is approved, each task goes to a sub-agent and its status is kept up to date.
+const PLAN_ROLE: &str = include_str!("../../../prompts/chat/plan.md");
+
 pub struct ClaudeAgent;
 
 impl AgentCli for ClaudeAgent {
@@ -34,7 +37,11 @@ impl AgentCli for ClaudeAgent {
             "--include-partial-messages".to_string(),
             // * How the assistant works here (short answers, act without asking), added to the CLI's own prompt.
             "--append-system-prompt".to_string(),
-            CHAT_ROLE.to_string(),
+            if options.mode == Some(PLAN_MODE) {
+                format!("{CHAT_ROLE}\n\n{PLAN_ROLE}")
+            } else {
+                CHAT_ROLE.to_string()
+            },
         ];
 
         if let Some(id) = options.session {

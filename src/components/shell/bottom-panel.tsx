@@ -37,6 +37,7 @@ export function BottomPanel({
     onClose,
     onOpenSubagent,
     onOpenFile,
+    onSendPrompt,
 }: {
     tab: BottomTab;
     /** Folder of the open project. */
@@ -54,6 +55,8 @@ export function BottomPanel({
     onOpenSubagent: (id: string) => void;
     /** Opens a file of the project (path relative to it) in the editor. */
     onOpenFile: (path: string) => void;
+    /** Sends a message to the chat of the open project. */
+    onSendPrompt: (text: string) => void;
 }) {
     const sessions = useTerminalSessions(onClose);
     const { tasks, failed, stopTask, clearFinished } = useBackgroundTasks(root);
@@ -187,7 +190,12 @@ export function BottomPanel({
                     />
                 )}
                 {tab === 'plans' && (
-                    <PlansPane key={root} root={root} onOpenFile={onOpenFile} />
+                    <PlansPane
+                        key={root}
+                        root={root}
+                        onOpenFile={onOpenFile}
+                        onSendPrompt={onSendPrompt}
+                    />
                 )}
                 {terminalStarted && (
                     <ActivityTerminal

@@ -510,7 +510,7 @@ export function useAgentTurns({
     });
 
     // * While a turn runs, a message goes at once (its own turn) only if that turn has sub-agents working; otherwise it waits in the queue.
-    const send = (prompt: string) => {
+    const send = (prompt: string, fromComposer = true) => {
         if (runs.current.size > 0 && working.current.size === 0) {
             keepQueue([
                 ...queued.current,
@@ -520,7 +520,7 @@ export function useAgentTurns({
             return;
         }
 
-        startTurn(prompt, cli, [], true);
+        startTurn(prompt, cli, [], fromComposer);
     };
 
     // * Sends the waiting messages as one: when the chat is free or a sub-agent starts.
@@ -566,6 +566,13 @@ export function useAgentTurns({
     const sendFromComposer = useStableCallback((prompt: string) => {
         if (prompt !== '') {
             send(prompt);
+        }
+    });
+
+    /** A message that did not come from the box (a button): sent like a typed one, but the draft in the box stays. */
+    const sendPrompt = useStableCallback((prompt: string) => {
+        if (prompt !== '') {
+            send(prompt, false);
         }
     });
 
@@ -727,6 +734,7 @@ export function useAgentTurns({
         clearWaiting,
         choose,
         sendFromComposer,
+        sendPrompt,
         switchAccount,
         answerPermission,
         stopTurns,

@@ -112,9 +112,26 @@ export function LocalChanges({
     onOpenFile: (path: string) => void;
     actions: FileActions;
 }) {
-    // * The file whose diff fills the lower half; the first of the list until one is picked (or when the picked one is gone).
+    // * The file whose diff opens right under its row; the first of the list until one is picked (or when the picked one is gone); picking it again closes it.
     const [picked, setPicked] = useState<string | null>(null);
+    const [isClosed, setIsClosed] = useState(false);
     const selected = files?.find((file) => file.path === picked) ?? files?.[0];
+
+    const toggle = (path: string) => {
+        if (selected?.path === path) {
+            setIsClosed((closed) => !closed);
+
+            return;
+        }
+
+        setPicked(path);
+        setIsClosed(false);
+    };
+
+    const show = (path: string) => {
+        setPicked(path);
+        setIsClosed(false);
+    };
 
     const { confirm, dialog } = useConfirm();
 
@@ -183,11 +200,11 @@ export function LocalChanges({
     return (
         <>
             {dialog}
-            <ul className="max-h-[40%] min-h-16 shrink-0 animate-in overflow-auto border-b duration-200 fade-in motion-reduce:animate-none">
+            <ul className="min-h-0 flex-1 animate-in overflow-auto border-b duration-200 fade-in motion-reduce:animate-none">
                 {files.map((file) => {
                     const name = file.path.split('/').pop() ?? file.path;
                     const dir = file.path.split('/').slice(0, -1).join('/');
-                    const isSelected = selected?.path === file.path;
+                    const isSelected = selected?.path === file.path && !isClosed;
 
                     return (
                         <li
@@ -200,7 +217,7 @@ export function LocalChanges({
                                 items={[
                                     {
                                         label: t('local_changes.show_changes'),
-                                        onSelect: () => setPicked(file.path),
+                                        onSelect: () => show(file.path),
                                     },
                                     {
                                         label: t('common.open_file'),
@@ -223,8 +240,8 @@ export function LocalChanges({
                                 >
                                     <button
                                         type="button"
-                                        aria-pressed={isSelected}
-                                        onClick={() => setPicked(file.path)}
+                                        aria-expanded={isSelected}
+                                        onClick={() => toggle(file.path)}
                                         className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     >
                                         <FileIcon
@@ -304,19 +321,13 @@ export function LocalChanges({
                                     )}
                                 </div>
                             </FileContextMenu>
+                            {isSelected && (
+                                <ChangeDiff root={root} change={file} />
+                            )}
                         </li>
                     );
                 })}
             </ul>
-            <div className="min-h-0 flex-1 overflow-auto">
-                {selected !== undefined && (
-                    <ChangeDiff
-                        key={selected.path}
-                        root={root}
-                        change={selected}
-                    />
-                )}
-            </div>
         </>
     );
 }

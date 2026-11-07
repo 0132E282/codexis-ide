@@ -28,6 +28,10 @@ export const shellMainVietnamese: Record<string, string> = {
     'plans.title': 'Kế hoạch',
     'plans.back': 'Về danh sách kế hoạch',
     'plans.open_file': 'Mở tệp',
+    'plans.do_tasks': 'Làm task',
+    'plans.continue': 'Tiếp tục',
+    'plans.continue_prompt':
+        'Làm các task chưa xong của kế hoạch {path}: {tasks}. Đọc tệp kế hoạch, giao từng task cho subagent làm luôn (task độc lập chạy song song, task phụ thuộc chạy tuần tự), cập nhật status của task trong tệp sau mỗi task và báo task nào xong, task nào còn dở.',
     'plans.detail_loading': 'Đang tải kế hoạch…',
     'plans.section_requirements': 'Yêu cầu',
     'plans.section_tasks': 'Việc cần làm',
@@ -331,6 +335,8 @@ export const shellMainVietnamese: Record<string, string> = {
     'usage_dialog.which_clis_are_in':
         'CLI nào đang dùng và CLI nào đã dừng vì hạn mức.',
     'workspace_pane.open_chat_panel': 'Mở khung chat',
+    'workspace_pane.show_files': 'Hiện khung tệp',
+    'workspace_pane.hide_files': 'Ẩn khung tệp',
     'errors.vscode.not_installed':
         "Không mở được VS Code. Cài VS Code và chạy “Shell Command: Install 'code' command in PATH”.",
     'errors.remote.pairing_code_failed': 'Không tạo được mã ghép đôi.',
