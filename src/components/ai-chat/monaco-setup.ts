@@ -30,6 +30,59 @@ const THEME_NAMES: Record<CodeScheme, string> = {
     'dark-colorblind': 'pm-dark-cb',
 };
 
+// * `.log` files (console / dev-server logs): Monaco has no log mode, so a small Monarch grammar tags the time stamp, the level and the stack lines, and the theme below colours them.
+monaco.languages.register({ id: 'log' });
+monaco.languages.setMonarchTokensProvider('log', {
+    ignoreCase: true,
+    tokenizer: {
+        root: [
+            [
+                /^(\[\s*\d+ms\])(\s*)(\[(?:error|fatal)\].*|(?:\w*error|uncaught)\b.*)$/,
+                ['log.time', '', 'log.error'],
+            ],
+            [
+                /^(\[\s*\d+ms\])(\s*)(\[(?:warning|warn)\].*|warning\b.*)$/,
+                ['log.time', '', 'log.warn'],
+            ],
+            [
+                /^(\[\s*\d+ms\])(\s*)(\[(?:info|log|debug)\].*)$/,
+                ['log.time', '', 'log.info'],
+            ],
+            [/^\[\s*\d+ms\]/, 'log.time'],
+            [/^\s+at\s/, { token: 'log.stack', next: '@stack' }],
+        ],
+        // * A stack line: the long URL prefix fades, the `file:line:col` tail stays readable.
+        stack: [
+            [/(?:https?|file):\/\/[^\s()]*\//, 'log.url'],
+            [/[^\s()/]+:\d+(?::\d+)?/, 'log.loc'],
+            [/$/, '', '@pop'],
+            [/./, 'log.stack'],
+        ],
+    },
+});
+
+// * Log token colours per base theme (fixed, readable on both light and dark backgrounds).
+const LOG_COLORS = {
+    vs: {
+        time: '#8c959f',
+        error: '#cf222e',
+        warn: '#9a6700',
+        info: '#57606a',
+        stack: '#8c959f',
+        url: '#b1b8c0',
+        loc: '#0550ae',
+    },
+    'vs-dark': {
+        time: '#6e7681',
+        error: '#f47067',
+        warn: '#d9a441',
+        info: '#9aa7b4',
+        stack: '#6e7681',
+        url: '#4d5560',
+        loc: '#79b8ff',
+    },
+} as const;
+
 for (const scheme of Object.keys(CODE_PALETTES) as CodeScheme[]) {
     const palette = CODE_PALETTES[scheme];
     const hex = (color: string) => color.slice(1);
@@ -48,6 +101,20 @@ for (const scheme of Object.keys(CODE_PALETTES) as CodeScheme[]) {
             { token: 'attribute.name', foreground: hex(palette.attribute) },
             { token: 'variable', foreground: hex(palette.variable) },
             { token: 'delimiter', foreground: hex(palette.delimiter) },
+            ...(
+                [
+                    ['log.time', 'time'],
+                    ['log.error', 'error'],
+                    ['log.warn', 'warn'],
+                    ['log.info', 'info'],
+                    ['log.stack', 'stack'],
+                    ['log.url', 'url'],
+                    ['log.loc', 'loc'],
+                ] as const
+            ).map(([token, key]) => ({
+                token,
+                foreground: hex(LOG_COLORS[palette.base][key]),
+            })),
         ],
         colors: {
             ...COMMON_COLORS,
@@ -91,6 +158,7 @@ const LANGUAGES: Record<string, string> = {
     cpp: 'cpp',
     cs: 'csharp',
     ini: 'ini',
+    log: 'log',
     mk: 'shell',
     conf: 'ini',
     properties: 'ini',
