@@ -1,4 +1,4 @@
-//! Read-only look at the extensions VS Code (and its Insiders, Cursor and VSCodium relatives) installed, to reuse the language servers inside them.
+//! Read-only look at the extensions VS Code (and its Insiders, Cursor and VSCodium relatives) installed, to reuse the language servers inside them .
 //!
 //! Only four fixed folders under `$HOME` are read, and only `package.json`, `extensions.json` and `.obsolete` (each at most 1 MiB). Nothing is written and no script of an extension is run; a folder or file that links out of the folder it must be in is left out with a reason.
 
