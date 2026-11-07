@@ -40,19 +40,20 @@ Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rus
 - **Giọng nói và language server**: giọng nói chỉ kết nối loopback qua HTTP và từ chối chuyển hướng; extension VS Code chỉ được đọc manifest.
 - **Xoá và dọn dẹp** chỉ thực hiện khi người dùng xác nhận; phần dọn dung lượng chỉ đụng tới dữ liệu của chính IDE, không chạm thư mục dự án.
 
-## Yêu cầu
+## Yêu cầu và tải về
+
+**Yêu cầu**
 
 - [Node.js](https://nodejs.org) và [pnpm](https://pnpm.io).
 - [Rust](https://rustup.rs) (toolchain stable) và các thành phần hệ thống của Tauri 2: xem [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/). Trên macOS cần Xcode Command Line Tools (`xcode-select --install`).
 - Để chat với AI: cài ít nhất một CLI và đăng nhập sẵn, sao cho `claude` hoặc `codex` chạy được từ terminal. App tìm thêm trong `/opt/homebrew/bin`, `/usr/local/bin` và `~/.local/bin`.
 
-## Tải về (macOS)
+**Tải về (macOS)**
 
 Tải tệp `.dmg` mới nhất tại [trang Releases](https://github.com/0132E282/codexis-ide/releases/latest), mở tệp và kéo app vào thư mục `Applications`.
 
 - Bản hiện tại chỉ chạy trên Mac chip Apple Silicon (arm64).
 - App chưa được ký số và notarize nên macOS có thể chặn lần mở đầu tiên. Bấm chuột phải vào app, chọn **Open**, hoặc chạy `xattr -cr "/Applications/Codexis IDE.app"`.
-- Để chat với AI, cần cài sẵn và đăng nhập CLI `claude` hoặc `codex` (xem phần Yêu cầu).
 - Từ các bản sau, app tự kiểm tra bản mới trên GitHub Releases: khi có bản mới sẽ hiện thông báo ở góc dưới bên phải, bấm **Cập nhật** để tự tải, cài và khởi động lại (không cần tải `.dmg` lại). Chức năng này chưa được kiểm với một bản phát hành thật.
 
 ## Cài đặt và chạy
@@ -111,16 +112,6 @@ Trên macOS:
 - `~/Library/Caches/ai.geteasy.rynox-ide/attachments/`: ảnh và tệp đã dán vào chat. Thư mục này là cache, xoá được.
 
 Nếu có file `projects.json` cũ trong thư mục dữ liệu, các dự án trong đó được nhập vào `codexis.db` một lần; file cũ không bị xoá.
-
-## Cấu trúc thư mục
-
-- `src-tauri/`: backend Rust. Migration và seeder ở `src-tauri/database/{migrations,seeders}`, test ở `src-tauri/tests/unit/`.
-- `src/`: giao diện React 19 (Vite, Tailwind 4, Monaco, xterm).
-- `prompts/`: prompt Markdown cho AI agent.
-- `e2e/`: test Playwright.
-- `docs/`: tài liệu hệ thống [`docs/system/`](docs/system/), kế hoạch [`docs/plans/`](docs/plans/), testcase `docs/repo/` và thiết kế [`docs/design/`](docs/design/DESIGN.md).
-
-Một số tài liệu hệ thống: [kiến trúc](docs/system/architecture.md), [language server](docs/system/language-servers.md), [relay AI](docs/system/ai-relay.md), [cơ sở dữ liệu](docs/system/database.md), [tác vụ nền](docs/system/background-tasks.md), [tự cập nhật](docs/system/app-update.md).
 
 ## Đóng góp
 
