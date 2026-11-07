@@ -549,6 +549,25 @@ impl ToolScanner {
                     });
                 }
             }
+
+            // * Custom slash commands: one Markdown file each, named after the file.
+            for file in base.children(&base.sandbox.root().join(".claude/commands")) {
+                if file.extension().and_then(|extension| extension.to_str()) != Some("md") {
+                    continue;
+                }
+
+                let Some(real) = base.contained(&file) else {
+                    continue;
+                };
+
+                if !seen.insert(real) {
+                    continue;
+                }
+
+                collect(&mut listing, base.read(&file, MAX_FILE_BYTES), |text| {
+                    vec![entry(base, &file, &stem(&file), front_matter(&text))]
+                });
+            }
         }
 
         listing
