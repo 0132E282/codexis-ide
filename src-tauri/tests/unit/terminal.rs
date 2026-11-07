@@ -27,15 +27,35 @@ fn a_shell_runs_in_a_pseudo_terminal() {
 
     let mut child = pair.slave.spawn_command(command).unwrap();
     let mut reader = pair.master.try_clone_reader().unwrap();
-    let mut output = String::new();
+    let (sender, receiver) = std::sync::mpsc::channel();
 
     drop(pair.slave);
-    child.wait().unwrap();
-    let mut buffer = [0u8; 64];
-    let read = reader.read(&mut buffer).unwrap();
 
-    output.push_str(&String::from_utf8_lossy(&buffer[..read]));
-    assert!(output.contains("hello"));
+    // * The reader runs on its own thread and the test waits with a deadline: a read that never returns (the end of a pseudo-terminal differs between systems) must fail the test, not hang the whole run.
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 64];
+
+        while let Ok(read) = reader.read(&mut buffer) {
+            if read == 0 || sender.send(buffer[..read].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut output = String::new();
+
+    while !output.contains("hello") {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+
+        match receiver.recv_timeout(left) {
+            Ok(bytes) => output.push_str(&String::from_utf8_lossy(&bytes)),
+            Err(_) => break,
+        }
+    }
+
+    child.wait().unwrap();
+    assert!(output.contains("hello"), "output was {output:?}");
 }
 
 #[test]
