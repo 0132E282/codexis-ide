@@ -1,7 +1,9 @@
 use super::state::AppState;
+use crate::activity::ActivityStore;
+use crate::attachments;
 use crate::chats::{ChatHistory, ChatTurn, Conversation, GridMember};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 /// What the chat panel restores when a workspace opens: its turns, its CLI session ids, and the key (`workspace`) to hand back when saving, so a late save never lands in another workspace.
 #[derive(Debug, Serialize)]
@@ -84,6 +86,7 @@ pub fn chat_new(state: State<AppState>, workspace: String) -> Result<i64, String
 
 #[tauri::command]
 pub fn chat_delete(
+    app: AppHandle,
     state: State<AppState>,
     root: Option<String>,
     conversation: i64,
@@ -93,7 +96,22 @@ pub fn chat_delete(
     state
         .lock_chats()
         .delete_conversation(&workspace, conversation)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    // * The pictures of the chat go too: their rows and the copies in the attachments cache. A failure here never undoes the delete.
+    if let (Some(store), Ok(dir)) = (
+        app.try_state::<ActivityStore>(),
+        super::attachments::attachments_dir(&app),
+    ) {
+        for hash in store
+            .delete_conversation_images(conversation)
+            .unwrap_or_default()
+        {
+            attachments::remove_by_hash(&dir, &hash);
+        }
+    }
+
+    Ok(())
 }
 
 /// A chat of the grid as the interface sends it: its project folder and conversation.

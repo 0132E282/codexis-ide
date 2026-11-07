@@ -1,13 +1,10 @@
 import {
     Code2,
+    Files,
     LayoutGrid,
     ListChecks,
     MessageSquare,
     MessagesSquare,
-    PanelLeftClose,
-    PanelLeftOpen,
-    PanelRightClose,
-    PanelRightOpen,
     SquareMenu,
     Terminal,
 } from 'lucide-react';
@@ -53,6 +50,9 @@ const askAssistant =
         ).data;
 
 const noViewerChange = () => undefined;
+
+// * Projects whose chat was already shown again in this run.
+const REOPENED_CHATS = new Set<string>();
 
 /** The chat and the code viewer of one project. */
 export function WorkspacePane({
@@ -134,28 +134,44 @@ export function WorkspacePane({
 
     // * The whole file area (tree and editor) is folded away: it stays mounted, so its tabs and unsaved edits come back as they were.
     const filesHidden = state.filesHidden;
-    const filesOnLeft = treePlacement.placement === 'left';
-    const FilesIcon = filesOnLeft
-        ? filesHidden
-            ? PanelLeftOpen
-            : PanelLeftClose
-        : filesHidden
-          ? PanelRightOpen
-          : PanelRightClose;
+    // * The tree is closed from its own header: no strip is left for it, the file button (or Cmd/Ctrl+Shift+Y) opens it again.
+    const [treeClosed, setTreeClosed] = useState(false);
+    const FilesIcon = Files;
     const filesLabel = t(
         filesHidden ? 'workspace_pane.show_files' : 'workspace_pane.hide_files',
     );
-    const toggleFiles = () =>
+    const toggleFiles = () => {
+        if (treeClosed && !filesHidden) {
+            setTreeClosed(false);
+
+            return;
+        }
+
         onPatch(pane.key, {
             filesHidden: !filesHidden,
             // * With the files hidden the chat must stay on screen.
             ...(filesHidden ? {} : { chatCollapsed: false }),
         });
+    };
     const toggleRail = () => setRailOpen((open) => !open);
     // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
     const sideChatAlone =
         sideChatOpen && !state.editorVisible && state.chatCollapsed;
     const toggleSideChat = () => setSideChatOpen((open) => !open);
+    // * The chat is shown again when the app starts: a chat folded away in an earlier run (squeezed out by a wide file) must not stay gone. Once per project and run, so a chat folded on purpose stays folded afterwards.
+    useEffect(() => {
+        if (REOPENED_CHATS.has(pane.key)) {
+            return;
+        }
+
+        REOPENED_CHATS.add(pane.key);
+
+        if (state.chatCollapsed) {
+            onPatch(pane.key, { chatCollapsed: false });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only on the first mount of a project
+    }, []);
+
     // * Cmd/Ctrl+; opens and closes the side chat of the open project.
     useEffect(() => {
         if (!active) {
@@ -297,10 +313,13 @@ export function WorkspacePane({
                     state.editorVisible && state.chatCollapsed && !filesHidden
                 }
                 trailingHidden={filesHidden}
+                trailingEmpty={!state.editorVisible && treeClosed}
                 trailingFirst={treePlacement.placement === 'left'}
                 trailing={
                     <CodeViewer
-                        alwaysShowEditor
+                        alwaysShowEditor={!sidebarCollapsed}
+                        treeClosed={treeClosed}
+                        onTreeClosedChange={setTreeClosed}
                         chatCollapsed={state.chatCollapsed}
                         treePlacement={treePlacement}
                         tabsStart={
@@ -335,8 +354,6 @@ export function WorkspacePane({
                                         />
                                     </Button>
                                 </>
-                            ) : !state.editorVisible ? (
-                                panelsMenu
                             ) : undefined
                         }
                         onAttachFile={(path) =>

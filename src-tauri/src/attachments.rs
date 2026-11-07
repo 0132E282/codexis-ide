@@ -73,6 +73,31 @@ pub fn save(dir: &Path, name: &str, data: &[u8]) -> Result<PathBuf, AttachmentEr
     Ok(path)
 }
 
+/// Removes the files [`save`] wrote for content whose SHA-256 is `hash` (hex): every regular file in `dir` named with that hash prefix. A symlink or folder is left alone; a missing folder is not an error.
+pub fn remove_by_hash(dir: &Path, hash: &str) {
+    let prefix: String = hash.chars().take(HASH_BYTES * 2).collect();
+
+    if prefix.len() != HASH_BYTES * 2 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let named = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with(&format!("{prefix}-")));
+        let is_file = entry.file_type().is_ok_and(|kind| kind.is_file());
+
+        if named && is_file {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Reads back a file saved by [`save`]; only a file that lies inside `dir` can be read, so this never serves another file of the machine.
 ///
 /// # Errors

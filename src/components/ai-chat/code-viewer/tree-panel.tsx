@@ -290,6 +290,9 @@ export function TreePanel({
             style={{ width: treeWidth.width }}
             className={cn(
                 'relative hidden min-h-0 max-w-full shrink-0 flex-col md:flex',
+                // * It slides in when opened again (it is not mounted while closed).
+                'animate-in fade-in-0 duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
+                onLeft ? 'slide-in-from-left-6' : 'slide-in-from-right-6',
                 // * Floating: a card over the window (it stays mounted, and takes no room from the editor).
                 isFloating
                     ? 'bg-background fixed top-16 right-4 bottom-4 z-30 rounded-lg border shadow-xl'

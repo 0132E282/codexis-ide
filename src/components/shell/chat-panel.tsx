@@ -334,7 +334,10 @@ export function ChatPanel({
             style={fill ? undefined : { width: width.width }}
             className={cn(
                 'relative flex min-h-0 flex-col',
-                collapsed && 'hidden',
+                collapsed
+                    ? 'hidden'
+                    : // * Shown again: it fades in from the side (the section stays mounted, display none to flex restarts the animation).
+                      'animate-in fade-in-0 slide-in-from-left-6 duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
                 // * The chat gives way: when the editor or the file column is dragged out to the full width it shrinks away (and clips) instead of pushing the sidebar off the screen.
                 fill
                     ? 'max-w-full min-w-0 flex-1'
@@ -354,7 +357,7 @@ export function ChatPanel({
                         {headerStart}
                     </span>
                     {/* * The project and the settings sit in the header, not under the message box; in the chat grid one bar for all the chats stands in for it. */}
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                         {sharedOptions === undefined && (
                             <ProjectRow
                                 busy={busy}
@@ -373,7 +376,7 @@ export function ChatPanel({
                             />
                         )}
                     </div>
-                    <span className="flex items-center gap-0.5">
+                    <span className="flex shrink-0 items-center gap-0.5">
                         {headerActions}
                     </span>
                 </header>

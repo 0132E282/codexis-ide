@@ -121,3 +121,28 @@ fn a_picture_is_read_only_inside_the_allowed_roots() {
     assert!(read_image(&roots, root.path(), &outside.path().join("b.png")).is_err());
     assert!(read_image(&roots, root.path(), Path::new("../b.png")).is_err());
 }
+
+#[test]
+fn files_of_a_hash_are_removed_and_others_stay() {
+    use sha2::{Digest, Sha256};
+
+    let dir = tempfile::tempdir().unwrap();
+    let gone = save(dir.path(), "a.png", b"gone").unwrap();
+    let kept = save(dir.path(), "b.png", b"kept").unwrap();
+
+    remove_by_hash(dir.path(), &format!("{:x}", Sha256::digest(b"gone")));
+
+    assert!(!gone.exists());
+    assert!(kept.exists());
+}
+
+#[test]
+fn a_malformed_hash_removes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = save(dir.path(), "a.png", b"x").unwrap();
+
+    remove_by_hash(dir.path(), "");
+    remove_by_hash(dir.path(), "../../../../../../..");
+
+    assert!(path.exists());
+}

@@ -187,7 +187,7 @@
     {
       "id": "TASK-S01",
       "title": "Thử cờ chỉ đọc của Claude và chốt cách chỉ đọc cho Codex",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "priorityReason": "Yêu cầu chỉ đọc là an toàn dữ liệu; thiết kế đang dựa vào cờ chưa kiểm",
       "requirements": ["REQ-S4"],
@@ -205,7 +205,7 @@
     {
       "id": "TASK-S02",
       "title": "remote.rs: không phát sự kiện của run side-* cho điện thoại",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "priorityReason": "Tránh lộ nội dung side chat sang điện thoại",
       "requirements": ["REQ-S7"],

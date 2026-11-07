@@ -29,9 +29,12 @@ const MAX_SIZE = 960;
 function DockedPanel({
     panel,
     placement,
+    grow = false,
 }: {
     panel: DockPanel;
     placement: DockedPlacement;
+    /** Takes the whole room of its column instead of its own height (a bottom panel with nothing above it). */
+    grow?: boolean;
 }) {
     const vertical = placement === 'top' || placement === 'bottom';
     const axis = vertical ? 'y' : 'x';
@@ -49,14 +52,21 @@ function DockedPanel({
     return (
         <div
             className={cn(
-                'bg-background relative flex shrink-0 flex-col overflow-hidden',
+                'bg-background relative flex flex-col overflow-hidden',
+                grow ? 'min-h-0 flex-1' : 'shrink-0',
                 vertical && 'w-full',
                 placement === 'left' && 'border-r',
                 placement === 'right' && 'border-l',
                 placement === 'top' && 'border-b',
                 placement === 'bottom' && 'border-t',
             )}
-            style={vertical ? { height: size.width } : { width: size.width }}
+            style={
+                grow
+                    ? undefined
+                    : vertical
+                      ? { height: size.width }
+                      : { width: size.width }
+            }
         >
             <ResizeHandle
                 label={t('dock.resize_panel')}
@@ -84,6 +94,7 @@ export function DockLayout({
     trailingGrows = true,
     trailingFirst = false,
     trailingHidden = false,
+    trailingEmpty = false,
 }: {
     panels: DockPanel[];
     children?: ReactNode;
@@ -95,7 +106,18 @@ export function DockLayout({
     trailingFirst?: boolean;
     /** The trailing area is folded away (hidden, not unmounted, so its state survives). */
     trailingHidden?: boolean;
+    /** The trailing area has nothing to show (no file, no tree): a bottom panel under it takes its whole height, with no empty part above. */
+    trailingEmpty?: boolean;
 }) {
+    // * The width of the column when only a bottom panel is in it: dragged by the edge that faces the chat (the left one, or the right one when the column is drawn first); not saved per panel, so it is one size for the column.
+    const columnWidth = useResizableWidth(
+        'ide.size.bottom-column.x',
+        480,
+        384,
+        MAX_SIZE,
+        'x',
+        trailingFirst ? 'trailing' : 'leading',
+    );
     const alone =
         panels.filter((panel) => panel.open !== false).length === 1 &&
         children == null;
@@ -115,6 +137,7 @@ export function DockLayout({
             panel.placement === 'bottom' &&
             panel.underTrailing === true,
     );
+    const bottomGrows = trailingEmpty && scopedBottomOpen;
     const floating = effective.filter((panel) => panel.placement === 'float');
 
     const docked = (placement: DockedPlacement, scoped = false) =>
@@ -128,13 +151,36 @@ export function DockLayout({
             .map((panel) => (
                 <div
                     key={panel.id}
+                    inert={panel.open === false}
                     className={cn(
-                        'flex',
-                        (filled !== undefined || panel.open === false) &&
-                            'hidden',
+                        // * Opens and closes by growing the room from nothing (and fading); the panel stays mounted. Reduced motion: at once.
+                        'grid transition-[grid-template-rows,grid-template-columns,opacity,visibility] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                        placement === 'top' || placement === 'bottom'
+                            ? panel.open === false
+                                ? 'grid-rows-[0fr]'
+                                : 'grid-rows-[1fr]'
+                            : panel.open === false
+                              ? 'grid-cols-[0fr]'
+                              : 'grid-cols-[1fr]',
+                        panel.open === false && 'invisible opacity-0',
+                        scoped && bottomGrows && 'min-h-0 flex-1',
+                        filled !== undefined && 'hidden',
                     )}
                 >
-                    <DockedPanel panel={panel} placement={placement} />
+                    <div
+                        className={cn(
+                            'flex overflow-hidden',
+                            placement === 'top' || placement === 'bottom'
+                                ? 'min-h-0 flex-col'
+                                : 'min-w-0',
+                        )}
+                    >
+                        <DockedPanel
+                            panel={panel}
+                            placement={placement}
+                            grow={scoped && bottomGrows}
+                        />
+                    </div>
                 </div>
             ));
 
@@ -168,8 +214,16 @@ export function DockLayout({
                             </div>
                             {trailing != null && (
                                 <div
+                                    style={
+                                        bottomGrows && !trailingGrows
+                                            ? { width: columnWidth.width }
+                                            : undefined
+                                    }
                                     className={cn(
-                                        'flex min-h-0 flex-col',
+                                        'relative flex min-h-0 flex-col',
+                                        bottomGrows &&
+                                            !trailingGrows &&
+                                            'max-w-full',
                                         trailingHidden && 'hidden',
                                         !trailingGrows && scopedBottomOpen
                                             ? 'min-w-96'
@@ -187,10 +241,34 @@ export function DockLayout({
                                               'shrink-0',
                                     )}
                                 >
-                                    <div className="flex min-h-0 min-w-0 flex-1">
+                                    {bottomGrows && !trailingGrows && (
+                                        <ResizeHandle
+                                            label={t('dock.resize_panel')}
+                                            className={cn(
+                                                'z-10',
+                                                trailingFirst &&
+                                                    'right-0 left-auto translate-x-1/2',
+                                            )}
+                                            {...columnWidth.handleProps}
+                                        />
+                                    )}
+                                    <div
+                                        className={cn(
+                                            'flex min-h-0 min-w-0 flex-1',
+                                            bottomGrows && 'hidden',
+                                        )}
+                                    >
                                         {trailing}
                                     </div>
-                                    <div className="flex shrink-0 flex-col">
+                                    <div
+                                        className={cn(
+                                            // * w-0 min-w-full: the panel takes the width of the column and never widens it with its own content (a long history row would leave an empty gap between the file and the tree).
+                                            'flex w-0 min-w-full flex-col',
+                                            bottomGrows
+                                                ? 'min-h-0 flex-1'
+                                                : 'shrink-0',
+                                        )}
+                                    >
                                         {docked('bottom', true)}
                                     </div>
                                 </div>

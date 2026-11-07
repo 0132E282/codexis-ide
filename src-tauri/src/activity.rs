@@ -529,6 +529,34 @@ impl ActivityStore {
             .ok_or(ActivityError::ImageNotFound)
     }
 
+    /// Deletes the pictures kept for `conversation` and returns their content hashes (hex), so the caller can remove the copies it holds elsewhere.
+    ///
+    /// # Errors
+    /// `activity.delete_failed` when the database cannot be read or written.
+    pub fn delete_conversation_images(
+        &self,
+        conversation: i64,
+    ) -> Result<Vec<String>, ActivityError> {
+        let connection = self.lock(ActivityError::DeleteFailed)?;
+        let mut statement = connection
+            .prepare("SELECT sha256 FROM chat_images WHERE conversation_id = ?1")
+            .map_err(|_| ActivityError::DeleteFailed)?;
+        let hashes = statement
+            .query_map([conversation], |row| row.get::<_, String>(0))
+            .and_then(Iterator::collect::<rusqlite::Result<Vec<String>>>)
+            .map_err(|_| ActivityError::DeleteFailed)?;
+
+        drop(statement);
+        connection
+            .execute(
+                "DELETE FROM chat_images WHERE conversation_id = ?1",
+                [conversation],
+            )
+            .map_err(|_| ActivityError::DeleteFailed)?;
+
+        Ok(hashes)
+    }
+
     /// # Errors
     /// See [`Self::delete_file_events`].
     pub fn delete_images(&self, ids: &[i64]) -> Result<usize, ActivityError> {

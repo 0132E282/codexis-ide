@@ -83,12 +83,12 @@ export function BottomPanel({
         >
             <header
                 data-float-drag
-                className="flex h-9 shrink-0 items-center justify-between border-b border-zinc-200 px-2 text-xs dark:border-zinc-800"
+                className="@container flex h-9 shrink-0 items-center justify-between gap-1 border-b border-zinc-200 px-2 text-xs dark:border-zinc-800"
             >
                 <div
                     role="tablist"
                     aria-label={t('bottom_panel.label')}
-                    className="flex h-full min-w-0 items-center gap-1 overflow-x-auto"
+                    className="flex h-full min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] @md:gap-1 [&::-webkit-scrollbar]:hidden"
                 >
                     {tabs.map((item) => (
                         <button
@@ -98,7 +98,7 @@ export function BottomPanel({
                             aria-selected={tab === item.id}
                             onClick={() => onTabChange(item.id)}
                             className={cn(
-                                'flex h-full shrink-0 items-center border-b-2 px-2 text-zinc-500 hover:text-zinc-900 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:text-zinc-400 dark:hover:text-zinc-100',
+                                'flex h-full min-w-0 shrink items-center truncate border-b-2 px-1.5 text-zinc-500 @md:px-2 hover:text-zinc-900 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:text-zinc-400 dark:hover:text-zinc-100',
                                 tab === item.id
                                     ? 'border-zinc-900 font-medium text-zinc-900 dark:border-zinc-100 dark:text-zinc-100'
                                     : 'border-transparent',

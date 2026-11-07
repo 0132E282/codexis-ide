@@ -537,3 +537,20 @@ fn sync_adds_refreshes_and_prunes_only_when_asked() {
     assert_eq!(records[0].path, "docs/plans/new.md");
     assert_eq!(store.list_plan_records("/other").unwrap().len(), 1);
 }
+
+#[test]
+fn deleting_a_conversation_drops_only_its_images() {
+    let store = store();
+
+    store
+        .save_image(ROOT, Some(1), "a.png", &png(1, 64))
+        .unwrap();
+    store
+        .save_image(ROOT, Some(2), "b.png", &png(2, 64))
+        .unwrap();
+
+    let hashes = store.delete_conversation_images(1).unwrap();
+
+    assert_eq!(hashes.len(), 1);
+    assert_eq!(store.list_images(ROOT, 10, 0).unwrap().total, 1);
+}

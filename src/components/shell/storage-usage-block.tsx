@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import { Field } from '@/components/form';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -46,7 +45,6 @@ export function StorageUsageBlock({
     const [usage, setUsage] = useState<StorageUsage | null>(null);
     const [failed, setFailed] = useState(false);
     const [cleaning, setCleaning] = useState(false);
-    const [kinds, setKinds] = useState<Set<StorageCleanupKind>>(new Set());
     const [days, setDays] = useState('30');
     const [reloadTick, setReloadTick] = useState(0);
     const { confirm, dialog } = useConfirm();
@@ -82,19 +80,7 @@ export function StorageUsageBlock({
     );
     const needsAction = worst === 'warning' || worst === 'critical';
 
-    const open = useCallback(() => {
-        setKinds(
-            new Set(
-                warnings
-                    .map((warning) => warning.kind)
-                    .filter((kind): kind is StorageCleanupKind =>
-                        (CLEANUP_KINDS as string[]).includes(kind),
-                    ),
-            ),
-        );
-        setCleaning(true);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [usage]);
+    const open = useCallback(() => setCleaning(true), []);
 
     const clean = async () => {
         const olderThanDays = days.trim() === '' ? undefined : Number(days);
@@ -112,9 +98,11 @@ export function StorageUsageBlock({
             title: t('storage.cleanup_title'),
             description:
                 olderThanDays === undefined
-                    ? t('storage.cleanup_confirm_all', { count: kinds.size })
+                    ? t('storage.cleanup_confirm_all', {
+                          count: CLEANUP_KINDS.length,
+                      })
                     : t('storage.cleanup_confirm_old', {
-                          count: kinds.size,
+                          count: CLEANUP_KINDS.length,
                           days: olderThanDays,
                       }),
             action: t('storage.cleanup'),
@@ -127,7 +115,7 @@ export function StorageUsageBlock({
         let deleted = 0;
 
         try {
-            for (const kind of kinds) {
+            for (const kind of CLEANUP_KINDS) {
                 const result = await ideActivity.storageCleanup(kind, {
                     olderThanDays,
                     root,
@@ -211,35 +199,6 @@ export function StorageUsageBlock({
                     <DialogDescription>
                         {t('storage.cleanup_description')}
                     </DialogDescription>
-                    <ul className="flex flex-col gap-2">
-                        {CLEANUP_KINDS.map((kind) => (
-                            <li
-                                key={kind}
-                                className="flex items-center gap-2 text-sm"
-                            >
-                                <Checkbox
-                                    id={`cleanup-${kind}`}
-                                    checked={kinds.has(kind)}
-                                    onCheckedChange={(checked) =>
-                                        setKinds((current) => {
-                                            const next = new Set(current);
-
-                                            if (checked === true) {
-                                                next.add(kind);
-                                            } else {
-                                                next.delete(kind);
-                                            }
-
-                                            return next;
-                                        })
-                                    }
-                                />
-                                <label htmlFor={`cleanup-${kind}`}>
-                                    {t(`storage.kind_${kind}`)}
-                                </label>
-                            </li>
-                        ))}
-                    </ul>
                     <Field
                         name="cleanup-days"
                         label={t('storage.older_than_days')}
@@ -260,7 +219,6 @@ export function StorageUsageBlock({
                         <Button
                             type="button"
                             variant="destructive"
-                            disabled={kinds.size === 0}
                             onClick={() => void clean()}
                         >
                             {t('storage.cleanup')}

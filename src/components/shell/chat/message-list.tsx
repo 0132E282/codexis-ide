@@ -40,7 +40,8 @@ export const MessageList = forwardRef<
     return (
         <div
             data-chat-scroll
-            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-4"
+            // * As tall as its messages (it shrinks and scrolls when they are many): a short chat keeps the message box right under it instead of pushing it to the bottom.
+            className="min-h-0 flex-initial overflow-x-hidden overflow-y-auto overscroll-contain p-4"
         >
             {/* * One centred column, as wide as the message box: a wide panel keeps lines readable instead of pushing the two sides apart. */}
             <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6">

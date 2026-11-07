@@ -197,7 +197,7 @@ export const shellMainEnglish: Record<string, string> = {
     'storage.cleanup': 'Clean up',
     'storage.cleanup_title': 'Clean up data',
     'storage.cleanup_description':
-        'Pick the kinds of data to delete. No file of the project is deleted, and this cannot be undone.',
+        'Deletes all the data the IDE kept for the project (edit log, chat pictures, plan records, run logs, session plans) older than the days below. No file of the project is deleted, and this cannot be undone.',
     'storage.older_than_days': 'Older than (days)',
     'storage.older_than_days_hint':
         'Leave empty to delete everything of the picked kinds.',

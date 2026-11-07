@@ -7,7 +7,7 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Folder in the app cache where pasted attachments live.
-fn attachments_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub(super) fn attachments_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_cache_dir()
         .map(|dir| dir.join("attachments"))

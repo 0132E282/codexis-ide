@@ -197,7 +197,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'storage.cleanup': 'Dọn dẹp',
     'storage.cleanup_title': 'Dọn dẹp dữ liệu',
     'storage.cleanup_description':
-        'Chọn loại dữ liệu muốn xóa. Việc này không xóa tệp của dự án và không hoàn tác được.',
+        'Xóa mọi dữ liệu IDE đã lưu cho dự án (nhật ký sửa tệp, ảnh chat, bản ghi plan, nhật ký chạy, plan của phiên) cũ hơn số ngày bên dưới. Không xóa tệp của dự án và không hoàn tác được.',
     'storage.older_than_days': 'Cũ hơn (ngày)',
     'storage.older_than_days_hint': 'Để trống để xóa tất cả của loại đã chọn.',
     'storage.bad_days': 'Số ngày không hợp lệ.',
