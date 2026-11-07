@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ide } from '@/lib/ide';
 
-/** The three native window buttons stay hidden until the pointer reaches the top-left corner; the page is only watched, never covered, so the buttons under it stay clickable. */
+/** Returns whether the buttons are shown, so the page can draw a bar behind them. The three native window buttons stay hidden until the pointer reaches the top-left corner; the page is only watched, never covered, so the buttons under it stay clickable. */
 export function useWindowButtonsHover() {
+    const [isVisible, setIsVisible] = useState(false);
+
     useEffect(() => {
         let shown = false;
 
@@ -13,6 +15,7 @@ export function useWindowButtonsHover() {
 
             if (near !== shown) {
                 shown = near;
+                setIsVisible(near);
                 void ide.windowButtonsVisible(near).catch(() => undefined);
             }
         };
@@ -21,4 +24,6 @@ export function useWindowButtonsHover() {
 
         return () => window.removeEventListener('mousemove', onMove);
     }, []);
+
+    return isVisible;
 }

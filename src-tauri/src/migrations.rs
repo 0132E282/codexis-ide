@@ -22,6 +22,8 @@ pub const ADD_STEPS_TO_CHAT_TURNS: &str =
     include_str!("../database/migrations/0008_add_steps_to_chat_turns.sql");
 pub const ADD_PROFILE_TO_USAGE_EVENTS: &str =
     include_str!("../database/migrations/0009_add_profile_to_usage_events.sql");
+pub const CREATE_CHAT_GRID_TABLE: &str =
+    include_str!("../database/migrations/0010_create_chat_grid_table.sql");
 
 /// Runs the `ALTER TABLE` in `migration` when a file made by an older version lacks `column` in `table`.
 ///

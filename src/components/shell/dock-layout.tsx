@@ -160,10 +160,15 @@ export function DockLayout({
                                 <div
                                     className={cn(
                                         'flex min-h-0 min-w-0 flex-col',
-                                        trailingFirst && 'order-first',
+                                        // * Drawn first, it is the chat's border that is no longer beside it, so it carries the line itself.
+                                        trailingFirst && 'order-first border-r',
                                         trailingGrows
                                             ? 'flex-1'
-                                            : 'shrink-0 min-w-[20rem]',
+                                            : // * On the left the file tree is as wide as itself: the width kept for it on the right would show as an empty column between the tree and the chat.
+                                              trailingFirst
+                                              ? 'shrink-0'
+                                              : // * The tree sits at the edge of that wider column; this draws the header line across the empty part, so the line does not break.
+                                                'relative shrink-0 min-w-[20rem] before:pointer-events-none before:absolute before:inset-x-0 before:top-[47px] before:h-px before:bg-border',
                                     )}
                                 >
                                     <div className="flex min-h-0 min-w-0 flex-1">

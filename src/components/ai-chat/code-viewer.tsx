@@ -45,6 +45,8 @@ export function CodeViewer({
     tabsStart,
     tabsEnd,
     treePlacement,
+    treeClosed,
+    onTreeClosedChange,
     onAttachFile,
     onMarkedFiles,
 }: {
@@ -83,6 +85,9 @@ export function CodeViewer({
     tabsEnd?: ReactNode;
     /** Left or right of the editor; the owner also moves the whole file area in front of the chat when it is left. */
     treePlacement: ReturnType<typeof usePanelPlacement>;
+    /** The host holds whether the file tree is closed (and draws the button that opens it). */
+    treeClosed?: boolean;
+    onTreeClosedChange?: (closed: boolean) => void;
     /** Double click on a file of the tree: the chat attaches it (path inside the project). */
     onAttachFile?: (path: string) => void;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
@@ -316,6 +321,8 @@ export function CodeViewer({
     const treePanel = (
         <TreePanel
             placement={treePlacement}
+            closed={treeClosed}
+            onClosedChange={onTreeClosedChange}
             sourceName={sourceName}
             treeWidth={treeWidth}
             repo={repo}

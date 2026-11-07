@@ -43,6 +43,15 @@ export type ChangedFile = {
 };
 /** A sub-agent the AI started in the current turn. */
 export type Subagent = { id: string; label: string; done: boolean };
+/** One chat of the grid: a conversation and the project folder (`workspace`) it belongs to. */
+export type GridMember = {
+    /** The group (grid) the chat is in; a group holds at most four chats. */
+    group: number;
+    workspace: string;
+    conversation: number;
+    /** Title of the conversation, for the sidebar. */
+    title: string;
+};
 /** One saved chat turn. */
 export type ChatTurnRecord = {
     id: string;
@@ -192,6 +201,12 @@ export const ide = {
     chatNew: (workspace: string) => invoke<number>('chat_new', { workspace }),
     chatDelete: (conversation: number, root?: string) =>
         invoke<void>('chat_delete', { conversation, root }),
+    /** Chats picked for the chat grids, across projects, by group and in grid order (a grid shows from two chats on). */
+    chatGridGet: () => invoke<GridMember[]>('chat_grid_get'),
+    /** Saves the chat grids: each group has at most four chats, each with its project folder; an empty list clears them. */
+    chatGridSave: (
+        picks: { group: number; root: string; conversation: number }[],
+    ) => invoke<void>('chat_grid_save', { picks }),
     chatSaveTurn: (
         workspace: string,
         conversation: number,

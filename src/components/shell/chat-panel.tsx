@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
+import { ProjectRow } from '@/components/shell/chat/project-row';
 import { MessageList } from '@/components/shell/chat/message-list';
 import { useAgentTurns } from '@/components/shell/chat/use-agent-turns';
 import { useAttachments } from '@/components/shell/chat/use-attachments';
@@ -18,6 +19,14 @@ import { t } from '@/lib/i18n';
 
 // * The chat can be dragged this wide at most, so the file beside it keeps the larger share.
 const CHAT_MAX_WIDTH = 560;
+
+/** Settings shared by the chats of the grid: set once in the row under the grid, they replace the ones each chat keeps for itself. */
+export type SharedChatOptions = {
+    mode: string;
+    agentTeam: boolean;
+    extraRoots: string[];
+    worktree: boolean;
+};
 
 const NO_PROJECTS: { root: string; name: string }[] = [];
 
@@ -37,14 +46,14 @@ export function ChatPanel({
     onContext,
     collapsed,
     popup,
-    railOpen,
-    onToggleRail,
     onTooNarrow,
     viewSubagent,
     onLeaveSubagent,
     attachFile,
     headerStart,
     headerActions,
+    showHeader = true,
+    sharedOptions,
     projects = NO_PROJECTS,
     acceptsRemote = false,
 }: {
@@ -73,9 +82,6 @@ export function ChatPanel({
     collapsed: boolean;
     /** Laid above the top of the message box (the session rail popup). */
     popup?: ReactNode;
-    /** The session rail popup is open, and the toggle shown in the row under the message box. */
-    railOpen?: boolean;
-    onToggleRail?: () => void;
     /** Told when the editor columns have squeezed the chat narrower than it can be used; the app then closes it. */
     onTooNarrow: () => void;
     /** The sub-agent picked in the sidebar: the chat shows what it is doing instead of the conversation. */
@@ -88,18 +94,26 @@ export function ChatPanel({
     headerStart?: ReactNode;
     /** Buttons for the right end of that bar (branch, editor, terminal). */
     headerActions?: ReactNode;
+    /** False in the chat grid, where one bar above all the chats stands in for the bar of each. */
+    showHeader?: boolean;
+    /** Chat grid: the settings come from the one row under the grid, and the chat shows no row of its own. */
+    sharedOptions?: SharedChatOptions;
 }) {
     const [text, setText] = useState('');
     const [cli, setCli] = useState<AgentCli>('claude');
     // * The model is picked per CLI; none means the CLI's own default.
     const [models, setModels] = useState<Partial<Record<AgentCli, string>>>({});
     // * Claude only: the permission mode, and whether its experimental agent teams are on.
-    const [mode, setMode] = useState('auto');
-    const [agentTeam, setAgentTeam] = useState(false);
+    const [ownMode, setMode] = useState('auto');
+    const [ownAgentTeam, setAgentTeam] = useState(false);
     // * Other projects the AI may also work in; kept for the whole chat, changed between messages.
-    const [extraRoots, setExtraRoots] = useState<string[]>([]);
+    const [ownExtraRoots, setExtraRoots] = useState<string[]>([]);
     // * Worktree mode: the turns of this conversation run on their own git branch, in a copy of the project.
-    const [worktree, setWorktree] = useState(false);
+    const [ownWorktree, setWorktree] = useState(false);
+    const mode = sharedOptions?.mode ?? ownMode;
+    const agentTeam = sharedOptions?.agentTeam ?? ownAgentTeam;
+    const extraRoots = sharedOptions?.extraRoots ?? ownExtraRoots;
+    const worktree = sharedOptions?.worktree ?? ownWorktree;
     const bottom = useRef<HTMLDivElement>(null);
     const section = useRef<HTMLElement>(null);
     const width = useResizableWidth(
@@ -267,12 +281,36 @@ export function ChatPanel({
                     {...width.handleProps}
                 />
             )}
-            <header className="flex h-[49px] shrink-0 items-center justify-between gap-2 border-b px-2">
-                <span className="ml-2 flex items-center">{headerStart}</span>
-                <span className="flex items-center gap-0.5">
-                    {headerActions}
-                </span>
-            </header>
+            {showHeader && (
+                <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">
+                    <span className="ml-2 flex items-center">
+                        {headerStart}
+                    </span>
+                    {/* * The project and the settings sit in the header, not under the message box; in the chat grid one bar for all the chats stands in for it. */}
+                    <div className="min-w-0 flex-1">
+                        {sharedOptions === undefined && (
+                            <ProjectRow
+                                busy={busy}
+                                projectName={projectName}
+                                otherProjects={otherProjects}
+                                extraRoots={extraRoots}
+                                onExtraRootsChange={setExtraRoots}
+                                worktree={worktree}
+                                onWorktreeChange={setWorktree}
+                                compact
+                                cli={cli}
+                                mode={mode}
+                                onModeChange={setMode}
+                                agentTeam={agentTeam}
+                                onAgentTeamChange={setAgentTeam}
+                            />
+                        )}
+                    </div>
+                    <span className="flex items-center gap-0.5">
+                        {headerActions}
+                    </span>
+                </header>
+            )}
             <MessageList
                 ref={bottom}
                 turns={turns}
@@ -293,10 +331,6 @@ export function ChatPanel({
                 onStop={stopTurns}
                 cli={cli}
                 model={models[cli] ?? null}
-                mode={mode}
-                onModeChange={setMode}
-                agentTeam={agentTeam}
-                onAgentTeamChange={setAgentTeam}
                 onChoose={chooseModel}
                 onAddFiles={addFiles}
                 attachments={attachments}
@@ -304,14 +338,6 @@ export function ChatPanel({
                 onPasteFiles={attachmentState.pasteFiles}
                 onPastePaths={attachmentState.pastePaths}
                 onRemoveAttachment={attachmentState.removeAttachment}
-                projectName={projectName}
-                otherProjects={otherProjects}
-                extraRoots={extraRoots}
-                worktree={worktree}
-                onWorktreeChange={setWorktree}
-                onExtraRootsChange={setExtraRoots}
-                railOpen={railOpen}
-                onToggleRail={onToggleRail}
                 popup={popup}
             />
         </section>

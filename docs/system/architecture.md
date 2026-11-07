@@ -15,7 +15,7 @@ Codexis IDE là IDE desktop độc lập (Tauri 2 + Rust, UI React 19): soạn c
 | UI        | React 19, Vite 8, Tailwind 4, Monaco, xterm, Radix | Hiển thị, soạn thảo, chat                 |
 | Cầu nối   | Tauri `invoke` / `emit`, lớp `src/lib/*.ts`        | Gọi lệnh Rust, nhận sự kiện               |
 | Lõi       | Rust (`src-tauri/src`)                             | Workspace, git, PTY, agent, lưu trữ       |
-| Lưu trữ   | SQLite (`rynox.db`, thư mục dữ liệu app)           | Dự án, chat, tài khoản, thống kê, cài đặt |
+| Lưu trữ   | SQLite (`codexis.db`, thư mục dữ liệu app)          | Dự án, chat, tài khoản, thống kê, cài đặt |
 | Bên ngoài | CLI `claude`, `codex`, `git`, VS Code              | Chạy AI, git, mở trong VS Code            |
 
 Toàn bộ hệ thống nhìn từ trên xuống, và tài liệu nào mô tả phần nào:
@@ -34,7 +34,7 @@ flowchart TD
         CMDS["commands/*<br/>62 lệnh Tauri"] --> DOMAIN["workspace · git · agent<br/>terminal · remote · formatter"]
         DOMAIN --> STORES["projects · chats · profiles<br/>usage · settings · credentials"]
     end
-    STORES --> DB[("SQLite rynox.db · mục 10")]
+    STORES --> DB[("SQLite codexis.db · mục 10")]
     DOMAIN --> EXT["CLI claude · codex · git · prettier · VS Code"]
     BE -. "Quyền và ranh giới an toàn · mục 6, 11" .- SEC["Sandbox · root đã lưu · token điện thoại · bí mật không trả ra"]
 ```

@@ -1,7 +1,14 @@
 import {
     ChevronDown,
+    CircleHelp,
+    FilePen,
+    GitBranch,
     Laptop,
-    SquareMenu,
+    ListChecks,
+    ShieldOff,
+    Zap,
+    type LucideIcon,
+    Settings2,
     ShieldCheck,
     Users,
 } from 'lucide-react';
@@ -14,6 +21,8 @@ import {
     DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
     DropdownMenuShortcut,
@@ -24,6 +33,15 @@ import { useConfirm } from '@/hooks/use-confirm';
 import type { AgentCli } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 
+// * An icon for each permission mode in the Settings menu.
+const MODE_ICONS: Record<string, LucideIcon> = {
+    auto: Zap,
+    manual: CircleHelp,
+    acceptEdits: FilePen,
+    plan: ListChecks,
+    bypassPermissions: ShieldOff,
+};
+
 /** The row under the message box: the projects the AI works in (this one, and others picked for the chat), the worktree switch and (Claude only) the permission mode and agent team. */
 export function ProjectRow({
     busy,
@@ -33,13 +51,13 @@ export function ProjectRow({
     onExtraRootsChange,
     worktree,
     onWorktreeChange,
+    showWorktree = true,
+    compact = false,
     cli,
     mode,
     onModeChange,
     agentTeam,
     onAgentTeamChange,
-    railOpen,
-    onToggleRail,
 }: {
     busy: boolean;
     /** Name of the project this chat belongs to. */
@@ -52,15 +70,15 @@ export function ProjectRow({
     /** Worktree mode: the AI works on its own git branch, in a copy of the project. */
     worktree: boolean;
     onWorktreeChange: (on: boolean) => void;
+    /** False in the chat grid, where each project has its own Worktree switch on its bar. */
+    showWorktree?: boolean;
+    /** One "Settings" menu holds Worktree, the permission mode and agent team, so the row stays short (every chat). */
+    compact?: boolean;
     cli: AgentCli;
     mode: string;
     onModeChange: (mode: string) => void;
     agentTeam: boolean;
     onAgentTeamChange: (on: boolean) => void;
-    /** The session rail popup is open (the button at the end of the row follows it). */
-    railOpen?: boolean;
-    /** Opens or closes the session rail popup; no button when absent. */
-    onToggleRail?: () => void;
 }) {
     const modeLabel = t(
         MODES.find((option) => option.value === mode)?.label ?? mode,
@@ -90,7 +108,9 @@ export function ProjectRow({
     };
 
     return (
-        <div className="mt-1 flex flex-wrap items-center px-2 text-sm">
+        <div
+            className={`${compact ? '@container min-w-0 flex-1 flex-nowrap' : 'mt-1 flex-wrap'} flex items-center px-2 text-sm`}
+        >
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
@@ -100,7 +120,7 @@ export function ProjectRow({
                         disabled={busy}
                         aria-label={t('project_row.choose_working_projects')}
                         title={t('project_row.projects_the_ai_works')}
-                        className="max-w-full gap-1.5 text-muted-foreground"
+                        className={`min-w-0 max-w-full gap-1.5 text-muted-foreground ${compact ? 'shrink' : ''}`}
                     >
                         <Laptop aria-hidden="true" />
                         <span className="truncate">
@@ -164,118 +184,201 @@ export function ProjectRow({
                         ))}
                 </DropdownMenuContent>
             </DropdownMenu>
-            <label
-                title={t('project_row.run_the_ai_on')}
-                className="ml-2 flex cursor-pointer items-center gap-1.5 text-muted-foreground"
-            >
-                <Checkbox
-                    checked={worktree}
-                    disabled={busy}
-                    onCheckedChange={(on) => onWorktreeChange(on === true)}
-                />
-                Worktree
-            </label>
-            {cli === 'claude' && (
+            {compact ? (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            aria-label={t('project_row.settings')}
+                            title={t('project_row.settings')}
+                            className="ml-1 shrink-0 gap-1.5 text-muted-foreground"
+                        >
+                            <Settings2 aria-hidden="true" />
+                            {/* * The label gives way to the icon when the bar is narrow (a narrow chat or a chat of the grid). */}
+                            <span className="hidden @[22rem]:inline">
+                                {t('project_row.settings')}
+                            </span>
+                            {(worktree || agentTeam) && (
+                                <span
+                                    aria-hidden="true"
+                                    className="size-1.5 rounded-full bg-primary"
+                                />
+                            )}
+                            <ChevronDown aria-hidden="true" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-72">
+                        {showWorktree && (
+                            <DropdownMenuCheckboxItem
+                                checked={worktree}
+                                onSelect={(event) => event.preventDefault()}
+                                onCheckedChange={(on) =>
+                                    onWorktreeChange(on === true)
+                                }
+                                title={t('project_row.run_the_ai_on')}
+                            >
+                                <GitBranch aria-hidden="true" />
+                                Worktree
+                            </DropdownMenuCheckboxItem>
+                        )}
+                        {cli === 'claude' && (
+                            <>
+                                <DropdownMenuCheckboxItem
+                                    checked={agentTeam}
+                                    onSelect={(event) => event.preventDefault()}
+                                    onCheckedChange={(on) =>
+                                        onAgentTeamChange(on === true)
+                                    }
+                                    title={t(
+                                        'project_row.enable_agent_team_experimental',
+                                    )}
+                                >
+                                    <Users aria-hidden="true" />
+                                    Agent team
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>
+                                    {t('project_row.choose_mode')}
+                                </DropdownMenuLabel>
+                                <DropdownMenuRadioGroup
+                                    value={mode}
+                                    onValueChange={(next) =>
+                                        void chooseMode(next)
+                                    }
+                                >
+                                    {MODES.map((option) => (
+                                        <DropdownMenuRadioItem
+                                            key={option.value}
+                                            value={option.value}
+                                            title={t(option.hint)}
+                                        >
+                                            {(() => {
+                                                const Icon =
+                                                    MODE_ICONS[option.value];
+
+                                                return Icon ===
+                                                    undefined ? null : (
+                                                    <Icon aria-hidden="true" />
+                                                );
+                                            })()}
+                                            {t(option.label)}
+                                        </DropdownMenuRadioItem>
+                                    ))}
+                                </DropdownMenuRadioGroup>
+                            </>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : (
                 <>
-                    <DropdownMenu
-                        open={modeMenuOpen}
-                        onOpenChange={setModeMenuOpen}
-                    >
-                        <DropdownMenuTrigger asChild>
+                    {showWorktree && (
+                        <label
+                            title={t('project_row.run_the_ai_on')}
+                            className="ml-2 flex cursor-pointer items-center gap-1.5 text-muted-foreground"
+                        >
+                            <Checkbox
+                                checked={worktree}
+                                disabled={busy}
+                                onCheckedChange={(on) =>
+                                    onWorktreeChange(on === true)
+                                }
+                            />
+                            Worktree
+                        </label>
+                    )}
+                    {cli === 'claude' && (
+                        <>
+                            <DropdownMenu
+                                open={modeMenuOpen}
+                                onOpenChange={setModeMenuOpen}
+                            >
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={busy}
+                                        aria-label={t(
+                                            'project_row.choose_mode',
+                                        )}
+                                        className="ml-1 gap-1.5 text-muted-foreground"
+                                    >
+                                        <ShieldCheck aria-hidden="true" />
+                                        {modeLabel}
+                                        <ChevronDown aria-hidden="true" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="start"
+                                    onKeyDown={(event) => {
+                                        // * The number on each row picks it.
+                                        const picked =
+                                            MODES[Number(event.key) - 1];
+
+                                        if (picked !== undefined) {
+                                            event.preventDefault();
+                                            // * The menu closes first, so the confirmation is not drawn over an open menu.
+                                            setModeMenuOpen(false);
+                                            void chooseMode(picked.value);
+                                        }
+                                    }}
+                                >
+                                    <DropdownMenuRadioGroup
+                                        value={mode}
+                                        onValueChange={(next) =>
+                                            void chooseMode(next)
+                                        }
+                                    >
+                                        {MODES.map((option, index) => (
+                                            <DropdownMenuRadioItem
+                                                key={option.value}
+                                                value={option.value}
+                                                title={t(option.hint)}
+                                            >
+                                                <span className="flex flex-col">
+                                                    <span className="flex items-center gap-2">
+                                                        {t(option.label)}
+                                                        {option.recommended && (
+                                                            <span className="rounded-full border px-1.5 text-xs text-muted-foreground">
+                                                                {t(
+                                                                    'cli_options.recommended',
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {t(option.hint)}
+                                                    </span>
+                                                </span>
+                                                <DropdownMenuShortcut>
+                                                    {index + 1}
+                                                </DropdownMenuShortcut>
+                                            </DropdownMenuRadioItem>
+                                        ))}
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
                                 disabled={busy}
-                                aria-label={t('project_row.choose_mode')}
-                                className="ml-1 gap-1.5 text-muted-foreground"
+                                aria-pressed={agentTeam}
+                                title={t(
+                                    'project_row.enable_agent_team_experimental',
+                                )}
+                                onClick={() => onAgentTeamChange(!agentTeam)}
+                                className={`gap-1.5 ${agentTeam ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
                             >
-                                <ShieldCheck aria-hidden="true" />
-                                {modeLabel}
-                                <ChevronDown aria-hidden="true" />
+                                <Users aria-hidden="true" />
+                                Agent team
                             </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="start"
-                            onKeyDown={(event) => {
-                                // * The number on each row picks it.
-                                const picked = MODES[Number(event.key) - 1];
-
-                                if (picked !== undefined) {
-                                    event.preventDefault();
-                                    // * The menu closes first, so the confirmation is not drawn over an open menu.
-                                    setModeMenuOpen(false);
-                                    void chooseMode(picked.value);
-                                }
-                            }}
-                        >
-                            <DropdownMenuRadioGroup
-                                value={mode}
-                                onValueChange={(next) => void chooseMode(next)}
-                            >
-                                {MODES.map((option, index) => (
-                                    <DropdownMenuRadioItem
-                                        key={option.value}
-                                        value={option.value}
-                                        title={t(option.hint)}
-                                    >
-                                        <span className="flex flex-col">
-                                            <span className="flex items-center gap-2">
-                                                {t(option.label)}
-                                                {option.recommended && (
-                                                    <span className="rounded-full border px-1.5 text-xs text-muted-foreground">
-                                                        {t(
-                                                            'cli_options.recommended',
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {t(option.hint)}
-                                            </span>
-                                        </span>
-                                        <DropdownMenuShortcut>
-                                            {index + 1}
-                                        </DropdownMenuShortcut>
-                                    </DropdownMenuRadioItem>
-                                ))}
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy}
-                        aria-pressed={agentTeam}
-                        title={t('project_row.enable_agent_team_experimental')}
-                        onClick={() => onAgentTeamChange(!agentTeam)}
-                        className={`gap-1.5 ${agentTeam ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
-                    >
-                        <Users aria-hidden="true" />
-                        Agent team
-                    </Button>
+                        </>
+                    )}
                 </>
-            )}
-            {onToggleRail && (
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t(
-                        railOpen ? 'session_rail.hide' : 'session_rail.show',
-                    )}
-                    title={t(
-                        railOpen ? 'session_rail.hide' : 'session_rail.show',
-                    )}
-                    aria-expanded={railOpen === true}
-                    aria-haspopup="dialog"
-                    data-rail-toggle=""
-                    onClick={onToggleRail}
-                    className={`relative z-40 ml-auto text-muted-foreground ${railOpen ? 'bg-accent text-accent-foreground' : ''}`}
-                >
-                    <SquareMenu aria-hidden="true" />
-                </Button>
             )}
             {dialog}
         </div>

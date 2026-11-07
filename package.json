@@ -1,6 +1,7 @@
 {
   "name": "codexis-ide",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "start": "tauri dev --additional-watch-folders ../prompts",

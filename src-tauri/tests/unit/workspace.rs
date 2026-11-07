@@ -426,3 +426,99 @@ fn normalise_refuses_deceptive_segments_but_keeps_ordinary_ones() {
         assert_eq!(normalise(good).as_deref(), Some(good), "{good:?}");
     }
 }
+
+#[test]
+fn viewer_creates_copies_and_moves_entries_inside_the_project() {
+    let (dir, workspace) = project();
+
+    fs::create_dir_all(dir.path().join("src/inner")).unwrap();
+    fs::create_dir_all(dir.path().join("lib")).unwrap();
+    fs::write(dir.path().join("src/a.txt"), "a").unwrap();
+    fs::write(dir.path().join("src/inner/b.txt"), "b").unwrap();
+
+    // * Create: a file and a folder, in a folder and in the root; an existing name or a bad one is refused.
+    assert_eq!(
+        workspace.create_for_viewer("src", "new.txt", false),
+        Ok("src/new.txt".to_string())
+    );
+    assert_eq!(
+        workspace.create_for_viewer("", "top", true),
+        Ok("top".to_string())
+    );
+    assert!(dir.path().join("src/new.txt").is_file());
+    assert!(dir.path().join("top").is_dir());
+    assert_eq!(
+        workspace.create_for_viewer("src", "new.txt", false),
+        Err(WorkspaceError::Conflict)
+    );
+    for bad in ["", "a/b", "..", "nul"] {
+        assert_eq!(
+            workspace.create_for_viewer("src", bad, false),
+            Err(WorkspaceError::BadPath),
+            "{bad:?}"
+        );
+    }
+    assert_eq!(
+        workspace.create_for_viewer("../outside", "x", false),
+        Err(WorkspaceError::BadPath)
+    );
+    assert_eq!(
+        workspace.create_for_viewer(".git", "x", false),
+        Err(WorkspaceError::Denied)
+    );
+
+    // * Copy: a free name each time, a folder with what is inside it.
+    assert_eq!(
+        workspace.copy_for_viewer("src/a.txt", "src"),
+        Ok("src/a copy.txt".to_string())
+    );
+    assert_eq!(
+        workspace.copy_for_viewer("src/a.txt", "src"),
+        Ok("src/a copy 2.txt".to_string())
+    );
+    assert_eq!(
+        workspace.copy_for_viewer("src/inner", "lib"),
+        Ok("lib/inner".to_string())
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("lib/inner/b.txt")).unwrap(),
+        "b"
+    );
+    assert_eq!(
+        workspace.copy_for_viewer("src", "src/inner"),
+        Err(WorkspaceError::BadPath)
+    );
+
+    // * Move: into a folder, never over an existing entry, a folder never into itself.
+    assert_eq!(
+        workspace.move_for_viewer("src/a.txt", "lib"),
+        Ok("lib/a.txt".to_string())
+    );
+    assert!(!dir.path().join("src/a.txt").exists());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("lib/a.txt")).unwrap(),
+        "a"
+    );
+    assert_eq!(
+        workspace.move_for_viewer("src/a copy.txt", "lib"),
+        Ok("lib/a copy.txt".to_string())
+    );
+    fs::write(dir.path().join("src/a.txt"), "again").unwrap();
+    assert_eq!(
+        workspace.move_for_viewer("src/a.txt", "lib"),
+        Err(WorkspaceError::Conflict)
+    );
+    assert_eq!(
+        workspace.move_for_viewer("src", "src/inner"),
+        Err(WorkspaceError::BadPath)
+    );
+    assert_eq!(
+        workspace.move_for_viewer("src/new.txt", ""),
+        Ok("new.txt".to_string())
+    );
+    assert_eq!(
+        workspace.move_for_viewer("lib/a.txt", ".git"),
+        Err(WorkspaceError::Denied)
+    );
+    assert!(dir.path().join("lib/a.txt").is_file());
+}

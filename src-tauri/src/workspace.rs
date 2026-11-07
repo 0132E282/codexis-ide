@@ -365,6 +365,21 @@ impl Workspace {
         self.access(&Unguarded).rename(path, new_name)
     }
 
+    /// Creates an empty file or folder inside `folder` (empty: the project root): the person's action in the file tree.
+    pub fn create_for_viewer(&self, folder: &str, name: &str, is_folder: bool) -> Result<String> {
+        self.access(&Unguarded).create(folder, name, is_folder)
+    }
+
+    /// Copies a file or folder into `folder` under a free name: the person's action in the file tree.
+    pub fn copy_for_viewer(&self, path: &str, folder: &str) -> Result<String> {
+        self.access(&Unguarded).copy(path, folder)
+    }
+
+    /// Moves a file or folder into `folder`: the person's drag and drop in the file tree.
+    pub fn move_for_viewer(&self, path: &str, folder: &str) -> Result<String> {
+        self.access(&Unguarded).move_into(path, folder)
+    }
+
     /// Removes a regular file (a new file being discarded); never a link, never a folder.
     pub fn delete(&self, path: &str) -> Result<()> {
         self.access(&Guarded).delete(path)
@@ -499,15 +514,7 @@ impl Access<'_> {
         let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
         let name = new_name.trim();
 
-        if name.is_empty()
-            || name.len() > MAX_PATH_BYTES
-            || matches!(name, "." | "..")
-            || name
-                .chars()
-                .any(|c| c.is_control() || c == '/' || c == '\\')
-            || !portable_segment(name)
-            || name.chars().any(is_invisible_format)
-        {
+        if !plain_name(name) {
             return Err(WorkspaceError::BadPath);
         }
 
@@ -541,6 +548,130 @@ impl Access<'_> {
             Some((folder, _)) => format!("{folder}/{name}"),
             None => name.to_string(),
         })
+    }
+
+    /// The real folder behind a folder path from the viewer (empty: the project root) and its normalised relative path ("" for the root). Only leaving the project and the closed folders are refused.
+    fn folder_for_entries(&self, folder: &str) -> Result<(PathBuf, String)> {
+        if folder.is_empty() {
+            let root = self.parent_directory_with("x", &Unguarded)?;
+
+            return Ok((root, String::new()));
+        }
+
+        let relative = normalise(folder).ok_or(WorkspaceError::BadPath)?;
+
+        if in_denied_directory(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        let real = self.parent_directory_with(&format!("{relative}/x"), &Unguarded)?;
+
+        Ok((real, relative))
+    }
+
+    /// Creates an empty file or folder named `name` inside `folder` and returns its relative path. An existing entry is never touched.
+    pub fn create(&self, folder: &str, name: &str, is_folder: bool) -> Result<String> {
+        let name = name.trim();
+
+        if !plain_name(name) {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let (directory, relative_folder) = self.folder_for_entries(folder)?;
+        let target = directory.join(name);
+
+        if fs::symlink_metadata(&target).is_ok() {
+            return Err(WorkspaceError::Conflict);
+        }
+
+        let made = if is_folder {
+            fs::create_dir(&target)
+        } else {
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&target)
+                .map(|_| ())
+        };
+
+        made.map_err(|_| WorkspaceError::WriteFailed)?;
+
+        Ok(join_relative(&relative_folder, name))
+    }
+
+    /// Copies a file or folder into `folder` (empty: the project root) under a free name (`a copy.txt`, `a copy 2.txt`) and returns the new relative path. Links inside a copied folder are left out.
+    pub fn copy(&self, path: &str, folder: &str) -> Result<String> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+        let source = self.entry_for_change(&relative)?;
+        let (directory, relative_folder) = self.folder_for_entries(folder)?;
+
+        if in_denied_directory(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        // * A folder copied into itself would never end.
+        if source.is_dir() && directory.starts_with(&source) {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let name = free_name(&directory, file_name(&relative));
+        let target = directory.join(&name);
+        let mut budget = MAX_COPY_ENTRIES;
+
+        copy_entry(&source, &target, &mut budget).inspect_err(|_| {
+            // * A half-made copy is removed again.
+            let _ = if target.is_dir() {
+                fs::remove_dir_all(&target)
+            } else {
+                fs::remove_file(&target)
+            };
+        })?;
+
+        Ok(join_relative(&relative_folder, &name))
+    }
+
+    /// Moves a file or folder into `folder` (empty: the project root) and returns the new relative path. Nothing is overwritten, a folder never goes into itself.
+    pub fn move_into(&self, path: &str, folder: &str) -> Result<String> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+        let source = self.entry_for_change(&relative)?;
+        let (directory, relative_folder) = self.folder_for_entries(folder)?;
+        let name = file_name(&relative);
+        let target_relative = join_relative(&relative_folder, name);
+
+        if in_denied_directory(&relative) || in_denied_directory(&target_relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        if source.is_dir() && directory.starts_with(&source) {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let target = directory.join(name);
+
+        if target == source {
+            return Ok(relative);
+        }
+
+        if fs::symlink_metadata(&target).is_ok() {
+            return Err(WorkspaceError::Conflict);
+        }
+
+        fs::rename(&source, &target).map_err(|_| WorkspaceError::WriteFailed)?;
+
+        Ok(target_relative)
+    }
+
+    /// The real path of an existing file or folder that is about to be copied or moved; never a link.
+    fn entry_for_change(&self, relative: &str) -> Result<PathBuf> {
+        let parent = self.parent_directory_with(relative, &Unguarded)?;
+        let full = parent.join(file_name(relative));
+        let meta = fs::symlink_metadata(&full).map_err(|_| WorkspaceError::NotFound)?;
+
+        if meta.file_type().is_symlink() {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        Ok(full)
     }
 
     pub fn delete(&self, path: &str) -> Result<()> {
@@ -618,6 +749,86 @@ impl Access<'_> {
 
         Ok(parent)
     }
+}
+
+/// A single plain name for an entry: no separator or control character, not `.` / `..`, portable on every platform.
+fn plain_name(name: &str) -> bool {
+    !(name.is_empty()
+        || name.len() > MAX_PATH_BYTES
+        || matches!(name, "." | "..")
+        || name
+            .chars()
+            .any(|c| c.is_control() || c == '/' || c == '\\')
+        || !portable_segment(name)
+        || name.chars().any(is_invisible_format))
+}
+
+fn join_relative(folder: &str, name: &str) -> String {
+    if folder.is_empty() {
+        name.to_string()
+    } else {
+        format!("{folder}/{name}")
+    }
+}
+
+/// Most entries one copy may make: a folder with node_modules-sized content is not copied by accident.
+const MAX_COPY_ENTRIES: usize = 5000;
+
+/// `name` when free in `directory`, else `stem copy.ext`, `stem copy 2.ext`...
+fn free_name(directory: &Path, name: &str) -> String {
+    if fs::symlink_metadata(directory.join(name)).is_err() {
+        return name.to_string();
+    }
+
+    let (stem, extension) = match name.rfind('.') {
+        Some(dot) if dot > 0 => (&name[..dot], &name[dot..]),
+        _ => (name, ""),
+    };
+
+    (1..)
+        .map(|number| {
+            if number == 1 {
+                format!("{stem} copy{extension}")
+            } else {
+                format!("{stem} copy {number}{extension}")
+            }
+        })
+        .find(|candidate| fs::symlink_metadata(directory.join(candidate)).is_err())
+        .unwrap_or_else(|| name.to_string())
+}
+
+/// Copies a file, or a folder with what is inside it (links are skipped), counting every entry against `budget`.
+fn copy_entry(source: &Path, target: &Path, budget: &mut usize) -> Result<()> {
+    *budget = budget.checked_sub(1).ok_or(WorkspaceError::TooLarge)?;
+
+    let meta = fs::symlink_metadata(source).map_err(|_| WorkspaceError::NotFound)?;
+
+    if meta.file_type().is_symlink() {
+        return Ok(());
+    }
+
+    if meta.is_dir() {
+        fs::create_dir(target).map_err(|_| WorkspaceError::WriteFailed)?;
+
+        for entry in fs::read_dir(source).map_err(|_| WorkspaceError::NotFound)? {
+            let entry = entry.map_err(|_| WorkspaceError::NotFound)?;
+
+            // * Closed folders (repo internals, dependencies) inside a copied folder stay behind.
+            if DENIED_DIRECTORIES
+                .contains(&entry.file_name().to_string_lossy().to_lowercase().as_str())
+            {
+                continue;
+            }
+
+            copy_entry(&entry.path(), &target.join(entry.file_name()), budget)?;
+        }
+
+        return Ok(());
+    }
+
+    fs::copy(source, target)
+        .map(|_| ())
+        .map_err(|_| WorkspaceError::WriteFailed)
 }
 
 fn file_name(relative: &str) -> &str {

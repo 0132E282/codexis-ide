@@ -8,14 +8,48 @@ use sea_query::{Alias, Expr, ExprTrait, Order, Query};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Environment variable naming the database file (falls back to `rynox.db` in the app data folder).
+/// Environment variable naming the database file (falls back to `codexis.db` in the app data folder).
 pub const DB_ENV: &str = "RYNOX_DB";
 
-/// The database file: `RYNOX_DB` when set and not empty, else `rynox.db` inside `data_dir`.
+/// Name of the database file in the app data folder.
+const FILE_NAME: &str = "codexis.db";
+
+/// Name the file had before the IDE was renamed; a file under it is moved to `FILE_NAME`.
+const LEGACY_FILE_NAME: &str = "rynox.db";
+
+/// The database file: `RYNOX_DB` when set and not empty, else `codexis.db` inside `data_dir`.
+///
+/// A `rynox.db` left by an earlier version is renamed to `codexis.db` (with its `-wal` and `-shm` files) when there is no `codexis.db` yet, so the saved projects and chats come along. Nothing is deleted or overwritten.
 pub fn path(data_dir: &Path) -> PathBuf {
     std::env::var_os(DB_ENV)
         .filter(|value| !value.is_empty())
-        .map_or_else(|| data_dir.join("rynox.db"), PathBuf::from)
+        .map_or_else(
+            || {
+                move_legacy_file(data_dir);
+                data_dir.join(FILE_NAME)
+            },
+            PathBuf::from,
+        )
+}
+
+/// Renames the old database file (and its journal files) to the new name, only when the new one does not exist.
+fn move_legacy_file(data_dir: &Path) {
+    let current = data_dir.join(FILE_NAME);
+    let legacy = data_dir.join(LEGACY_FILE_NAME);
+
+    if current.exists() || !legacy.exists() {
+        return;
+    }
+
+    for suffix in ["", "-wal", "-shm"] {
+        let from = data_dir.join(format!("{LEGACY_FILE_NAME}{suffix}"));
+        let to = data_dir.join(format!("{FILE_NAME}{suffix}"));
+
+        // Best effort: when the rename fails the new file is made empty, and the old one stays where it was.
+        if from.exists() {
+            let _ = fs::rename(from, to);
+        }
+    }
 }
 
 /// Opens (creating it when missing) the database at `path` with the tables in place.
@@ -45,6 +79,7 @@ fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     let connection = Connection::open(path)?;
 
     connection.execute_batch(migrations::CREATE_CORE_TABLES)?;
+    connection.execute_batch(migrations::CREATE_CHAT_GRID_TABLE)?;
     add_archived_column(&connection)?;
     add_conversation_column(&connection)?;
     add_steps_column(&connection)?;
@@ -184,6 +219,9 @@ pub fn in_memory() -> Connection {
 
     connection
         .execute_batch(migrations::CREATE_CORE_TABLES)
+        .expect("schema");
+    connection
+        .execute_batch(migrations::CREATE_CHAT_GRID_TABLE)
         .expect("schema");
     add_archived_column(&connection).expect("schema");
 

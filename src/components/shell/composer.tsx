@@ -10,7 +10,6 @@ import { MODES } from '@/components/shell/chat/cli-options';
 import { ComposerTools } from '@/components/shell/chat/composer-tools';
 import { Inert } from '@/components/shell/chat/inert-button';
 import { ModelMenu } from '@/components/shell/chat/model-menu';
-import { ProjectRow } from '@/components/shell/chat/project-row';
 import { SuggestionList } from '@/components/shell/chat/suggestion-list';
 import { useCommandSuggestions } from '@/components/shell/chat/use-command-suggestions';
 import { Button } from '@/components/ui/button';
@@ -36,24 +35,12 @@ export const Composer = memo(function Composer({
     cli,
     model,
     onChoose,
-    mode,
-    onModeChange,
-    agentTeam,
-    onAgentTeamChange,
     onAddFiles,
     attachments,
     attachError,
     onPasteFiles,
     onPastePaths,
     onRemoveAttachment,
-    projectName,
-    otherProjects,
-    extraRoots,
-    onExtraRootsChange,
-    worktree,
-    onWorktreeChange,
-    railOpen,
-    onToggleRail,
     popup,
 }: {
     /** Name of the project the conversation is attached to (null: none). */
@@ -69,12 +56,6 @@ export const Composer = memo(function Composer({
     cli: AgentCli;
     /** Model of the chosen CLI (null: its default). */
     model: string | null;
-    /** Permission mode of the Claude CLI. */
-    mode: string;
-    onModeChange: (mode: string) => void;
-    /** The Claude CLI's experimental agent teams are on. */
-    agentTeam: boolean;
-    onAgentTeamChange: (on: boolean) => void;
     /** A model picked under one of the CLIs: picks that CLI and that model together. */
     onChoose: (cli: AgentCli, model: string | null) => void;
     /** * The "+" button: the host lets the person pick files to add to the message. */
@@ -87,20 +68,6 @@ export const Composer = memo(function Composer({
     /** Paths of files on disk pasted as text. */
     onPastePaths: (paths: string[]) => void;
     onRemoveAttachment: (id: string) => void;
-    /** Name of the project this chat belongs to. */
-    projectName: string;
-    /** Saved projects other than the one this chat belongs to. */
-    otherProjects: { root: string; name: string }[];
-    /** Folders of the other projects the AI may also work in. */
-    extraRoots: string[];
-    onExtraRootsChange: (roots: string[]) => void;
-    /** Worktree mode: the AI works on its own git branch, in a copy of the project. */
-    worktree: boolean;
-    onWorktreeChange: (on: boolean) => void;
-    /** The session rail popup is open. */
-    railOpen?: boolean;
-    /** Opens or closes the session rail popup. */
-    onToggleRail?: () => void;
     /** Laid above the top of the message box (the session rail popup). */
     popup?: ReactNode;
 }) {
@@ -302,7 +269,7 @@ export const Composer = memo(function Composer({
                             <Plus aria-hidden="true" />
                         </Inert>
                     )}
-                    <span className="ml-auto flex items-center gap-1">
+                    <span className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1">
                         <ModelMenu
                             busy={busy}
                             cli={cli}
@@ -337,22 +304,6 @@ export const Composer = memo(function Composer({
                     </span>
                 </div>
             </div>
-            <ProjectRow
-                busy={busy}
-                projectName={projectName}
-                otherProjects={otherProjects}
-                extraRoots={extraRoots}
-                onExtraRootsChange={onExtraRootsChange}
-                worktree={worktree}
-                onWorktreeChange={onWorktreeChange}
-                cli={cli}
-                mode={mode}
-                onModeChange={onModeChange}
-                agentTeam={agentTeam}
-                onAgentTeamChange={onAgentTeamChange}
-                railOpen={railOpen}
-                onToggleRail={onToggleRail}
-            />
         </form>
     );
 });

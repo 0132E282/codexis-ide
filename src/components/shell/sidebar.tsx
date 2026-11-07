@@ -2,6 +2,8 @@ import {
     ChartColumn,
     EllipsisVertical,
     Folder,
+    LayoutGrid,
+    X,
     Github,
     FolderOpen,
     Plus,
@@ -27,7 +29,12 @@ import {
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import Field from '@/components/form/field';
 import { useAuthStatus } from '@/hooks/use-auth-status';
-import type { ChatConversation, Project, Subagent } from '@/lib/ide';
+import type {
+    ChatConversation,
+    Project,
+    Subagent,
+    GridMember,
+} from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
@@ -72,6 +79,21 @@ function GithubAvatar({ account }: { account: string | null }) {
     );
 }
 
+/** A line with a label in the middle, between two sections of the sidebar (the group and the projects). */
+function SectionDivider({ label }: { label: string }) {
+    return (
+        <div
+            role="separator"
+            aria-label={label}
+            className="flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-muted-foreground select-none"
+        >
+            <span className="h-px flex-1 bg-border" />
+            {label}
+            <span className="h-px flex-1 bg-border" />
+        </div>
+    );
+}
+
 /** Left column: brand, the saved projects (or the start-up folder while there are none) and the account footer. */
 export function Sidebar({
     projects,
@@ -89,6 +111,15 @@ export function Sidebar({
     onOpenConversation,
     onOpenSubagent,
     onDeleteConversation,
+    activeRoot,
+    grid,
+    openGroup,
+    targetGroup,
+    maxGrid,
+    onToggleGrid,
+    onOpenGroup,
+    onNewGroup,
+    onRemoveGridProject,
     onNewChat,
     onOpenSettings,
     onOpenUsage,
@@ -116,6 +147,23 @@ export function Sidebar({
     /** Shows what a sub-agent did: its call opens in the chat. */
     onOpenSubagent: (id: string) => void;
     onDeleteConversation: (id: number) => void;
+    /** Folder of the open project; null for the start-up folder, whose chats cannot join the grid. */
+    activeRoot: string | null;
+    /** Chats of the grid, across projects, in grid order (the grid shows from two on). */
+    grid: GridMember[];
+    /** The group shown in the main area; null when none is. */
+    openGroup: number | null;
+    /** The group a chat is added to next. */
+    targetGroup: number;
+    maxGrid: number;
+    /** Adds the chat to a group, or takes it out when it is in one. */
+    onToggleGrid: (root: string, conversation: number, group: number) => void;
+    /** Shows a group (it needs two chats). */
+    onOpenGroup: (group: number) => void;
+    /** Starts an empty group; the next chats added go to it. */
+    onNewGroup: () => void;
+    /** Takes every chat of one project out of one group. */
+    onRemoveGridProject: (root: string, group: number) => void;
     /** Starts a new conversation with the AI in the open project. */
     onNewChat: () => void;
     /** Opens the chat settings on `tab`. */
@@ -143,6 +191,40 @@ export function Sidebar({
             : startupName !== null
               ? [{ id: null, name: startupName }]
               : [];
+    // * The groups, by number; the group new chats go to is always listed (it may still be empty). Each lists its projects in the order they first appear, with the titles of their chats: the sidebar shows these, not every chat.
+    const groupNumbers = [
+        ...new Set([...grid.map((member) => member.group), targetGroup]),
+    ].sort((first, second) => first - second);
+    const gridGroups = groupNumbers.map((group) => ({
+        group,
+        count: grid.filter((member) => member.group === group).length,
+        projects: grid
+            .filter((member) => member.group === group)
+            .reduce<{ root: string; titles: string[] }[]>((entries, member) => {
+                const known = entries.find(
+                    (entry) => entry.root === member.workspace,
+                );
+
+                return known === undefined
+                    ? [
+                          ...entries,
+                          { root: member.workspace, titles: [member.title] },
+                      ]
+                    : entries.map((entry) =>
+                          entry === known
+                              ? {
+                                    ...entry,
+                                    titles: [...entry.titles, member.title],
+                                }
+                              : entry,
+                      );
+            }, []),
+    }));
+    // * Name of the project a grid chat belongs to: the saved project with that folder, else the folder's own name.
+    const projectName = (workspace: string) =>
+        projects.find((project) => project.folders[0] === workspace)?.name ??
+        workspace.split('/').filter(Boolean).pop() ??
+        workspace;
     const visible = rows.filter((row) => plain(row.name).includes(needle));
 
     const newProjectButton = (
@@ -158,7 +240,7 @@ export function Sidebar({
             className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
             {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the sidebar toggle sits at the left edge. */}
-            <div className="flex h-12 shrink-0 items-center pl-3 select-none">
+            <div className="mb-2 flex h-12 shrink-0 items-center border-b pl-3 select-none">
                 {toggle}
             </div>
             <div className="flex items-center justify-between px-3 pb-2 text-sm">
@@ -208,6 +290,158 @@ export function Sidebar({
                         {t('sidebar.no_project_found')}
                     </p>
                 )}
+                {grid.length > 0 && (
+                    <SectionDivider label={t('sidebar.group_section')} />
+                )}
+                {grid.length > 0 && (
+                    <div data-testid="sidebar-chat-grid" className="mb-1">
+                        {gridGroups.map((entry, index) => (
+                            <div
+                                key={entry.group}
+                                data-testid="sidebar-chat-group"
+                                className={cn(
+                                    // * One background holds the whole group.
+                                    'mb-1.5 rounded-md bg-accent/30 p-1',
+                                    entry.group === openGroup &&
+                                        'bg-accent/60 ring-1 ring-primary/40',
+                                )}
+                            >
+                                <button
+                                    type="button"
+                                    aria-pressed={entry.group === openGroup}
+                                    disabled={entry.count < 2}
+                                    onClick={() => onOpenGroup(entry.group)}
+                                    className="flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-xs font-medium hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:hover:bg-transparent"
+                                >
+                                    <LayoutGrid
+                                        aria-hidden="true"
+                                        className="size-3.5 shrink-0"
+                                    />
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {t('sidebar.group_section')} {index + 1}
+                                    </span>
+                                    {entry.group === targetGroup && (
+                                        <span
+                                            title={t('sidebar.group_target')}
+                                            className="size-1.5 shrink-0 rounded-full bg-primary"
+                                        />
+                                    )}
+                                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                                        {entry.count}/{maxGrid}
+                                    </span>
+                                </button>
+                                <ul className="flex flex-col gap-0.5">
+                                    {entry.projects.map((project, position) => (
+                                        <li
+                                            key={project.root}
+                                            className={cn(
+                                                'group/member relative',
+                                                // * The line down the left side links the projects of the group: one tick into each row, cut to fit the first, middle and last.
+                                                'before:absolute before:top-3.5 before:left-1 before:h-px before:w-1.5 before:bg-primary/60 after:absolute after:left-1 after:w-px after:bg-primary/60',
+                                                entry.projects.length === 1 &&
+                                                    'after:hidden',
+                                                position === 0 &&
+                                                    'after:top-3.5 after:-bottom-0.5',
+                                                position > 0 &&
+                                                    position <
+                                                        entry.projects.length -
+                                                            1 &&
+                                                    'after:-top-0.5 after:-bottom-0.5',
+                                                position > 0 &&
+                                                    position ===
+                                                        entry.projects.length -
+                                                            1 &&
+                                                    'after:-top-0.5 after:bottom-[calc(100%-0.875rem)]',
+                                            )}
+                                        >
+                                            <button
+                                                type="button"
+                                                disabled={entry.count < 2}
+                                                onClick={() =>
+                                                    onOpenGroup(entry.group)
+                                                }
+                                                className="flex w-full items-center gap-2 rounded-sm py-1.5 pr-8 pl-2.5 text-left text-sm text-foreground hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:hover:bg-transparent"
+                                            >
+                                                <Folder
+                                                    aria-hidden="true"
+                                                    className="size-4 shrink-0"
+                                                />
+                                                <span
+                                                    title={projectName(
+                                                        project.root,
+                                                    )}
+                                                    className="min-w-0 flex-1 truncate"
+                                                >
+                                                    {projectName(project.root)}
+                                                </span>
+                                                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                                                    {project.titles.length}
+                                                </span>
+                                            </button>
+                                            <ul className="mb-1 flex flex-col pr-2 pl-9">
+                                                {project.titles.map(
+                                                    (title, titleIndex) => (
+                                                        <li
+                                                            key={titleIndex}
+                                                            title={
+                                                                title ||
+                                                                t(
+                                                                    'sidebar.conversation',
+                                                                )
+                                                            }
+                                                            className="truncate py-0.5 text-xs text-muted-foreground"
+                                                        >
+                                                            {title ||
+                                                                t(
+                                                                    'sidebar.conversation',
+                                                                )}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                aria-label={t(
+                                                    'sidebar.remove_project_from_grid',
+                                                )}
+                                                title={t(
+                                                    'sidebar.remove_project_from_grid',
+                                                )}
+                                                onClick={() =>
+                                                    onRemoveGridProject(
+                                                        project.root,
+                                                        entry.group,
+                                                    )
+                                                }
+                                                className="absolute top-3.5 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/member:opacity-100 group-hover/member:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                                            >
+                                                <X aria-hidden="true" />
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={onNewGroup}
+                            disabled={grid.every(
+                                (member) => member.group !== targetGroup,
+                            )}
+                            className="w-full justify-start gap-1.5 text-muted-foreground"
+                        >
+                            <Plus aria-hidden="true" />
+                            {t('sidebar.new_group')}
+                        </Button>
+                    </div>
+                )}
+                {grid.length > 0 && visible.length > 0 && (
+                    <SectionDivider label={t('common.projects')} />
+                )}
                 {visible.map((row) => {
                     const active = selected && row.id === activeId;
 
@@ -239,7 +473,10 @@ export function Sidebar({
                                             className="size-4 shrink-0"
                                         />
                                     )}
-                                    <span className="min-w-0 flex-1 truncate">
+                                    <span
+                                        title={row.name}
+                                        className="min-w-0 flex-1 truncate"
+                                    >
                                         {row.name}
                                     </span>
                                     <span
@@ -283,106 +520,244 @@ export function Sidebar({
                             )}
                             {active && (
                                 <ul className="ml-5 flex flex-col gap-0.5">
-                                    {conversations.map((conversation) => (
-                                        <li
-                                            key={conversation.id}
-                                            className="group/chat relative"
-                                        >
-                                            <button
-                                                type="button"
-                                                aria-current={
-                                                    conversation.id ===
-                                                    currentConversation
-                                                }
-                                                title={conversation.title}
-                                                onClick={() =>
-                                                    onOpenConversation(
-                                                        conversation.id,
-                                                    )
-                                                }
-                                                className={cn(
-                                                    'flex w-full items-center rounded-sm py-1.5 pr-8 pl-2.5 text-left text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                                    conversation.id ===
-                                                        currentConversation &&
-                                                        'bg-accent/60 text-foreground',
-                                                )}
+                                    {(() => {
+                                        const inGrid = (id: number) =>
+                                            grid.some(
+                                                (member) =>
+                                                    member.conversation === id,
+                                            );
+                                        const renderConversation = (
+                                            conversation: (typeof conversations)[number],
+                                        ) => (
+                                            <li
+                                                key={conversation.id}
+                                                className="group/chat relative"
                                             >
-                                                <span className="truncate">
-                                                    {conversation.title ||
-                                                        t(
-                                                            'sidebar.conversation',
-                                                        )}
-                                                </span>
-                                            </button>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon-xs"
-                                                aria-label={t(
-                                                    'sidebar.delete_conversation',
-                                                )}
-                                                title={t(
-                                                    'sidebar.delete_conversation',
-                                                )}
-                                                onClick={() =>
-                                                    onDeleteConversation(
-                                                        conversation.id,
-                                                    )
-                                                }
-                                                className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
-                                            >
-                                                <Trash2 aria-hidden="true" />
-                                            </Button>
-                                            {conversation.id ===
-                                                currentConversation &&
-                                                subagents.length > 0 && (
-                                                    <ul
+                                                <button
+                                                    type="button"
+                                                    aria-current={
+                                                        conversation.id ===
+                                                        currentConversation
+                                                    }
+                                                    title={conversation.title}
+                                                    onClick={() =>
+                                                        onOpenConversation(
+                                                            conversation.id,
+                                                        )
+                                                    }
+                                                    className={cn(
+                                                        'flex w-full items-center rounded-sm py-1.5 pr-14 pl-2.5 text-left text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                                        conversation.id ===
+                                                            currentConversation &&
+                                                            'bg-accent/60 text-foreground',
+                                                    )}
+                                                >
+                                                    <span className="truncate">
+                                                        {conversation.title ||
+                                                            t(
+                                                                'sidebar.conversation',
+                                                            )}
+                                                    </span>
+                                                </button>
+                                                {inGrid(conversation.id) ? (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon-xs"
                                                         aria-label={t(
-                                                            'sidebar.agent_is_working',
+                                                            'sidebar.remove_from_grid',
                                                         )}
-                                                        className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
+                                                        title={t(
+                                                            'sidebar.remove_from_grid',
+                                                        )}
+                                                        aria-pressed
+                                                        onClick={() => {
+                                                            if (
+                                                                activeRoot !==
+                                                                null
+                                                            ) {
+                                                                onToggleGrid(
+                                                                    activeRoot,
+                                                                    conversation.id,
+                                                                    targetGroup,
+                                                                );
+                                                            }
+                                                        }}
+                                                        className="absolute top-1/2 right-7 -translate-y-1/2 text-foreground opacity-100"
                                                     >
-                                                        {subagents.map(
-                                                            (agent) => (
-                                                                <li
-                                                                    key={
-                                                                        agent.id
-                                                                    }
-                                                                >
-                                                                    <button
-                                                                        type="button"
-                                                                        title={
-                                                                            agent.label
+                                                        <LayoutGrid aria-hidden="true" />
+                                                    </Button>
+                                                ) : (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger
+                                                            asChild
+                                                        >
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon-xs"
+                                                                aria-label={t(
+                                                                    'sidebar.add_to_grid',
+                                                                )}
+                                                                title={t(
+                                                                    'sidebar.add_to_grid',
+                                                                )}
+                                                                disabled={
+                                                                    activeRoot ===
+                                                                    null
+                                                                }
+                                                                className="absolute top-1/2 right-7 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                                                            >
+                                                                <LayoutGrid aria-hidden="true" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            {gridGroups.map(
+                                                                (
+                                                                    entry,
+                                                                    index,
+                                                                ) => (
+                                                                    <DropdownMenuItem
+                                                                        key={
+                                                                            entry.group
                                                                         }
-                                                                        onClick={() =>
-                                                                            onOpenSubagent(
-                                                                                agent.id,
-                                                                            )
+                                                                        disabled={
+                                                                            entry.count >=
+                                                                            maxGrid
                                                                         }
-                                                                        className="flex w-full items-center gap-2 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                                        onSelect={() => {
+                                                                            if (
+                                                                                activeRoot !==
+                                                                                null
+                                                                            ) {
+                                                                                onToggleGrid(
+                                                                                    activeRoot,
+                                                                                    conversation.id,
+                                                                                    entry.group,
+                                                                                );
+                                                                            }
+                                                                        }}
                                                                     >
-                                                                        <span
-                                                                            aria-hidden="true"
-                                                                            className={cn(
-                                                                                'size-1.5 shrink-0 rounded-full',
-                                                                                agent.done
-                                                                                    ? 'bg-muted-foreground/50'
-                                                                                    : 'animate-pulse bg-primary',
-                                                                            )}
-                                                                        />
-                                                                        <span className="truncate">
+                                                                        <span className="flex-1">
+                                                                            {t(
+                                                                                'sidebar.group_section',
+                                                                            )}{' '}
+                                                                            {index +
+                                                                                1}
+                                                                        </span>
+                                                                        <span className="text-xs text-muted-foreground tabular-nums">
                                                                             {
-                                                                                agent.label
+                                                                                entry.count
+                                                                            }
+                                                                            /
+                                                                            {
+                                                                                maxGrid
                                                                             }
                                                                         </span>
-                                                                    </button>
-                                                                </li>
-                                                            ),
-                                                        )}
-                                                    </ul>
+                                                                    </DropdownMenuItem>
+                                                                ),
+                                                            )}
+                                                            <DropdownMenuItem
+                                                                onSelect={() => {
+                                                                    if (
+                                                                        activeRoot !==
+                                                                        null
+                                                                    ) {
+                                                                        onToggleGrid(
+                                                                            activeRoot,
+                                                                            conversation.id,
+                                                                            Math.max(
+                                                                                ...groupNumbers,
+                                                                            ) +
+                                                                                1,
+                                                                        );
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Plus aria-hidden="true" />
+                                                                {t(
+                                                                    'sidebar.new_group',
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 )}
-                                        </li>
-                                    ))}
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon-xs"
+                                                    aria-label={t(
+                                                        'sidebar.delete_conversation',
+                                                    )}
+                                                    title={t(
+                                                        'sidebar.delete_conversation',
+                                                    )}
+                                                    onClick={() =>
+                                                        onDeleteConversation(
+                                                            conversation.id,
+                                                        )
+                                                    }
+                                                    className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/chat:opacity-100 group-hover/chat:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                                                >
+                                                    <Trash2 aria-hidden="true" />
+                                                </Button>
+                                                {conversation.id ===
+                                                    currentConversation &&
+                                                    subagents.length > 0 && (
+                                                        <ul
+                                                            aria-label={t(
+                                                                'sidebar.agent_is_working',
+                                                            )}
+                                                            className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
+                                                        >
+                                                            {subagents.map(
+                                                                (agent) => (
+                                                                    <li
+                                                                        key={
+                                                                            agent.id
+                                                                        }
+                                                                    >
+                                                                        <button
+                                                                            type="button"
+                                                                            title={
+                                                                                agent.label
+                                                                            }
+                                                                            onClick={() =>
+                                                                                onOpenSubagent(
+                                                                                    agent.id,
+                                                                                )
+                                                                            }
+                                                                            className="flex w-full items-center gap-2 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                                        >
+                                                                            <span
+                                                                                aria-hidden="true"
+                                                                                className={cn(
+                                                                                    'size-1.5 shrink-0 rounded-full',
+                                                                                    agent.done
+                                                                                        ? 'bg-muted-foreground/50'
+                                                                                        : 'animate-pulse bg-primary',
+                                                                                )}
+                                                                            />
+                                                                            <span className="truncate">
+                                                                                {
+                                                                                    agent.label
+                                                                                }
+                                                                            </span>
+                                                                        </button>
+                                                                    </li>
+                                                                ),
+                                                            )}
+                                                        </ul>
+                                                    )}
+                                            </li>
+                                        );
+                                        return conversations.map(
+                                            (conversation) =>
+                                                renderConversation(
+                                                    conversation,
+                                                ),
+                                        );
+                                    })()}
                                 </ul>
                             )}
                         </Fragment>

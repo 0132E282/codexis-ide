@@ -408,9 +408,10 @@ export function WorkspacePane({
                                         'bg-accent text-accent-foreground',
                                 )}
                             >
+                                {/* * A box fills its whole square, so it is drawn smaller (16px against 20px) to look as big as the open icons beside it. */}
                                 <SquareMenu
                                     aria-hidden="true"
-                                    className="size-5"
+                                    className="size-4"
                                 />
                             </Button>
                             {panelsMenu}
@@ -425,8 +426,6 @@ export function WorkspacePane({
                         onPatch(pane.key, { viewSubagent: null })
                     }
                     popup={railPopup}
-                    railOpen={railOpen}
-                    onToggleRail={toggleRail}
                     collapsed={
                         state.chatCollapsed &&
                         (state.editorVisible || sideChatOpen)

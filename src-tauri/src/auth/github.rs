@@ -48,6 +48,8 @@ impl AuthTool for GithubAuth {
             "github.com",
             "--git-protocol",
             "https",
+            "--scopes",
+            "repo,read:org,gist,workflow,delete_repo,write:packages,read:user,user:email",
         ]
     }
 

@@ -13,6 +13,8 @@ use std::path::PathBuf;
 
 /// Oldest turns beyond this many per workspace are dropped.
 pub const MAX_TURNS: i64 = 500;
+/// Most conversations the chat grid shows at once (2 × 2).
+pub const MAX_GROUP: usize = 4;
 const MAX_ANSWER_BYTES: usize = 2_000_000;
 
 /// Sizes of the saved turns of one conversation (see `ChatStore::size_of`).
@@ -122,6 +124,17 @@ pub struct Conversation {
     /// Unix seconds of the last saved turn.
     pub updated_at: i64,
     pub turns: i64,
+}
+
+/// One chat of the grid: a conversation and the workspace (project folder) it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GridMember {
+    /// The grid (group) this chat is in; a group holds at most four chats.
+    pub group: i64,
+    pub workspace: String,
+    pub conversation: i64,
+    /// Title of the conversation, for the sidebar; only read: saving the grid ignores it.
+    pub title: String,
 }
 
 #[derive(Debug)]
@@ -419,6 +432,84 @@ impl ChatStore {
         Ok(self.connection.last_insert_rowid())
     }
 
+    /// Chats picked for the chat grid, in grid order, with the workspace each belongs to.
+    ///
+    /// # Errors
+    /// Fails when the database cannot be read.
+    pub fn grid(&self) -> Result<Vec<GridMember>> {
+        let read = || -> rusqlite::Result<Vec<GridMember>> {
+            self.connection
+                .prepare(
+                    "SELECT g.grp, g.workspace, g.conversation, c.title
+                     FROM chat_grid_members g JOIN conversations c ON c.id = g.conversation
+                     ORDER BY g.grp, g.position",
+                )?
+                .query_map([], |row| {
+                    Ok(GridMember {
+                        group: row.get(0)?,
+                        workspace: row.get(1)?,
+                        conversation: row.get(2)?,
+                        title: row.get(3)?,
+                    })
+                })?
+                .collect()
+        };
+
+        read().map_err(|_| ChatError::LoadFailed)
+    }
+
+    /// Replaces the chat grids with `members` (in order; each carries its group). One member is kept too: it is a pick waiting for a second chat, and the interface shows the grid from two on.
+    ///
+    /// # Errors
+    /// Fails on more than four members in one group, a repeated conversation, a conversation that is not in its workspace, or when the database cannot be written.
+    pub fn save_grid(&mut self, members: &[GridMember]) -> Result<()> {
+        let repeated = members.iter().enumerate().any(|(index, member)| {
+            members[..index]
+                .iter()
+                .any(|seen| seen.conversation == member.conversation)
+        });
+
+        let too_big = members.iter().any(|member| {
+            members
+                .iter()
+                .filter(|other| other.group == member.group)
+                .count()
+                > MAX_GROUP
+        });
+
+        if too_big
+            || repeated
+            || !members
+                .iter()
+                .all(|member| self.owns(&member.workspace, member.conversation))
+        {
+            return Err(ChatError::Invalid);
+        }
+
+        let write = |connection: &mut Connection| -> rusqlite::Result<()> {
+            let transaction = connection.transaction()?;
+
+            transaction.execute("DELETE FROM chat_grid_members", [])?;
+
+            for (index, member) in members.iter().enumerate() {
+                // * The position only orders the chats of a group; the index of the whole list is unique within it.
+                transaction.execute(
+                    "INSERT INTO chat_grid_members (grp, position, workspace, conversation) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        member.group,
+                        index as i64,
+                        member.workspace,
+                        member.conversation
+                    ],
+                )?;
+            }
+
+            transaction.commit()
+        };
+
+        write(&mut self.connection).map_err(|_| ChatError::SaveFailed)
+    }
+
     /// Deletes a conversation with its turns and session ids.
     ///
     /// # Errors
@@ -434,6 +525,7 @@ impl ChatStore {
             for (table, column) in [
                 ("chat_turns", "conversation"),
                 ("conversation_sessions", "conversation"),
+                ("chat_grid_members", "conversation"),
                 ("conversations", "id"),
             ] {
                 sql::delete_where(

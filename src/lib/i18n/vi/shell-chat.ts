@@ -49,6 +49,7 @@ export const shellChatVietnamese: Record<string, string> = {
     'project_row.bypass_description':
         'AI sẽ chạy lệnh và sửa hoặc xoá file mà không hỏi bạn. Chỉ dùng khi bạn tin tưởng việc này và dự án.',
     'project_row.bypass_title': 'Bỏ qua mọi quyền?',
+    'project_row.settings': 'Cài đặt',
     'project_row.choose_mode': 'Chọn chế độ',
     'project_row.choose_working_projects': 'Chọn dự án đang làm',
     'project_row.enable_agent_team_experimental':

@@ -14,6 +14,7 @@
 - **Terminal thật** (PTY) ngay trong app.
 - **Chat với AI**: mỗi tin nhắn là một lượt chạy `claude` hoặc `codex` trong thư mục dự án; lịch sử và mã phiên của CLI được lưu theo từng thư mục, nên mở lại là tiếp tục đúng cuộc hội thoại. Dừng lượt đang chạy bằng nút dừng hoặc Ctrl+C.
 - **Multichat**: chat thêm một cuộc trò chuyện song song với chat chính, đặt dưới vùng tệp hoặc ở chế độ nổi.
+- **Lưới chat theo nhóm**: đặt tối đa 4 chat (từ nhiều dự án) cạnh nhau trong một nhóm, tạo được nhiều nhóm; nhóm được lưu trong `codexis.db`. Mở tệp thì vùng tệp nổi đè lên lưới (kéo đổi độ rộng), không làm các chat co lại.
 - **Relay giữa các AI**: `claude` và `codex` gọi nhau bằng khối `relay:<ai>` trong câu trả lời, tối đa 6 lượt, có nút dừng cả chuỗi (xem [docs/system/ai-relay.md](docs/system/ai-relay.md)).
 - **Thanh phiên**: popup trên ô chat gồm môi trường, kết nối MCP, tệp AI đã ghi, thống kê sử dụng và GitHub.
 - **Kế hoạch, tác vụ nền và sub-agent**: xem plan AI viết, việc chạy nền và sub-agent gọi bằng `@`.
@@ -68,7 +69,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 | Biến              | Tác dụng                                        | Mặc định                                              |
 | ----------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | `RYNOX_WORKSPACE` | Thư mục mở khi khởi động                        | Dự án mở lần trước, nếu không có thì thư mục hiện tại |
-| `RYNOX_DB`        | Đường dẫn file SQLite lưu dự án và lịch sử chat | `rynox.db` trong thư mục dữ liệu của app              |
+| `RYNOX_DB`        | Đường dẫn file SQLite lưu dự án và lịch sử chat | `codexis.db` trong thư mục dữ liệu của app            |
 
 Ví dụ:
 
@@ -99,10 +100,10 @@ Workflow CI hiện tại ([`build.yml`](.github/workflows/build.yml)) chỉ ki�
 
 Trên macOS:
 
-- `~/Library/Application Support/ai.geteasy.rynox-ide/rynox.db`: dự án, lịch sử chat, mã phiên CLI. File chỉ chủ sở hữu đọc được vì có thể chứa biến môi trường của dự án.
+- `~/Library/Application Support/ai.geteasy.rynox-ide/codexis.db` (file `rynox.db` của bản cũ được đổi tên thành `codexis.db` ở lần mở đầu): dự án, lịch sử chat, mã phiên CLI. File chỉ chủ sở hữu đọc được vì có thể chứa biến môi trường của dự án.
 - `~/Library/Caches/ai.geteasy.rynox-ide/attachments/`: ảnh và tệp đã dán vào chat. Thư mục này là cache, xoá được.
 
-Nếu có file `projects.json` cũ trong thư mục dữ liệu, các dự án trong đó được nhập vào `rynox.db` một lần; file cũ không bị xoá.
+Nếu có file `projects.json` cũ trong thư mục dữ liệu, các dự án trong đó được nhập vào `codexis.db` một lần; file cũ không bị xoá.
 
 ## Cấu trúc
 
@@ -112,3 +113,7 @@ Nếu có file `projects.json` cũ trong thư mục dữ liệu, các dự án t
 - `docs/` — tài liệu hệ thống (`docs/system/`), kế hoạch (`docs/plans/`), testcase (`docs/repo/`) và thiết kế (`docs/design/`).
 
 Quy ước làm việc với repo và các vấn đề đã biết nằm trong [AGENTS.md](AGENTS.md).
+
+## Giấy phép
+
+Mã nguồn mở theo giấy phép [MIT](LICENSE).

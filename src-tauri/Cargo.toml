@@ -3,6 +3,7 @@ name = "codexis-ide"
 version = "0.1.0"
 description = "Codexis IDE: the Code tab of the AI chat as a desktop app"
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "codexis_ide_lib"

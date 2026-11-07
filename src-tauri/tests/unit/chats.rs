@@ -346,3 +346,110 @@ fn size_of_counts_turns_failures_and_characters_of_one_conversation() {
     assert_eq!(size.last_cli.as_deref(), Some("claude"));
     assert_eq!(store.size_of("/a", b), Err(ChatError::Invalid));
 }
+
+#[test]
+fn chat_grids_span_projects_keep_groups_and_forget_deleted_conversations() {
+    let (dir, mut store) = store();
+    // * An empty conversation is reused, so each one gets a turn before the next is made.
+    let make = |store: &mut ChatStore, workspace: &str| {
+        let id = store.new_conversation(workspace).unwrap();
+
+        store
+            .save_turn(workspace, id, &turn(&format!("t{id}"), "x"))
+            .unwrap();
+        id
+    };
+    let member = |workspace: &str, conversation: i64| GridMember {
+        group: 1,
+        workspace: workspace.into(),
+        conversation,
+        title: String::new(),
+    };
+    // * What the grid keeps: the titles are read from the conversations, so they are left out of the comparison.
+    let pairs = |store: &ChatStore| -> Vec<(String, i64)> {
+        store
+            .grid()
+            .unwrap()
+            .into_iter()
+            .map(|member| (member.workspace, member.conversation))
+            .collect()
+    };
+    let expected = |members: &[GridMember]| -> Vec<(String, i64)> {
+        members
+            .iter()
+            .map(|member| (member.workspace.clone(), member.conversation))
+            .collect()
+    };
+    let a1 = make(&mut store, "/a");
+    let b1 = make(&mut store, "/b");
+    let a2 = make(&mut store, "/a");
+    let b2 = make(&mut store, "/b");
+    let c1 = make(&mut store, "/c");
+    let a3 = make(&mut store, "/a");
+
+    let picked = vec![member("/a", a1), member("/b", b1), member("/a", a2)];
+    store.save_grid(&picked).unwrap();
+    assert_eq!(pairs(&store), expected(&picked));
+
+    drop(store);
+    let mut store = ChatStore::open(dir.path().join("rynox.db"));
+    assert_eq!(pairs(&store), expected(&picked));
+
+    store.delete_conversation("/b", b1).unwrap();
+    assert_eq!(
+        pairs(&store),
+        expected(&[member("/a", a1), member("/a", a2)])
+    );
+    assert!(store
+        .grid()
+        .unwrap()
+        .iter()
+        .all(|member| !member.title.is_empty()));
+
+    let five = [
+        member("/a", a1),
+        member("/b", b2),
+        member("/a", a2),
+        member("/c", c1),
+        member("/a", a3),
+    ];
+    assert_eq!(store.save_grid(&five), Err(ChatError::Invalid));
+    // * Several groups are allowed, each with its own four; the order and the group are kept.
+    let in_group = |group: i64, workspace: &str, conversation: i64| GridMember {
+        group,
+        ..member(workspace, conversation)
+    };
+    let groups = [
+        in_group(1, "/a", a1),
+        in_group(1, "/a", a2),
+        in_group(2, "/b", b2),
+        in_group(2, "/c", c1),
+        in_group(2, "/a", a3),
+    ];
+    store.save_grid(&groups).unwrap();
+    assert_eq!(
+        store
+            .grid()
+            .unwrap()
+            .into_iter()
+            .map(|member| (member.group, member.conversation))
+            .collect::<Vec<_>>(),
+        vec![(1, a1), (1, a2), (2, b2), (2, c1), (2, a3)]
+    );
+    assert_eq!(
+        store.save_grid(&[member("/a", a1), member("/a", a1)]),
+        Err(ChatError::Invalid)
+    );
+    // * A conversation under another project's name is refused.
+    assert_eq!(
+        store.save_grid(&[member("/a", a1), member("/b", a2)]),
+        Err(ChatError::Invalid)
+    );
+
+    // * One pick is kept: it waits for a second chat to make a grid.
+    store.save_grid(&[member("/a", a1)]).unwrap();
+    assert_eq!(pairs(&store), expected(&[member("/a", a1)]));
+
+    store.save_grid(&[]).unwrap();
+    assert!(store.grid().unwrap().is_empty());
+}

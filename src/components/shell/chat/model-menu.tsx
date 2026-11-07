@@ -42,13 +42,15 @@ export function ModelMenu({
                     size="sm"
                     disabled={busy}
                     aria-label={t('model_menu.choose_ai_and_model')}
-                    className="gap-2 text-muted-foreground"
+                    className="min-w-0 gap-2 text-muted-foreground"
                 >
                     <CliIcon aria-hidden="true" className="size-5" />
-                    {MODELS[cli].find((option) => option.value === model)
-                        ?.label ??
-                        model ??
-                        CLIS.find((option) => option.value === cli)?.label}
+                    <span className="truncate">
+                        {MODELS[cli].find((option) => option.value === model)
+                            ?.label ??
+                            model ??
+                            CLIS.find((option) => option.value === cli)?.label}
+                    </span>
                     <ChevronDown aria-hidden="true" />
                 </Button>
             </DropdownMenuTrigger>

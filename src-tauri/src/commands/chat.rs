@@ -1,6 +1,6 @@
 use super::state::AppState;
-use crate::chats::{ChatHistory, ChatTurn, Conversation};
-use serde::Serialize;
+use crate::chats::{ChatHistory, ChatTurn, Conversation, GridMember};
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 /// What the chat panel restores when a workspace opens: its turns, its CLI session ids, and the key (`workspace`) to hand back when saving, so a late save never lands in another workspace.
@@ -93,5 +93,40 @@ pub fn chat_delete(
     state
         .lock_chats()
         .delete_conversation(&workspace, conversation)
+        .map_err(|error| error.to_string())
+}
+
+/// A chat of the grid as the interface sends it: its project folder and conversation.
+#[derive(Debug, Deserialize)]
+pub struct GridPick {
+    group: i64,
+    root: String,
+    conversation: i64,
+}
+
+/// The chats picked for the chat grid, across projects (the interface shows the grid from two on).
+#[tauri::command]
+pub fn chat_grid_get(state: State<AppState>) -> Result<Vec<GridMember>, String> {
+    state.lock_chats().grid().map_err(|error| error.to_string())
+}
+
+/// Saves the chat grids: each group has up to four chats, each in its project; an empty list clears them.
+#[tauri::command]
+pub fn chat_grid_save(state: State<AppState>, picks: Vec<GridPick>) -> Result<(), String> {
+    let members = picks
+        .into_iter()
+        .map(|pick| {
+            Ok(GridMember {
+                group: pick.group,
+                workspace: state.workspace_key(Some(&pick.root))?,
+                conversation: pick.conversation,
+                title: String::new(),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    state
+        .lock_chats()
+        .save_grid(&members)
         .map_err(|error| error.to_string())
 }

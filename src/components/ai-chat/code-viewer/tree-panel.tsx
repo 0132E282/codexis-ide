@@ -67,7 +67,12 @@ export function TreePanel({
     changed,
     changedDirs,
     actions,
+    closed,
+    onClosedChange,
 }: {
+    /** The host holds the closed state and draws the button that opens the tree again (the chat grid puts it in its header): closed, the tree draws nothing. */
+    closed?: boolean;
+    onClosedChange?: (closed: boolean) => void;
     sourceName: string;
     treeWidth: ReturnType<typeof useResizableWidth>;
     /** Left or right of the editor (the Move menu); Fill is the maximize below. */
@@ -103,7 +108,9 @@ export function TreePanel({
 }) {
     const filterInput = useRef<HTMLInputElement>(null);
     const widthBeforeMaximize = useRef<number | null>(null);
-    const [isClosed, setIsClosed] = useState(false);
+    const [ownClosed, setOwnClosed] = useState(false);
+    const isClosed = closed ?? ownClosed;
+    const setIsClosed = onClosedChange ?? setOwnClosed;
     const isMaximized = treeWidth.width >= TREE_MAX_WIDTH;
 
     const toggleMaximize = () => {
@@ -130,6 +137,10 @@ export function TreePanel({
             placement.setPlacement(next);
         }
     };
+
+    if (isClosed && closed !== undefined) {
+        return null;
+    }
 
     if (isClosed) {
         return (

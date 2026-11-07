@@ -185,7 +185,7 @@ export function SideChatDock({
                         'pointer-events-auto h-full max-h-[36rem] flex-none rounded-xl border shadow-xl w-full',
                 )}
             >
-                <header className="flex h-[49px] shrink-0 items-center gap-1 border-b px-2">
+                <header className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
                     <div
                         role="tablist"
                         aria-label={t('side_chat.title')}

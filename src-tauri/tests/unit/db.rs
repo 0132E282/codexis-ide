@@ -101,3 +101,30 @@ fn old_chat_turns_are_upgraded_and_grouped_into_a_conversation() {
 
     assert_eq!((turns, groups, conversations), (2, 1, 1));
 }
+
+#[test]
+fn the_old_database_file_is_renamed_with_its_data_and_never_overwrites_a_new_one() {
+    let dir = TempDir::new().unwrap();
+
+    fs::write(dir.path().join("rynox.db"), b"old").unwrap();
+    fs::write(dir.path().join("rynox.db-wal"), b"old-wal").unwrap();
+    move_legacy_file(dir.path());
+    assert_eq!(fs::read(dir.path().join("codexis.db")).unwrap(), b"old");
+    assert_eq!(
+        fs::read(dir.path().join("codexis.db-wal")).unwrap(),
+        b"old-wal"
+    );
+    assert!(!dir.path().join("rynox.db").exists());
+
+    // * A new file already there stays as it is; the old one is left alone.
+    fs::write(dir.path().join("rynox.db"), b"older").unwrap();
+    move_legacy_file(dir.path());
+    assert_eq!(fs::read(dir.path().join("codexis.db")).unwrap(), b"old");
+    assert_eq!(fs::read(dir.path().join("rynox.db")).unwrap(), b"older");
+
+    // * Nothing to move: no file is made.
+    let empty = TempDir::new().unwrap();
+
+    move_legacy_file(empty.path());
+    assert!(!empty.path().join("codexis.db").exists());
+}

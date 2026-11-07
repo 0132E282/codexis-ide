@@ -174,3 +174,52 @@ pub fn workspace_rename(
         .rename_for_viewer(&path, &new_name)
         .map_err(|error| error.to_string())
 }
+
+/// Creates an empty file or folder named `name` inside `folder` (empty: the project root) and returns its path.
+#[tauri::command]
+pub fn workspace_create(
+    state: State<AppState>,
+    root: Option<String>,
+    folder: String,
+    name: String,
+    is_folder: bool,
+) -> Result<String, String> {
+    validation::entry_name(&name)?;
+
+    state
+        .workspace_for(root.as_deref())?
+        .create_for_viewer(&folder, &name, is_folder)
+        .map_err(|error| error.to_string())
+}
+
+/// Copies a file or folder into `folder` (empty: the project root) under a free name and returns the new path.
+#[tauri::command]
+pub fn workspace_copy(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+    folder: String,
+) -> Result<String, String> {
+    validation::relative_path(&path)?;
+
+    state
+        .workspace_for(root.as_deref())?
+        .copy_for_viewer(&path, &folder)
+        .map_err(|error| error.to_string())
+}
+
+/// Moves a file or folder into `folder` (empty: the project root), the drag and drop of the file tree, and returns the new path.
+#[tauri::command]
+pub fn workspace_move(
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+    folder: String,
+) -> Result<String, String> {
+    validation::relative_path(&path)?;
+
+    state
+        .workspace_for(root.as_deref())?
+        .move_for_viewer(&path, &folder)
+        .map_err(|error| error.to_string())
+}
