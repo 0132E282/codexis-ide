@@ -6,7 +6,6 @@ export type DiffRow =
           newNo: number | null;
           text: string;
       };
-
 // * Largest block (old lines × new lines) matched exactly; a bigger block is shown as all removed, then all added.
 const MAX_CELLS = 4_000_000;
 const CONTEXT = 3;
