@@ -41,6 +41,48 @@ export type ChangedFile = {
     added: number | null;
     removed: number | null;
 };
+/** Kind of a branch or tag label on a commit; `head` is `HEAD` itself. */
+export type GitRefKind = 'local' | 'remote' | 'tag' | 'head';
+export type GitRefLabel = { name: string; kind: GitRefKind };
+/** One commit of a log; `timestamp` is unix seconds. */
+export type GitCommit = {
+    hash: string;
+    shortHash: string;
+    subject: string;
+    authorName: string;
+    authorEmail: string;
+    timestamp: number;
+    parents: string[];
+    refs: GitRefLabel[];
+};
+/** A file a commit changed; `status` is A, M, D, R, C or T, counts are null for a binary file. */
+export type GitCommitFile = {
+    path: string;
+    status: string;
+    oldPath?: string;
+    additions: number | null;
+    deletions: number | null;
+};
+/** Unified diff of one file in a commit, cut when `truncated`. */
+export type GitFileDiff = { diff: string; truncated: boolean };
+/** Blame of one line; `committed` is false (hash all zeros, empty author and subject) while the line is not committed. */
+export type GitBlameLine = {
+    line: number;
+    hash: string;
+    shortHash: string;
+    authorName: string;
+    timestamp: number;
+    subject: string;
+    committed: boolean;
+};
+export type GitBranchesInfo = {
+    git: boolean;
+    current: string | null;
+    local: string[];
+    remotes: string[];
+};
+/** Commits `head` has that `base` lacks (`ahead`) and the other way round (`behind`). */
+export type GitBranchCompare = { ahead: number; behind: number };
 /** A sub-agent the AI started in the current turn. */
 export type Subagent = { id: string; label: string; done: boolean };
 /** One chat of the grid: a conversation and the project folder (`workspace`) it belongs to. */
@@ -82,9 +124,75 @@ export type ChatConversation = {
     turns: number;
 };
 
+/** How far a plan document stands, one vocabulary for the JSON and Markdown plans. */
+export type PlanDocStatus =
+    'done' | 'in_progress' | 'partial' | 'todo' | 'draft' | 'unknown';
+/** One plan of the project's `docs/plans/` folder (a card). */
+export type PlanDoc = {
+    /** Path relative to the project (the key of the card). */
+    id: string;
+    title: string;
+    description: string;
+    tags: string[];
+    status: PlanDocStatus;
+    /** The status word as written in the file. */
+    rawStatus: string | null;
+    createdAt: string | null;
+    format: 'json' | 'md';
+    /** A `.md` twin sits beside this JSON plan. */
+    hasMarkdown: boolean;
+    tasksTotal: number;
+    tasksDone: number;
+    /** Path relative to the project, to open in the editor. */
+    path: string;
+    /** Last change, seconds since the Unix epoch. */
+    modifiedAt: number;
+};
+/** A requirement, acceptance criterion or open question of a plan. */
+export type PlanItem = {
+    id: string | null;
+    text: string;
+    /** Where it comes from, which requirement it checks, or its default answer. */
+    note: string | null;
+};
+export type PlanTask = {
+    id: string | null;
+    title: string;
+    status: PlanDocStatus;
+    rawStatus: string | null;
+    priority: string | null;
+    /** Files the task says it changes. */
+    files: string[];
+};
+/** One block of a Markdown plan. */
+export type MarkdownBlock =
+    | { kind: 'heading'; level: number; text: string }
+    | { kind: 'paragraph'; text: string }
+    | { kind: 'bullet'; text: string }
+    | { kind: 'checklist'; text: string; checked: boolean }
+    | { kind: 'code'; text: string };
+/** A plan in full: its card plus the sections of the file. */
+export type PlanDocDetail = PlanDoc & {
+    requirements: PlanItem[];
+    tasks: PlanTask[];
+    acceptanceCriteria: PlanItem[];
+    openQuestions: PlanItem[];
+    /** The body of a Markdown plan (empty for a JSON plan). */
+    blocks: MarkdownBlock[];
+};
+export type PlanDocsList = {
+    /** The project folder that was read. */
+    root: string;
+    plans: PlanDoc[];
+    /** Files that could not be read or understood. */
+    skipped: number;
+    truncated: boolean;
+};
+
 export const ide = {
     windowButtonsVisible: (visible: boolean) =>
         invoke<void>('window_buttons_visible', { visible }),
+    windowIsFullscreen: () => invoke<boolean>('window_is_fullscreen'),
     info: () => invoke<ProjectInfo>('workspace_info'),
     tree: (root?: string) =>
         invoke<{ paths: string[]; truncated: boolean }>('workspace_tree', {
@@ -104,6 +212,13 @@ export const ide = {
             expectedHash,
             root,
         }),
+    /** Creates an empty file or folder named `name` inside `folder` (empty: the project root); resolves to the new path. */
+    workspaceCreate: (
+        folder: string,
+        name: string,
+        isFolder: boolean,
+        root?: string,
+    ) => invoke<string>('workspace_create', { root, folder, name, isFolder }),
     projects: () =>
         invoke<{ projects: Project[]; selected: string | null }>(
             'projects_list',
@@ -167,6 +282,43 @@ export const ide = {
                 { root },
             )
         ).files,
+    /** Commits of a branch, newest first (the current branch when `branch` is null); `limit` is 1 to 200. Rejects with `git.not_repository` outside a repository. */
+    gitLog: (
+        branch: string | null,
+        limit: number,
+        skip: number,
+        root?: string,
+    ) => invoke<GitCommit[]>('git_log', { root, branch, limit, skip }),
+    /** Files one commit changed. */
+    gitCommitFiles: (hash: string, root?: string) =>
+        invoke<GitCommitFile[]>('git_commit_files', { root, hash }),
+    /** Diff of one file in one commit (at most 512 KiB). */
+    gitCommitFileDiff: (hash: string, path: string, root?: string) =>
+        invoke<GitFileDiff>('git_commit_file_diff', { root, hash, path }),
+    /** Commits that touched a file, renames followed. */
+    gitFileHistory: (
+        path: string,
+        limit: number,
+        skip: number,
+        root?: string,
+    ) => invoke<GitCommit[]>('git_file_history', { root, path, limit, skip }),
+    /** Per-line blame of a file as it is on disk. */
+    gitBlame: (path: string, root?: string) =>
+        invoke<GitBlameLine[]>('git_blame', { root, path }),
+    /** Current, local and remote branches (`git` false outside a repository). */
+    gitBranchesInfo: (root?: string) =>
+        invoke<GitBranchesInfo>('git_branches_info', { root }),
+    /** How far `head` is ahead of and behind `base`. */
+    gitBranchCompare: (base: string, head: string, root?: string) =>
+        invoke<GitBranchCompare>('git_branch_compare', { root, base, head }),
+    /** Switches to a local branch; resolves to the branch now checked out. */
+    gitCheckout: (branch: string, root?: string) =>
+        invoke<string>('git_checkout', { root, branch }),
+    /** Merges a branch into the current one (a conflict is cancelled); resolves to the current branch. */
+    gitMerge: (branch: string, root?: string) =>
+        invoke<string>('git_merge', { root, branch }),
+    /** Fast-forward pull of the current branch; resolves to the current branch. */
+    gitPull: (root?: string) => invoke<string>('git_pull', { root }),
     /** Stops a running turn: the CLI is ended and the turn finishes with what it had. */
     agentStop: (runId: string) => invoke<void>('agent_stop', { runId }),
     /** Answers a permission question of a running turn ("Hỏi từng việc"): `allow` lets the tool run with `input`, otherwise it is denied. */
@@ -177,11 +329,25 @@ export const ide = {
         input: unknown,
     ) => invoke<void>('agent_permission', { runId, requestId, allow, input }),
     /** Saves a pasted image or file in the app cache; resolves to the path to put in the message as `@path`. */
-    saveAttachment: async (file: File) =>
+    saveAttachment: async (
+        file: File,
+        /** A picture is also kept in the database for this project (the open one when absent) and conversation. */
+        keep?: { root?: string; conversation?: number },
+    ) =>
         invoke<string>(
             'attachment_save',
             new Uint8Array(await file.arrayBuffer()),
-            { headers: { 'x-name': encodeURIComponent(file.name) } },
+            {
+                headers: {
+                    'x-name': encodeURIComponent(file.name),
+                    ...(keep?.root === undefined
+                        ? {}
+                        : { 'x-root': encodeURIComponent(keep.root) }),
+                    ...(keep?.conversation === undefined
+                        ? {}
+                        : { 'x-conversation': String(keep.conversation) }),
+                },
+            },
         ),
     /** Bytes of a saved attachment (only files of the attachments folder), to show it in the chat. */
     readAttachment: (path: string) =>
@@ -195,6 +361,12 @@ export const ide = {
     /** The plan the AI wrote in a CLI session of the project: JSON of `{todos, markdown}`, or null when there is none. */
     planLoad: (session: string, root?: string) =>
         invoke<string | null>('plan_load', { session, root }),
+    /** The plans written in `docs/plans/` of the project (newest first, JSON preferred over Markdown); empty when the folder is absent. */
+    planDocsList: (root?: string) =>
+        invoke<PlanDocsList>('plan_docs_list', { root }),
+    /** One plan of `docs/plans/` in full; `path` is the `path` of its card. */
+    planDocRead: (path: string, root?: string) =>
+        invoke<PlanDocDetail>('plan_doc_read', { path, root }),
     chatList: (root?: string) =>
         invoke<ChatConversation[]>('chat_list', { root }),
     /** Starts a new conversation (the previous ones stay in the list) and resolves to its id. */

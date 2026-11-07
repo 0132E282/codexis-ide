@@ -2,6 +2,10 @@ use super::state::AppState;
 use crate::agent::{self, ClaudeAgent};
 use crate::cli::CliKind;
 use crate::git::{Branches, Change, Committed, GitRepo};
+use crate::git_history::{
+    BlameLine, BranchCompare, BranchesInfo, CommitFile, CommitInfo, FileDiff, GitHistory,
+    HistoryCache,
+};
 use crate::profiles::ProfileStore;
 use crate::validation;
 use serde::Serialize;
@@ -85,6 +89,7 @@ pub async fn local_head(
 
 #[tauri::command]
 pub async fn local_discard(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     root: Option<String>,
     path: String,
@@ -92,13 +97,22 @@ pub async fn local_discard(
     validation::relative_path(&path)?;
 
     let workspace = state.workspace_for(root.as_deref())?;
+    let event = crate::activity::NewFileEvent::user(
+        &workspace.root().display().to_string(),
+        &path,
+        crate::activity::FileAction::Discard,
+    );
 
     super::blocking("git.restore_failed", move || {
         GitRepo::new(&workspace)
             .discard(&path)
             .map_err(|error| error.to_string())
     })
-    .await
+    .await?;
+
+    super::activity::log_file_event(&app, &event);
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -140,6 +154,187 @@ pub async fn local_commit_message(
         let (title, description) = agent::split_message(&answer);
 
         Ok(CommitMessage { title, description })
+    })
+    .await
+}
+
+// * Read-only history commands: the front end shows an empty state for the `git.not_repository` error.
+#[tauri::command]
+pub async fn git_log(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    branch: Option<String>,
+    limit: u32,
+    skip: u32,
+) -> Result<Vec<CommitInfo>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .log(branch.as_deref(), limit, skip)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_commit_files(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    hash: String,
+) -> Result<Vec<CommitFile>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .commit_files(&hash)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_commit_file_diff(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    hash: String,
+    path: String,
+) -> Result<FileDiff, String> {
+    validation::relative_path(&path)?;
+
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .commit_file_diff(&hash, &path)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_file_history(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    path: String,
+    limit: u32,
+    skip: u32,
+) -> Result<Vec<CommitInfo>, String> {
+    validation::relative_path(&path)?;
+
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .file_history(&path, limit, skip)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_blame(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    path: String,
+) -> Result<Vec<BlameLine>, String> {
+    validation::relative_path(&path)?;
+
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .blame(&path)
+            .map(|lines| lines.as_ref().clone())
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_branches_info(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+) -> Result<BranchesInfo, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        Ok(GitHistory::with_cache(&workspace, &cache).branches_info())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_branch_compare(
+    state: State<'_, AppState>,
+    cache: State<'_, HistoryCache>,
+    root: Option<String>,
+    base: String,
+    head: String,
+) -> Result<BranchCompare, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+    let cache = cache.inner().clone();
+
+    super::blocking("git.history_failed", move || {
+        GitHistory::with_cache(&workspace, &cache)
+            .branch_compare(&base, &head)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_checkout(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    branch: String,
+) -> Result<String, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("git.checkout_failed", move || {
+        GitHistory::new(&workspace)
+            .checkout(&branch)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_merge(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    branch: String,
+) -> Result<String, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("git.merge_failed", move || {
+        GitHistory::new(&workspace)
+            .merge(&branch)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn git_pull(state: State<'_, AppState>, root: Option<String>) -> Result<String, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("git.pull_failed", move || {
+        GitHistory::new(&workspace)
+            .pull()
+            .map_err(|error| error.to_string())
     })
     .await
 }

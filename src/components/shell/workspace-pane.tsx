@@ -1,6 +1,7 @@
 import {
     ClipboardList,
     Code2,
+    LayoutGrid,
     ListChecks,
     MessageSquare,
     MessagesSquare,
@@ -13,7 +14,6 @@ import { CodeViewer } from '@/components/ai-chat/code-viewer';
 import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
 import { ChatPanel } from '@/components/shell/chat-panel';
 import { useSideChat } from '@/components/shell/chat/use-side-chat';
-import { BackgroundTasksPane } from '@/components/shell/background-tasks-pane';
 import { DockLayout } from '@/components/shell/dock-layout';
 import type { DockPanel } from '@/components/shell/dock-layout';
 import { PanelMenu } from '@/components/shell/panel-menu';
@@ -61,13 +61,16 @@ export function WorkspacePane({
     projects,
     terminalOpen,
     backgroundOpen,
+    plansOpen,
     sidebarCollapsed,
     sidebarToggle,
     onToggleTerminal,
     onToggleBackground,
+    onTogglePlans,
     onOpenSettings,
     onOpenInVscode,
     onPatch,
+    onShowHistory,
     onRefreshConversations,
 }: {
     pane: Pane;
@@ -77,16 +80,20 @@ export function WorkspacePane({
     projects: { root: string; name: string }[];
     terminalOpen: boolean;
     backgroundOpen: boolean;
+    plansOpen: boolean;
     /** The phone-pairing dialog is open (the rail's Remote Control switch follows it). */
     phoneOpen: boolean;
     sidebarCollapsed: boolean;
     sidebarToggle: ReactNode;
     onToggleTerminal: () => void;
     onToggleBackground: () => void;
+    onTogglePlans: () => void;
     onOpenSettings: () => void;
     onOpenPhone: () => void;
     onOpenInVscode: () => void;
     onPatch: (key: string, change: Partial<PaneState>) => void;
+    /** Opens the history of this file of the project in the bottom panel. */
+    onShowHistory: (path?: string) => void;
     onRefreshConversations: (root: string) => void;
 }) {
     // * Kept here, not in the pane state: it follows the pane (which stays mounted) and nothing else needs it.
@@ -94,7 +101,6 @@ export function WorkspacePane({
     const sideChat = useSideChat(pane.root);
     const sideChatPlacement = usePanelPlacement('side-chat', 'bottom');
     const planPlacement = usePanelPlacement('plan', 'right');
-    const backgroundPlacement = usePanelPlacement('background', 'bottom');
     // * The session rail: open or not, the context usage the chat reports, a counter bumped when a turn was saved (the rail reads files, branch and pull request again) and the file the rail asked the viewer to open.
     const [railOpen, setRailOpen] = useState(false);
     // * Left of the editor moves the whole file area (tree and editor, with the Multichat under them) in front of the main chat.
@@ -106,6 +112,23 @@ export function WorkspacePane({
         path: string;
         id: number;
     } | null>(null);
+    // * A plan picked in the Plans tab opens in the viewer, like a file the rail asked for.
+    const [seenOpenFile, setSeenOpenFile] = useState(state.openFile);
+
+    if (state.openFile !== seenOpenFile) {
+        setSeenOpenFile(state.openFile);
+
+        if (state.openFile !== null) {
+            const { path } = state.openFile;
+
+            setOpenRequest((current) => ({
+                repo: `local:${pane.root}`,
+                path,
+                id: (current?.id ?? 0) + 1,
+            }));
+        }
+    }
+
     const toggleRail = () => setRailOpen((open) => !open);
     // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
     const sideChatAlone =
@@ -180,6 +203,13 @@ export function WorkspacePane({
                     onToggle: onToggleBackground,
                 },
                 {
+                    id: 'plans',
+                    icon: LayoutGrid,
+                    label: t('plans.title'),
+                    open: plansOpen,
+                    onToggle: onTogglePlans,
+                },
+                {
                     id: 'plan',
                     icon: ClipboardList,
                     label: t('plan_pane.title'),
@@ -209,6 +239,7 @@ export function WorkspacePane({
                             id: (current?.id ?? 0) + 1,
                         }))
                     }
+                    onShowHistory={() => onShowHistory()}
                     onClose={() => setRailOpen(false)}
                 />
             </RailPopup>
@@ -242,23 +273,6 @@ export function WorkspacePane({
                         sideChatAlone
                             ? () => onPatch(pane.key, { chatCollapsed: false })
                             : undefined
-                    }
-                />
-            ),
-        },
-        {
-            id: 'background',
-            placement: backgroundPlacement.placement,
-            // * Only the open project shows it: its tasks follow that project's folder.
-            open: active && backgroundOpen,
-            size: 240,
-            content: active && backgroundOpen && (
-                <BackgroundTasksPane
-                    root={pane.root}
-                    placementMenu={placementMenu(backgroundPlacement)}
-                    onClose={onToggleBackground}
-                    onOpenSubagent={(id) =>
-                        onPatch(pane.key, { viewSubagent: id })
                     }
                 />
             ),
@@ -336,8 +350,9 @@ export function WorkspacePane({
                         repos={[`local:${pane.root}`]}
                         onViewRepo={noViewerChange}
                         changes={[]}
-                        assistant={{ name: 'Rynox' }}
+                        assistant={{ name: 'Codexis' }}
                         onInlineAsk={askAssistant(pane.root)}
+                        onShowHistory={onShowHistory}
                         onActiveFile={(file) =>
                             onPatch(pane.key, { activeFile: file })
                         }
@@ -421,6 +436,7 @@ export function WorkspacePane({
                         onPatch(pane.key, { chatCollapsed: true })
                     }
                     attachFile={state.attachFile}
+                    selectedFile={state.activeFile}
                     viewSubagent={state.viewSubagent}
                     onLeaveSubagent={() =>
                         onPatch(pane.key, { viewSubagent: null })

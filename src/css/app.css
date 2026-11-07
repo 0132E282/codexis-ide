@@ -176,6 +176,8 @@ html.no-transitions *::after {
 
 /* "Hoàn tác đoạn này" shown under a change mark in the code editor's margin. */
 .pm-revert-pop {
+    width: max-content;
+    white-space: nowrap;
     margin-left: 4px;
     padding: 2px 10px;
     border: 1px solid var(--border, #d4d4d8);
@@ -284,4 +286,38 @@ html.no-transitions *::after {
         animation: none;
         background-color: rgb(250 204 21 / 0.2);
     }
+}
+
+/* * Git blame note at the end of the line the caret is on (muted, follows the theme). */
+.monaco-editor .pm-blame {
+    margin-left: 1.5rem;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-style: italic;
+    opacity: 0.8;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* The note never takes a click: the line under it stays clickable. */
+    pointer-events: none;
+}
+
+/* * The card shown over the blame note: who, when and the commit subject. */
+.monaco-editor .pm-blame-card {
+    pointer-events: none;
+    width: max-content;
+    max-width: 28rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    font-size: 12px;
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+    overflow-wrap: anywhere;
+}
+
+/* * Closed, the card takes no room at all (Monaco sets display and visibility on its widgets, so only !important holds). */
+.monaco-editor .pm-blame-card:not(.pm-blame-card-open) {
+    display: none !important;
 }

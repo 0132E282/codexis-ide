@@ -2,6 +2,7 @@ import {
     Bot,
     Link2,
     Plug,
+    Puzzle,
     ScrollText,
     SlidersHorizontal,
     Sparkles,
@@ -15,6 +16,7 @@ import { AgentTab } from '@/components/shell/settings-tabs/agent-tab';
 import { CharacterTab } from '@/components/shell/settings-tabs/character-tab';
 import { ConnectTab } from '@/components/shell/settings-tabs/connect-tab';
 import { HookTab } from '@/components/shell/settings-tabs/hook-tab';
+import { ExtensionsTab } from '@/components/shell/settings-tabs/extensions-tab';
 import { McpTab } from '@/components/shell/settings-tabs/mcp-tab';
 import { RulesTab } from '@/components/shell/settings-tabs/rules-tab';
 import { SkillTab } from '@/components/shell/settings-tabs/skill-tab';
@@ -38,6 +40,7 @@ export type SettingsTab =
     | 'skill'
     | 'agent'
     | 'mcp'
+    | 'extensions'
     | 'rules'
     | 'hook'
     | 'connect';
@@ -63,6 +66,12 @@ const SECTIONS: {
     { key: 'skill', label: 'Skill', title: 'Skill', icon: Sparkles },
     { key: 'agent', label: 'Agent', title: 'Agent', icon: Bot },
     { key: 'mcp', label: 'MCP', title: 'MCP server', icon: Plug },
+    {
+        key: 'extensions',
+        label: 'extensions_tab.title',
+        title: 'extensions_tab.title',
+        icon: Puzzle,
+    },
     { key: 'rules', label: 'Rules', title: 'Rules', icon: ScrollText },
     { key: 'hook', label: 'Hook', title: 'Hook', icon: Webhook },
     {
@@ -205,6 +214,9 @@ export function SettingsDialog({
                                 </TabsContent>
                                 <TabsContent value="mcp">
                                     <McpTab />
+                                </TabsContent>
+                                <TabsContent value="extensions">
+                                    <ExtensionsTab />
                                 </TabsContent>
                                 <TabsContent value="rules">
                                     <RulesTab />

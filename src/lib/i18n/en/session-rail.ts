@@ -41,6 +41,7 @@ export const sessionRailEnglish: Record<string, string> = {
     'session_rail.usage_note':
         'Tokens are estimated from text length; the CLI reports no cost or duration.',
     'session_rail.github': 'GitHub',
+    'session_rail.git_history': 'Git history',
     'session_rail.github_account': 'Account',
     'session_rail.github_repo': 'Repository',
     'session_rail.github_pull_request': 'Pull request',

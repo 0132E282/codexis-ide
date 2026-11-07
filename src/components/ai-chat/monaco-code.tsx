@@ -8,7 +8,7 @@ import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
 import { Editor } from '@monaco-editor/react';
 import type { Monaco } from '@monaco-editor/react';
 import type { editor, Range } from 'monaco-editor';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AiChatActivityStep } from '@/types';
 import { lineChanges } from '@/lib/line-changes';
 import type { Hunk } from '@/lib/line-changes';
@@ -18,6 +18,13 @@ import {
     monacoTheme,
 } from '@/components/ai-chat/monaco-setup';
 import { t } from '@/lib/i18n';
+import { useLanguageServer } from '@/components/ai-chat/code-viewer/use-language-server';
+import { useBlameAnnotation } from '@/components/ai-chat/blame-annotation';
+import type { GitBlameLine } from '@/lib/ide';
+import type { CursorStore } from '@/components/ai-chat/code-viewer/cursor-position';
+import type { EditorOptions } from '@/components/ai-chat/code-viewer/use-editor-options';
+
+const noopOpen = () => {};
 
 /** * Monaco editor for one file (loaded lazily by the code viewer): read-only unless `onChange` is given, then Cmd/Ctrl+S calls `onSave`. */
 export default function MonacoCode({
@@ -32,9 +39,24 @@ export default function MonacoCode({
     baseline,
     boxHost,
     revealLine,
+    blame,
+    editorOptions,
+    cursorStore,
+    languageServer,
 }: {
     path: string;
     value: string;
+    /** * The project's language servers: `root` of the project and where a definition in another file opens (the viewer jumps there). */
+    languageServer?: {
+        root: string | null;
+        onOpenDefinition: (path: string, line: number, column: number) => void;
+    };
+    /** * Git blame of the file: the line the caret is on shows its author, time and subject (null: nothing shown). */
+    blame?: GitBlameLine[] | null;
+    /** * The options menu's choices: wrap, guides, whitespace, scroll past end, tab size, Tab key. */
+    editorOptions?: EditorOptions;
+    /** * Receives the caret's line, column and selection size (the viewer's cursor label reads it). */
+    cursorStore?: CursorStore;
     /** * Scrolls the editor to this line once (the id makes the same line scroll again): where the AI changed the file. */
     revealLine?: { line: number; count: number; id: number } | null;
     onChange?: (value: string) => void;
@@ -89,6 +111,71 @@ export default function MonacoCode({
     const monacoRef = useRef<Monaco | null>(null);
     const [instance, setInstance] =
         useState<editor.IStandaloneCodeEditor | null>(null);
+
+    useBlameAnnotation(instance, blame ?? null);
+
+    const { active: serverActive, dialog: serverDialog } = useLanguageServer({
+        instance: editable ? instance : null,
+        root: languageServer?.root ?? null,
+        path,
+        onOpenDefinition: languageServer?.onOpenDefinition ?? noopOpen,
+    });
+
+    // * The caret's place goes to the store at most once per frame; nothing here sets React state.
+    useEffect(() => {
+        if (instance === null || cursorStore === undefined) {
+            return;
+        }
+
+        let frame = 0;
+        const publish = () => {
+            frame = 0;
+
+            const position = instance.getPosition();
+            const selection = instance.getSelection();
+            const model = instance.getModel();
+
+            if (position === null || model === null) {
+                cursorStore.set(null);
+
+                return;
+            }
+
+            cursorStore.set({
+                line: position.lineNumber,
+                column: position.column,
+                selectedChars:
+                    selection === null || selection.isEmpty()
+                        ? 0
+                        : model.getValueLengthInRange(selection),
+                selectedLines:
+                    selection === null || selection.isEmpty()
+                        ? 0
+                        : selection.endLineNumber -
+                          selection.startLineNumber +
+                          1,
+            });
+        };
+        const schedule = () => {
+            if (frame === 0) {
+                frame = window.requestAnimationFrame(publish);
+            }
+        };
+        const subscriptions = [
+            instance.onDidChangeCursorPosition(schedule),
+            instance.onDidChangeCursorSelection(schedule),
+        ];
+
+        publish();
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            for (const subscription of subscriptions) {
+                subscription.dispose();
+            }
+            cursorStore.set(null);
+        };
+    }, [instance, cursorStore]);
 
     useEffect(() => {
         if (
@@ -495,137 +582,178 @@ export default function MonacoCode({
         askRef.current?.(selection);
     };
 
+    // * One options object per real change: a new object on every render would make the editor apply its options (a layout) on every key.
+    const isMarkdown = languageOf(path) === 'markdown';
+    const monacoOptions = useMemo(
+        () => ({
+            ...READ_ONLY_OPTIONS,
+            readOnly: !editable,
+            domReadOnly: !editable,
+            // * Markdown is prose: its long lines wrap (keeping their indent) instead of running off the side.
+            ...(editorOptions === undefined
+                ? {}
+                : {
+                      wordWrap: editorOptions.wordWrap
+                          ? ('on' as const)
+                          : ('off' as const),
+                      wrappingIndent: 'same' as const,
+                      guides: {
+                          ...READ_ONLY_OPTIONS.guides,
+                          indentation: editorOptions.indentGuides,
+                      },
+                      renderWhitespace: editorOptions.showWhitespace
+                          ? ('all' as const)
+                          : ('none' as const),
+                      scrollBeyondLastLine: editorOptions.scrollPastEnd,
+                      tabSize: editorOptions.tabSize,
+                      tabFocusMode: !editorOptions.tabKeyIndents,
+                  }),
+            // * A running language server answers hover and suggestions: the words of the file are then not offered too.
+            ...(serverActive
+                ? {
+                      hover: { enabled: 'on' as const },
+                      wordBasedSuggestions: 'off' as const,
+                  }
+                : {}),
+            ...(isMarkdown
+                ? {
+                      wordWrap: 'on' as const,
+                      wrappingIndent: 'same' as const,
+                  }
+                : {}),
+        }),
+        [editable, isMarkdown, editorOptions, serverActive],
+    );
+
     return (
-        <Editor
-            path={path}
-            value={value}
-            language={languageOf(path)}
-            theme={monacoTheme()}
-            loading={
-                <p className="m-4 text-sm text-muted-foreground">
-                    {t('common.loading')}
-                </p>
-            }
-            onChange={(next) => onChange?.(next ?? '')}
-            onMount={(editor, monaco) => {
-                monacoRef.current = monaco;
-                setInstance(editor);
-                // * Remembers what is copied, so pasting it into the chat sends `file:lines` and not the code.
-                editor.getDomNode()?.addEventListener(
-                    'copy',
-                    () => {
-                        const selection = editor.getSelection();
-                        const text =
-                            selection === null || selection.isEmpty()
-                                ? ''
-                                : (editor
-                                      .getModel()
-                                      ?.getValueInRange(selection) ?? '');
-
-                        if (selection !== null && text !== '') {
-                            rememberEditorCopy(
-                                pathRef.current,
-                                selection.startLineNumber,
-                                selection.endLineNumber,
-                                text,
-                            );
-                        }
-                    },
-                    true,
-                );
-                // * The assistant's avatar by a selection: a click asks about the selected lines (like Cmd+L).
-                const hint = document.createElement('div');
-                const hintRoot = createRoot(hint);
-                const hintWidget: editor.IContentWidget = {
-                    getId: () => 'pm.ask-hint',
-                    getDomNode: () => hint,
-                    getPosition: () => {
-                        const range = editor.getSelection();
-
-                        return range === null || range.isEmpty()
-                            ? null
-                            : {
-                                  position: range.getEndPosition(),
-                                  preference: [
-                                      monaco.editor
-                                          .ContentWidgetPositionPreference
-                                          .BELOW,
-                                      monaco.editor
-                                          .ContentWidgetPositionPreference
-                                          .ABOVE,
-                                  ],
-                              };
-                    },
-                };
-                let hintShown = false;
-                const syncHint = () => {
-                    const range = editor.getSelection();
-                    const wanted =
-                        range !== null &&
-                        !range.isEmpty() &&
-                        (inlineRef.current !== undefined ||
-                            askRef.current !== undefined);
-
-                    if (wanted && !hintShown) {
-                        hintRoot.render(
-                            <button
-                                type="button"
-                                title={t('monaco_code.ask_ai_about_this')}
-                                aria-label={t('monaco_code.ask_ai_about_this2')}
-                                // * The editor must not see the press: it would drop the selection before the click.
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => askSelection(editor)}
-                                className="ml-2 flex rounded-full shadow-md ring-2 ring-background transition-transform hover:scale-110 focus-visible:ring-ring focus-visible:outline-none"
-                            >
-                                <AssistantAvatar
-                                    {...(assistantRef.current ?? {})}
-                                    className="size-6"
-                                />
-                            </button>,
-                        );
-                        editor.addContentWidget(hintWidget);
-                        hintShown = true;
-                    } else if (wanted) {
-                        editor.layoutContentWidget(hintWidget);
-                    } else if (hintShown) {
-                        editor.removeContentWidget(hintWidget);
-                        hintShown = false;
-                    }
-                };
-
-                editor.onDidChangeCursorSelection(syncHint);
-                syncHintRef.current = syncHint;
-
-                if (askTrigger) {
-                    askTrigger.current = () => askSelection(editor);
+        <>
+            {serverDialog}
+            <Editor
+                path={path}
+                value={value}
+                language={languageOf(path)}
+                theme={monacoTheme()}
+                loading={
+                    <p className="m-4 text-sm text-muted-foreground">
+                        {t('common.loading')}
+                    </p>
                 }
-                editor.addCommand(
-                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                    () => saveRef.current?.(),
-                );
-                editor.addAction({
-                    id: 'pm.chat-about-selection',
-                    label: t('monaco_code.chat_with_ai_about'),
-                    // * Cmd+L (Ctrl+L), like Cursor; the context menu shows it next to the label.
-                    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL],
-                    contextMenuGroupId: '9_cutcopypaste',
-                    contextMenuOrder: 0,
-                    precondition: 'editorHasSelection',
-                    run: (instance) => askSelection(instance),
-                });
-            }}
-            options={{
-                ...READ_ONLY_OPTIONS,
-                readOnly: !editable,
-                domReadOnly: !editable,
-                // * Markdown is prose: its long lines wrap (keeping their indent) instead of running off the side.
-                ...(languageOf(path) === 'markdown'
-                    ? {
-                          wordWrap: 'on' as const,
-                          wrappingIndent: 'same' as const,
-                      }
-                    : {}),
-            }}
-        />
+                onChange={(next) => onChange?.(next ?? '')}
+                onMount={(editor, monaco) => {
+                    monacoRef.current = monaco;
+                    setInstance(editor);
+                    // * Remembers what is copied, so pasting it into the chat sends `file:lines` and not the code.
+                    editor.getDomNode()?.addEventListener(
+                        'copy',
+                        () => {
+                            const selection = editor.getSelection();
+                            const text =
+                                selection === null || selection.isEmpty()
+                                    ? ''
+                                    : (editor
+                                          .getModel()
+                                          ?.getValueInRange(selection) ?? '');
+
+                            if (selection !== null && text !== '') {
+                                rememberEditorCopy(
+                                    pathRef.current,
+                                    selection.startLineNumber,
+                                    selection.endLineNumber,
+                                    text,
+                                );
+                            }
+                        },
+                        true,
+                    );
+                    // * The assistant's avatar by a selection: a click asks about the selected lines (like Cmd+L).
+                    const hint = document.createElement('div');
+                    const hintRoot = createRoot(hint);
+                    const hintWidget: editor.IContentWidget = {
+                        getId: () => 'pm.ask-hint',
+                        getDomNode: () => hint,
+                        getPosition: () => {
+                            const range = editor.getSelection();
+
+                            return range === null || range.isEmpty()
+                                ? null
+                                : {
+                                      position: range.getEndPosition(),
+                                      preference: [
+                                          monaco.editor
+                                              .ContentWidgetPositionPreference
+                                              .BELOW,
+                                          monaco.editor
+                                              .ContentWidgetPositionPreference
+                                              .ABOVE,
+                                      ],
+                                  };
+                        },
+                    };
+                    let hintShown = false;
+                    const syncHint = () => {
+                        const range = editor.getSelection();
+                        const wanted =
+                            range !== null &&
+                            !range.isEmpty() &&
+                            (inlineRef.current !== undefined ||
+                                askRef.current !== undefined);
+
+                        if (wanted && !hintShown) {
+                            hintRoot.render(
+                                <button
+                                    type="button"
+                                    title={t('monaco_code.ask_ai_about_this')}
+                                    aria-label={t(
+                                        'monaco_code.ask_ai_about_this2',
+                                    )}
+                                    // * The editor must not see the press: it would drop the selection before the click.
+                                    onMouseDown={(event) =>
+                                        event.preventDefault()
+                                    }
+                                    onClick={() => askSelection(editor)}
+                                    className="ml-2 flex rounded-full shadow-md ring-2 ring-background transition-transform hover:scale-110 focus-visible:ring-ring focus-visible:outline-none"
+                                >
+                                    <AssistantAvatar
+                                        {...(assistantRef.current ?? {})}
+                                        className="size-6"
+                                    />
+                                </button>,
+                            );
+                            editor.addContentWidget(hintWidget);
+                            hintShown = true;
+                        } else if (wanted) {
+                            editor.layoutContentWidget(hintWidget);
+                        } else if (hintShown) {
+                            editor.removeContentWidget(hintWidget);
+                            hintShown = false;
+                        }
+                    };
+
+                    editor.onDidChangeCursorSelection(syncHint);
+                    syncHintRef.current = syncHint;
+
+                    if (askTrigger) {
+                        askTrigger.current = () => askSelection(editor);
+                    }
+                    editor.addCommand(
+                        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                        () => saveRef.current?.(),
+                    );
+                    editor.addAction({
+                        id: 'pm.chat-about-selection',
+                        label: t('monaco_code.chat_with_ai_about'),
+                        // * Cmd+L (Ctrl+L), like Cursor; the context menu shows it next to the label.
+                        keybindings: [
+                            monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL,
+                        ],
+                        contextMenuGroupId: '9_cutcopypaste',
+                        contextMenuOrder: 0,
+                        precondition: 'editorHasSelection',
+                        run: (instance) => askSelection(instance),
+                    });
+                }}
+                options={monacoOptions}
+            />
+        </>
     );
 }

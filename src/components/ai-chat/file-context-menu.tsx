@@ -15,9 +15,18 @@ export type FileActions = {
     copyName: (path: string) => void;
     /** * Missing where nothing can be renamed (a GitHub repo); only files are renamed. */
     rename?: (path: string) => void;
+    /** * Starts a new file or folder inside `folder` (empty: the project root); missing where nothing can be created. */
+    create?: (folder: string, isFolder: boolean) => void;
+    /** * Shows the git history of the file; missing where there is no local repository. */
+    history?: (path: string) => void;
     /** * Missing when the chat cannot take a file reference. */
     ask?: (path: string) => void;
 };
+
+/** * Folder holding `path` (empty for the project root). */
+function parentFolder(path: string): string {
+    return path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+}
 
 /** * Right-click menu of a file (or folder) row: `items` first (open, show the change...), then the shared copy / add-to-chat entries. */
 export function FileContextMenu({
@@ -37,7 +46,40 @@ export function FileContextMenu({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-            <ContextMenuContent className="w-56">
+            <ContextMenuContent
+                className="w-56"
+                onCloseAutoFocus={(event) => {
+                    // * A new-entry row takes the focus; the menu must not give it back to the row.
+                    if (actions.create !== undefined) {
+                        event.preventDefault();
+                    }
+                }}
+            >
+                {actions.create !== undefined && (
+                    <>
+                        <ContextMenuItem
+                            onSelect={() =>
+                                actions.create?.(
+                                    folder ? path : parentFolder(path),
+                                    false,
+                                )
+                            }
+                        >
+                            {t('common.new_file')}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                            onSelect={() =>
+                                actions.create?.(
+                                    folder ? path : parentFolder(path),
+                                    true,
+                                )
+                            }
+                        >
+                            {t('common.new_folder')}
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                    </>
+                )}
                 {items?.map((item) => (
                     <ContextMenuItem
                         key={item.label}
@@ -61,6 +103,11 @@ export function FileContextMenu({
                 {!folder && actions.rename !== undefined && (
                     <ContextMenuItem onSelect={() => actions.rename?.(path)}>
                         {t('common.rename')}
+                    </ContextMenuItem>
+                )}
+                {!folder && actions.history !== undefined && (
+                    <ContextMenuItem onSelect={() => actions.history?.(path)}>
+                        {t('common.file_history')}
                     </ContextMenuItem>
                 )}
                 {!folder && (

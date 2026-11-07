@@ -1,5 +1,7 @@
 import { Volume2 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { SpeechEngineSection } from '@/components/shell/settings-tabs/speech-engine-section';
+import { StorageSection } from '@/components/shell/settings-tabs/storage-section';
 import { CodePreview } from '@/components/shell/settings-tabs/code-preview';
 import { Button } from '@/components/ui/button';
 import {
@@ -223,6 +225,8 @@ export function AdvancedTab({
                     </FieldDescription>
                 </Field>
             )}
+            <SpeechEngineSection settings={settings} onChange={onChange} />
+            <StorageSection settings={settings} onChange={onChange} />
         </FieldGroup>
     );
 }

@@ -54,171 +54,188 @@ function FileTabsBar({
     const [dropTab, setDropTab] = useState<string | null>(null);
 
     return (
-        <div
-            role="tablist"
-            aria-label={t('file_tabs.open_files')}
-            className="flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b px-2"
-        >
+        // * The side groups never shrink; the tab strip takes what is left and scrolls, so buttons and tabs cannot overlap.
+        <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2">
             {tabsStart !== undefined && (
-                <div className="sticky left-0 flex shrink-0 items-center bg-background pr-1">
+                <div className="flex shrink-0 items-center bg-background pr-1">
                     {tabsStart}
                 </div>
             )}
-            {tabs.map((path) => {
-                const name = path.split('/').pop() ?? path;
-                const active = path === selected;
+            <div
+                role="tablist"
+                aria-label={t('file_tabs.open_files')}
+                className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            >
+                {tabs.map((path) => {
+                    const name = path.split('/').pop() ?? path;
+                    const active = path === selected;
 
-                return (
-                    <ContextMenu key={path}>
-                        <ContextMenuTrigger asChild>
-                            <div
-                                draggable
-                                onDragStart={(event) => {
-                                    event.dataTransfer.effectAllowed = 'move';
-                                    setDraggedTab(path);
-                                }}
-                                onDragOver={(event) => {
-                                    if (draggedTab === null) {
-                                        return;
-                                    }
+                    return (
+                        <ContextMenu key={path}>
+                            <ContextMenuTrigger asChild>
+                                <div
+                                    draggable
+                                    onDragStart={(event) => {
+                                        event.dataTransfer.effectAllowed =
+                                            'move';
+                                        setDraggedTab(path);
+                                    }}
+                                    onDragOver={(event) => {
+                                        if (draggedTab === null) {
+                                            return;
+                                        }
 
-                                    event.preventDefault();
-                                    setDropTab(path);
-                                }}
-                                onDrop={(event) => {
-                                    event.preventDefault();
+                                        event.preventDefault();
+                                        setDropTab(path);
+                                    }}
+                                    onDrop={(event) => {
+                                        event.preventDefault();
 
-                                    if (
-                                        draggedTab !== null &&
-                                        draggedTab !== path
-                                    ) {
-                                        onMove(draggedTab, path);
-                                    }
-                                }}
-                                onDragEnd={() => {
-                                    setDraggedTab(null);
-                                    setDropTab(null);
-                                }}
-                                className={cn(
-                                    draggedTab === path && 'opacity-50',
-                                    dropTab === path &&
-                                        draggedTab !== path &&
-                                        'ring-2 ring-ring',
-                                    'group flex h-8 max-w-48 shrink-0 items-center gap-1.5 rounded-lg pr-1 pl-2 text-sm transition-colors duration-150 motion-reduce:transition-none',
-                                    active
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                                )}
-                            >
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={active}
-                                    title={path}
-                                    onClick={() =>
-                                        active ? undefined : onOpen(path)
-                                    }
-                                    onDoubleClick={() =>
-                                        path === previewTab
-                                            ? onKeepPreview()
-                                            : undefined
-                                    }
-                                    className="flex min-w-0 items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                >
-                                    <FileIcon
-                                        name={name}
-                                        className="size-4 shrink-0"
-                                    />
-                                    <span
-                                        className={cn(
-                                            'truncate',
-                                            path === previewTab && 'italic',
-                                        )}
-                                    >
-                                        {name}
-                                    </span>
-                                    {dirtyPaths.has(path) && (
-                                        <span
-                                            role="img"
-                                            aria-label={t('file_tabs.unsaved')}
-                                            className="size-1.5 shrink-0 rounded-full bg-foreground/60"
-                                        />
+                                        if (
+                                            draggedTab !== null &&
+                                            draggedTab !== path
+                                        ) {
+                                            onMove(draggedTab, path);
+                                        }
+                                    }}
+                                    onDragEnd={() => {
+                                        setDraggedTab(null);
+                                        setDropTab(null);
+                                    }}
+                                    className={cn(
+                                        draggedTab === path && 'opacity-50',
+                                        dropTab === path &&
+                                            draggedTab !== path &&
+                                            'ring-2 ring-ring',
+                                        'group flex h-8 max-w-48 shrink-0 items-center gap-1.5 rounded-lg pr-1 pl-2 text-sm transition-colors duration-150 motion-reduce:transition-none',
+                                        active
+                                            ? 'bg-muted text-foreground'
+                                            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                                     )}
-                                </button>
-                                <button
-                                    type="button"
-                                    aria-label={t('file_tabs.close_name', {
-                                        name,
-                                    })}
-                                    onClick={() => onClose(path)}
-                                    className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                 >
-                                    <X
-                                        aria-hidden="true"
-                                        className="size-3.5"
-                                    />
-                                </button>
-                            </div>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent className="w-60">
-                            <ContextMenuItem onSelect={() => onClose(path)}>
-                                {t('common.close')}
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                disabled={tabs.length < 2}
-                                onSelect={() =>
-                                    onCloseMany(
-                                        tabs.filter((item) => item !== path),
-                                    )
-                                }
-                            >
-                                {t('file_tabs.close_other_tabs')}
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                disabled={
-                                    tabs.indexOf(path) === tabs.length - 1
-                                }
-                                onSelect={() =>
-                                    onCloseMany(
-                                        tabs.slice(tabs.indexOf(path) + 1),
-                                    )
-                                }
-                            >
-                                {t('file_tabs.close_tabs_to_the')}
-                            </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => onCloseMany(tabs)}>
-                                {t('file_tabs.close_all')}
-                            </ContextMenuItem>
-                            <ContextMenuSeparator />
-                            <ContextMenuItem
-                                onSelect={() => actions.copy(path)}
-                            >
-                                {t('common.copy_path')}
-                            </ContextMenuItem>
-                            <ContextMenuItem
-                                onSelect={() => actions.copyName(path)}
-                            >
-                                {t('common.copy_file_name')}
-                            </ContextMenuItem>
-                            {actions.rename !== undefined && (
-                                <ContextMenuItem
-                                    onSelect={() => actions.rename?.(path)}
-                                >
-                                    {t('common.rename')}
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={active}
+                                        title={path}
+                                        onClick={() =>
+                                            active ? undefined : onOpen(path)
+                                        }
+                                        onDoubleClick={() =>
+                                            path === previewTab
+                                                ? onKeepPreview()
+                                                : undefined
+                                        }
+                                        className="flex min-w-0 items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        <FileIcon
+                                            name={name}
+                                            className="size-4 shrink-0"
+                                        />
+                                        <span
+                                            className={cn(
+                                                'truncate',
+                                                path === previewTab && 'italic',
+                                            )}
+                                        >
+                                            {name}
+                                        </span>
+                                        {dirtyPaths.has(path) && (
+                                            <span
+                                                role="img"
+                                                aria-label={t(
+                                                    'file_tabs.unsaved',
+                                                )}
+                                                className="size-1.5 shrink-0 rounded-full bg-foreground/60"
+                                            />
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label={t('file_tabs.close_name', {
+                                            name,
+                                        })}
+                                        onClick={() => onClose(path)}
+                                        className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        <X
+                                            aria-hidden="true"
+                                            className="size-3.5"
+                                        />
+                                    </button>
+                                </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-60">
+                                <ContextMenuItem onSelect={() => onClose(path)}>
+                                    {t('common.close')}
                                 </ContextMenuItem>
-                            )}
-                            <ContextMenuItem
-                                disabled={actions.ask === undefined}
-                                onSelect={() => actions.ask?.(path)}
-                            >
-                                {t('common.add_file_to_chat')}
-                            </ContextMenuItem>
-                        </ContextMenuContent>
-                    </ContextMenu>
-                );
-            })}
+                                <ContextMenuItem
+                                    disabled={tabs.length < 2}
+                                    onSelect={() =>
+                                        onCloseMany(
+                                            tabs.filter(
+                                                (item) => item !== path,
+                                            ),
+                                        )
+                                    }
+                                >
+                                    {t('file_tabs.close_other_tabs')}
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    disabled={
+                                        tabs.indexOf(path) === tabs.length - 1
+                                    }
+                                    onSelect={() =>
+                                        onCloseMany(
+                                            tabs.slice(tabs.indexOf(path) + 1),
+                                        )
+                                    }
+                                >
+                                    {t('file_tabs.close_tabs_to_the')}
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onSelect={() => onCloseMany(tabs)}
+                                >
+                                    {t('file_tabs.close_all')}
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                    onSelect={() => actions.copy(path)}
+                                >
+                                    {t('common.copy_path')}
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onSelect={() => actions.copyName(path)}
+                                >
+                                    {t('common.copy_file_name')}
+                                </ContextMenuItem>
+                                {actions.rename !== undefined && (
+                                    <ContextMenuItem
+                                        onSelect={() => actions.rename?.(path)}
+                                    >
+                                        {t('common.rename')}
+                                    </ContextMenuItem>
+                                )}
+                                {actions.history !== undefined && (
+                                    <ContextMenuItem
+                                        onSelect={() => actions.history?.(path)}
+                                    >
+                                        {t('common.file_history')}
+                                    </ContextMenuItem>
+                                )}
+                                <ContextMenuItem
+                                    disabled={actions.ask === undefined}
+                                    onSelect={() => actions.ask?.(path)}
+                                >
+                                    {t('common.add_file_to_chat')}
+                                </ContextMenuItem>
+                            </ContextMenuContent>
+                        </ContextMenu>
+                    );
+                })}
+            </div>
             {(tools !== undefined || tabsEnd !== undefined) && (
-                <div className="sticky right-0 ml-auto flex shrink-0 items-center gap-1 bg-background pl-1">
+                <div className="flex shrink-0 items-center gap-1 border-l bg-background pl-2">
                     {tools}
                     {tabsEnd}
                 </div>

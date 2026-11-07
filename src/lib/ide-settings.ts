@@ -29,8 +29,31 @@ export type ChatSettings = {
     /** Colors of the code in the editor; empty = follow the interface. */
     codeColors:
         '' | 'auto' | 'light' | 'dark' | 'light-colorblind' | 'dark-colorblind';
+    /** Who reads answers aloud: the device voice or a local VieNeu-TTS server. */
+    voiceEngine: 'system' | 'vieneu';
+    /** Loopback address of the VieNeu-TTS server. */
+    vieneuUrl: string;
+    /** VieNeu-TTS voice id; empty = the server's default. */
+    vieneuVoice: string;
+    /** Reading speed in percent (80 to 125). */
+    voiceRate: number;
+    /** Also save the plans the AI writes in the chat as files in the project (off: nothing is written to the project). */
+    savePlansToProject: boolean;
+    /** Folder of the saved plans, relative to the project and inside it. */
+    plansDir: string;
+    /** Warn when the data of the IDE (logs, pictures, plans, history) grows big. */
+    storageWarnings: boolean;
+    /** The storage warning limits are multiplied by this (1 to 100). */
+    storageWarnMultiplier: number;
 };
 
+export const DEFAULT_PLANS_DIR = 'docs/plans';
+export const MAX_STORAGE_WARN_MULTIPLIER = 100;
+
+export const DEFAULT_VIENEU_URL = 'http://127.0.0.1:8000';
+
+export const MIN_VOICE_RATE = 80;
+export const MAX_VOICE_RATE = 125;
 export const MAX_NAME_LENGTH = 60;
 export const MAX_INSTRUCTIONS_LENGTH = 8000;
 export const MAX_MODEL_LENGTH = 100;
@@ -51,6 +74,14 @@ export const defaultChatSettings: ChatSettings = {
     language: '',
     appearance: '',
     codeColors: '',
+    voiceEngine: 'system',
+    vieneuUrl: DEFAULT_VIENEU_URL,
+    vieneuVoice: '',
+    voiceRate: 100,
+    savePlansToProject: false,
+    plansDir: DEFAULT_PLANS_DIR,
+    storageWarnings: true,
+    storageWarnMultiplier: 1,
 };
 
 /** Plans each CLI can be marked with; the `value` is what is saved. */
@@ -68,10 +99,35 @@ export const CLI_PLANS = {
     ],
 } as const;
 
+/** Settings saved before the speech fields existed come back with them empty. */
+const withSpeechDefaults = (settings: ChatSettings): ChatSettings => ({
+    ...settings,
+    voiceEngine: settings.voiceEngine === 'vieneu' ? 'vieneu' : 'system',
+    vieneuUrl: settings.vieneuUrl || DEFAULT_VIENEU_URL,
+    voiceRate: settings.voiceRate || 100,
+    savePlansToProject: settings.savePlansToProject === true,
+    plansDir: settings.plansDir || DEFAULT_PLANS_DIR,
+    storageWarnings: settings.storageWarnings !== false,
+    storageWarnMultiplier: settings.storageWarnMultiplier || 1,
+});
+
+/** Raised on `window` after settings are saved, so a reader (the speech output) can pick the new ones up. */
+export const SETTINGS_SAVED_EVENT = 'codexis-settings-saved';
+
 export const ideSettings = {
-    get: () => invoke<ChatSettings>('settings_get'),
-    save: (settings: ChatSettings) =>
-        invoke<ChatSettings>('settings_save', { settings }),
+    get: async () =>
+        withSpeechDefaults(await invoke<ChatSettings>('settings_get')),
+    save: async (settings: ChatSettings) => {
+        const saved = withSpeechDefaults(
+            await invoke<ChatSettings>('settings_save', { settings }),
+        );
+
+        window.dispatchEvent(
+            new CustomEvent(SETTINGS_SAVED_EVENT, { detail: saved }),
+        );
+
+        return saved;
+    },
     /** Changes some settings in the settings file, leaving every other setting as it is. */
     update: async (changes: Partial<ChatSettings>) =>
         ideSettings.save({ ...(await ideSettings.get()), ...changes }),

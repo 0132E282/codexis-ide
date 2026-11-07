@@ -124,6 +124,7 @@ export function Sidebar({
     onOpenSettings,
     onOpenUsage,
     toggle,
+    hasWindowButtons = true,
 }: {
     projects: Project[];
     /** Saved project that is the open workspace, if any. */
@@ -171,6 +172,8 @@ export function Sidebar({
     onOpenUsage: () => void;
     /** The button that folds the sidebar away; it ends up at the left edge of the sidebar header. */
     toggle?: ReactNode;
+    /** True while the native window buttons sit at the top-left (every case but fullscreen); the header then leaves room for them. */
+    hasWindowButtons?: boolean;
 }) {
     const [query, setQuery] = useState('');
     const { statuses } = useAuthStatus(false);
@@ -239,8 +242,13 @@ export function Sidebar({
             aria-label={t('sidebar.sidebar')}
             className="flex w-full min-w-0 shrink-0 flex-col border-r bg-background"
         >
-            {/* * The native window buttons are hidden until the pointer reaches the top-left corner, so the sidebar toggle sits at the left edge. */}
-            <div className="mb-2 flex h-12 shrink-0 items-center border-b pl-3 select-none">
+            {/* * The native window buttons are always shown at the top-left, so the sidebar toggle starts after them. */}
+            <div
+                className={cn(
+                    'mb-2 flex h-12 shrink-0 items-center border-b select-none',
+                    hasWindowButtons ? 'pl-20' : 'pl-3',
+                )}
+            >
                 {toggle}
             </div>
             <div className="flex items-center justify-between px-3 pb-2 text-sm">
@@ -774,7 +782,7 @@ export function Sidebar({
                 <p className="min-w-0 flex-1 truncate text-sm">
                     {github?.loggedIn
                         ? (github.account ?? t('accounts.signed_in'))
-                        : 'Rynox'}
+                        : 'Codexis'}
                 </p>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>

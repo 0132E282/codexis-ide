@@ -1,6 +1,6 @@
 //! Shows or hides the three native window buttons (close, minimise, zoom) of the macOS title bar.
 
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::WebviewWindow;
 
 /// Hides or shows the window buttons; a no-op outside macOS, where the title bar draws its own.
 #[cfg(target_os = "macos")]
@@ -33,14 +33,13 @@ pub fn set_visible(_window: &WebviewWindow, _visible: bool) -> Result<(), String
     Ok(())
 }
 
-/// Hides the buttons of the first window; called once at start-up.
-pub fn hide_at_startup(app: &AppHandle) {
-    if let Some(window) = app.webview_windows().into_values().next() {
-        let _ = set_visible(&window, false);
-    }
-}
-
 #[tauri::command]
 pub fn window_buttons_visible(window: WebviewWindow, visible: bool) -> Result<(), String> {
     set_visible(&window, visible)
+}
+
+/// Whether the calling window is in (native) fullscreen, where the window buttons are not drawn.
+#[tauri::command]
+pub fn window_is_fullscreen(window: WebviewWindow) -> Result<bool, String> {
+    window.is_fullscreen().map_err(|error| error.to_string())
 }

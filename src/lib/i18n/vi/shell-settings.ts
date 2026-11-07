@@ -36,7 +36,7 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'api_key_section.no_key_yet': 'Chưa có khóa',
     'api_key_section.saved_hint': 'Đã lưu ····{hint}',
     'api_key_section.the_api_key_is':
-        'Khóa API lưu trong cơ sở dữ liệu của Rynox (chỉ chủ máy đọc được) và được truyền cho `claude` khi chat. Khi có khóa, CLI tính phí theo API thay vì gói đăng nhập.',
+        'Khóa API lưu trong cơ sở dữ liệu của Codexis (chỉ chủ máy đọc được) và được truyền cho `claude` khi chat. Khi có khóa, CLI tính phí theo API thay vì gói đăng nhập.',
     'character_tab.assistant_name': 'Tên trợ lý',
     'character_tab.assistant_picture': 'Ảnh đại diện trợ lý',
     'character_tab.choose_apicture': 'Chọn ảnh đại diện',
@@ -68,7 +68,7 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'connect_tab.scan_the_qr_code':
         'Quét mã QR để điều khiển chat AI từ điện thoại cùng Wi-Fi.',
     'connect_tab.sign_in_runs_each':
-        'Đăng nhập chạy lệnh của chính công cụ (`claude`, `codex`, `gh`), Rynox không thấy mật khẩu hay token.',
+        'Đăng nhập chạy lệnh của chính công cụ (`claude`, `codex`, `gh`), Codexis không thấy mật khẩu hay token.',
     'hook_tab.event': 'Sự kiện',
     'hook_tab.no_hooks_configured_yet': 'Chưa có hook nào được cấu hình.',
     'ide_settings.could_not_process_the': 'Không xử lý được ảnh.',
@@ -125,6 +125,145 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'errors.settings.invalid': 'Cài đặt không hợp lệ.',
     'errors.settings.save_failed': 'Không lưu được cài đặt.',
     'errors.settings.load_failed': 'Không đọc được cài đặt đã lưu.',
+    'errors.settings.bad_plans_dir':
+        'Thư mục plan phải là đường dẫn tương đối nằm trong dự án.',
+    'errors.activity.load_failed': 'Không đọc được nhật ký hoạt động đã lưu.',
+    'errors.activity.save_failed':
+        'Không ghi được nhật ký hoạt động vào cơ sở dữ liệu.',
+    'errors.activity.delete_failed': 'Không xoá được các bản ghi.',
+    'errors.activity.too_many_ids': 'Quá nhiều bản ghi một lần (tối đa 1000).',
+    'errors.chat_images.not_image': 'Tệp không phải là ảnh.',
+    'errors.chat_images.too_large': 'Ảnh quá lớn (tối đa 8 MB).',
+    'errors.chat_images.not_found': 'Ảnh không còn được lưu.',
+    'errors.plan_save.empty': 'Chưa có plan để lưu.',
+    'errors.plan_save.bad_directory':
+        'Thư mục plan phải là đường dẫn tương đối nằm trong dự án.',
+    'errors.storage.confirm_required': 'Cần xác nhận trước khi xoá dữ liệu.',
+    'errors.storage.bad_kind': 'Loại dữ liệu này không dọn được.',
+    'errors.storage.read_failed': 'Không đo được dung lượng dữ liệu.',
+    'errors.storage.cleanup_failed': 'Không dọn được dữ liệu.',
     'errors.usage.unavailable': 'Không đọc được thống kê AI.',
     'errors.usage.invalid': 'Dữ liệu thống kê AI không hợp lệ.',
+    'speech_engine.label': 'Công cụ đọc',
+    'speech_engine.system': 'Hệ thống',
+    'speech_engine.vieneu': 'VieNeu-TTS (máy local)',
+    'speech_engine.hint':
+        'Giọng hệ thống thường không đọc được tiếng Việt. VieNeu-TTS đọc tiếng Việt; các ngôn ngữ khác vẫn dùng giọng hệ thống.',
+    'speech_engine.url': 'Địa chỉ máy chủ VieNeu-TTS',
+    'speech_engine.check': 'Kiểm tra kết nối',
+    'speech_engine.checking': 'Đang kiểm tra…',
+    'speech_engine.connected': 'Đã kết nối, {count} giọng.',
+    'speech_engine.not_connected': 'Chưa kết nối được máy chủ.',
+    'speech_engine.voice': 'Giọng VieNeu-TTS',
+    'speech_engine.default_voice': 'Mặc định của máy chủ',
+    'speech_engine.guide':
+        'Ứng dụng không cài hay chạy VieNeu-TTS: bạn tự chạy máy chủ trên máy này bằng `uv sync` rồi `uv run python -m apps.openai_speech` (cổng 8000). Chỉ nhận địa chỉ loopback (127.0.0.1, localhost, ::1).',
+    'speech_engine.license':
+        'VieNeu-TTS do bạn tự cài và tự chịu trách nhiệm về giấy phép của mô hình và giọng đọc của VieNeu.',
+    'speech_engine.voice_hint':
+        'Miền của giọng chỉ hiện khi máy chủ nói rõ (trường vùng/giọng hoặc mô tả); nếu không, ứng dụng giữ giọng mặc định của máy chủ.',
+    'extensions_tab.title': 'Extensions',
+    'extensions_tab.intro':
+        'Ứng dụng dùng chung server ngôn ngữ của extension VS Code đã cài trên máy (chỉ đọc, không tải riêng); không có thì dùng bản trong PATH.',
+    'extensions_tab.language': 'Ngôn ngữ',
+    'extensions_tab.server': 'Server',
+    'extensions_tab.source_in_use': 'Nguồn đang dùng',
+    'extensions_tab.state': 'Trạng thái',
+    'extensions_tab.enabled': 'Bật',
+    'extensions_tab.not_installed': 'Chưa cài',
+    'extensions_tab.origin_vscode': 'VS Code',
+    'extensions_tab.origin_insiders': 'VS Code Insiders',
+    'extensions_tab.origin_cursor': 'Cursor',
+    'extensions_tab.origin_vscodium': 'VSCodium',
+    'extensions_tab.origin_path': 'PATH',
+    'extensions_tab.origin_download': 'Tải về',
+    'extensions_tab.source_setting': 'Nguồn',
+    'extensions_tab.source_auto': 'Tự chọn',
+    'extensions_tab.source_vscode': 'Extension VS Code',
+    'extensions_tab.source_path': 'PATH',
+    'extensions_tab.source_download': 'Tải về',
+    'extensions_tab.extension_root': 'Trình soạn',
+    'extensions_tab.root_any': 'Bất kỳ',
+    'extensions_tab.restart': 'Khởi động lại',
+    'extensions_tab.stop': 'Dừng',
+    'extensions_tab.show_log': 'Xem log',
+    'extensions_tab.found': 'Đã tìm thấy',
+    'extensions_tab.none_found': 'Không tìm thấy nguồn nào.',
+    'extensions_tab.in_use': 'Đang dùng',
+    'extensions_tab.log': 'Log server',
+    'extensions_tab.log_empty': 'Chưa có log.',
+    'extensions_tab.load_failed': 'Không tải được danh sách server.',
+    'extensions_tab.enable_title': 'Bật {name}?',
+    'extensions_tab.enable_warning':
+        'Server ngôn ngữ có thể chạy build script, proc-macro hoặc tác vụ MSBuild của dự án trên máy bạn. Chỉ bật với dự án bạn tin tưởng.',
+    'extensions_tab.intelephense_license':
+        'Intelephense có điều khoản giấy phép riêng của tác giả.',
+    'extensions_tab.enable_action': 'Bật',
+    'extensions_tab.enable_server': 'Bật {name}',
+    'extensions_tab.state_missing': 'Chưa cài',
+    'extensions_tab.state_stopped': 'Đã dừng',
+    'extensions_tab.state_starting': 'Đang khởi động',
+    'extensions_tab.state_running': 'Đang chạy',
+    'extensions_tab.state_error': 'Lỗi',
+    'language_server.hint_install_extension':
+        'Hãy cài extension {name} trong VS Code rồi mở lại tab này.',
+    'language_server.hint_install_program':
+        'Hãy cài {name} và đảm bảo chạy được từ PATH.',
+    'language_server.cannot_rename': 'Không đổi tên được ở vị trí này.',
+    'language_server.rename_nothing': 'Server không đề xuất thay đổi nào.',
+    'language_server.rename_title': 'Đổi tên ở nhiều chỗ?',
+    'language_server.rename_description': 'Sẽ sửa các tệp: {files}.',
+    'language_server.rename_skipped':
+        'Bỏ qua (ngoài dự án hoặc bị chặn): {skipped}.',
+    'language_server.rename_action': 'Đổi tên',
+    'language_server.external_definition': 'Định nghĩa nằm ngoài dự án: {path}',
+    'errors.language_server.unknown_server':
+        'Server ngôn ngữ không có trong danh mục.',
+    'errors.language_server.invalid': 'Nguồn hoặc trình soạn không hợp lệ.',
+    'errors.language_server.load_failed':
+        'Không đọc được cấu hình server ngôn ngữ.',
+    'errors.language_server.save_failed':
+        'Không lưu được cấu hình server ngôn ngữ.',
+    'errors.language_server.disabled': 'Server chưa được bật.',
+    'errors.language_server.not_installed':
+        'Không tìm thấy server hợp lệ để chạy.',
+    'errors.language_server.node_missing':
+        'Không tìm thấy Node.js (cần cho Intelephense).',
+    'errors.language_server.start_failed': 'Không khởi động được server.',
+    'errors.language_server.too_many': 'Đã chạy tối đa 8 server cùng lúc.',
+    'errors.language_server.not_running': 'Server không chạy.',
+    'errors.language_server.not_open': 'Tệp chưa được mở với server.',
+    'errors.language_server.out_of_sync': 'Nội dung tệp lệch với server.',
+    'errors.language_server.too_large': 'Tệp hoặc dữ liệu quá lớn cho server.',
+    'errors.language_server.timeout': 'Server trả lời quá chậm.',
+    'errors.language_server.cancelled': 'Yêu cầu đã bị hủy.',
+    'errors.language_server.request_failed':
+        'Server báo lỗi khi xử lý yêu cầu.',
+    'errors.language_server.unsupported': 'Server không hỗ trợ thao tác này.',
+    'errors.language_server.bad_request': 'Yêu cầu gửi server không hợp lệ.',
+    'errors.language_server.bad_message': 'Server gửi dữ liệu sai định dạng.',
+    'errors.language_server.bad_header': 'Server gửi tiêu đề thông điệp sai.',
+    'errors.language_server.message_too_large':
+        'Server gửi thông điệp quá lớn.',
+    'errors.language_server.closed': 'Server đã đóng kết nối.',
+    'errors.language_server.encoding_unsupported':
+        'Server không dùng mã hóa UTF-16 mà ứng dụng cần.',
+    'errors.language_server.crashed':
+        'Server liên tục bị lỗi nên đã dừng. Hãy khởi động lại.',
+    'errors.language_server.extension_changed':
+        'Tệp server đã đổi (extension vừa cập nhật). Hãy khởi động lại.',
+    'errors.language_server.unavailable':
+        'Dịch vụ server ngôn ngữ tạm thời không dùng được.',
+    'errors.language_server.obsolete': 'Bản này quá cũ.',
+    'errors.language_server.platform_mismatch':
+        'Bản này không dành cho hệ điều hành hiện tại.',
+    'errors.language_server.symlink_outside':
+        'Tệp là liên kết trỏ ra ngoài thư mục extension.',
+    'errors.language_server.bad_manifest':
+        'Không đọc được thông tin extension.',
+    'errors.language_server.not_executable': 'Tệp server không chạy được.',
+    'errors.language_server.version_check_failed':
+        'Không kiểm tra được phiên bản server.',
+    'errors.language_server.path_name_rejected':
+        'Tên tệp trong PATH không được chấp nhận.',
 };

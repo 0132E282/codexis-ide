@@ -224,6 +224,8 @@ pub fn in_memory() -> Connection {
         .execute_batch(migrations::CREATE_CHAT_GRID_TABLE)
         .expect("schema");
     add_archived_column(&connection).expect("schema");
+    add_conversation_column(&connection).expect("schema");
+    add_steps_column(&connection).expect("schema");
 
     connection
 }

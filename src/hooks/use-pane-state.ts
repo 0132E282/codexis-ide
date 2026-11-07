@@ -23,6 +23,8 @@ export type PaneState = {
     viewSubagent: string | null;
     /** A file double-clicked in the tree, for the chat to attach (`n` changes on every click). */
     attachFile: { path: string; n: number } | null;
+    /** A file the plans list asked the editor to open (`n` changes on every click). */
+    openFile: { path: string; n: number } | null;
 };
 
 export const FRESH: PaneState = {
@@ -35,6 +37,7 @@ export const FRESH: PaneState = {
     subagents: [],
     viewSubagent: null,
     attachFile: null,
+    openFile: null,
 };
 
 /** The per-pane state, keyed by pane; `patchPane` changes some fields of one pane and does nothing when nothing differs. */

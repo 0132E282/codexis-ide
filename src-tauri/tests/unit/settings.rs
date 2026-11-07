@@ -258,3 +258,105 @@ fn invalid_stored_fields_fall_back_to_defaults() {
     assert_eq!(loaded.claude_plan, "max5");
     assert_eq!(store.save(&loaded), Ok(()));
 }
+
+#[test]
+fn speech_settings_default_load_and_validate() {
+    let store = store();
+    put_raw(&store, r#"{"assistantName":"Cũ"}"#);
+
+    let loaded = store.get().unwrap();
+    assert_eq!(loaded.voice_engine, "");
+    assert_eq!(loaded.vieneu_url, "");
+    assert_eq!(loaded.vieneu_voice, "");
+
+    let local = ChatSettings {
+        voice_engine: "vieneu".into(),
+        vieneu_url: "http://localhost:8000".into(),
+        vieneu_voice: "minh-quan".into(),
+        voice_rate: 90,
+        ..ChatSettings::default()
+    };
+    store.save(&local).unwrap();
+    assert_eq!(store.get().unwrap(), local);
+
+    for bad in [
+        ChatSettings {
+            voice_engine: "cloud".into(),
+            ..ChatSettings::default()
+        },
+        ChatSettings {
+            vieneu_url: "http://example.com:8000".into(),
+            ..ChatSettings::default()
+        },
+        ChatSettings {
+            vieneu_voice: "a".repeat(MAX_VOICE_CHARS + 1),
+            ..ChatSettings::default()
+        },
+        ChatSettings {
+            voice_rate: MAX_VOICE_RATE + 1,
+            ..ChatSettings::default()
+        },
+        ChatSettings {
+            voice_rate: MIN_VOICE_RATE - 1,
+            ..ChatSettings::default()
+        },
+    ] {
+        assert_eq!(store.save(&bad), Err(SettingsError::Invalid));
+    }
+}
+
+#[test]
+fn invalid_speech_settings_in_a_stored_row_fall_back() {
+    let store = store();
+    put_raw(
+        &store,
+        r#"{"voiceEngine":"cloud","vieneuUrl":"http://example.com","vieneuVoice":"ok","voiceRate":500}"#,
+    );
+
+    let loaded = store.get().unwrap();
+    assert_eq!(loaded.voice_engine, "");
+    assert_eq!(loaded.vieneu_url, "");
+    assert_eq!(loaded.vieneu_voice, "ok");
+    assert_eq!(loaded.voice_rate, 0);
+}
+
+#[test]
+fn plan_saving_and_storage_warning_settings_have_safe_defaults_and_rules() {
+    let defaults = ChatSettings::default();
+
+    assert!(!defaults.save_plans_to_project);
+    assert!(defaults.storage_warnings);
+    assert_eq!(defaults.effective_plans_dir(), "docs/plans");
+    assert_eq!(defaults.effective_warn_multiplier(), 1);
+
+    let store = store();
+    let good = ChatSettings {
+        save_plans_to_project: true,
+        plans_dir: "notes/plans".into(),
+        storage_warn_multiplier: 4,
+        ..ChatSettings::default()
+    };
+
+    store.save(&good).unwrap();
+    assert_eq!(store.get().unwrap(), good);
+
+    for bad in ["../x", "/abs", ".git/plans", "a/../../b"] {
+        let settings = ChatSettings {
+            plans_dir: bad.into(),
+            ..ChatSettings::default()
+        };
+
+        assert_eq!(
+            store.save(&settings),
+            Err(SettingsError::Rejected("settings.bad_plans_dir")),
+            "{bad}"
+        );
+    }
+
+    let too_many = ChatSettings {
+        storage_warn_multiplier: MAX_WARN_MULTIPLIER + 1,
+        ..ChatSettings::default()
+    };
+
+    assert_eq!(store.save(&too_many), Err(SettingsError::Invalid));
+}

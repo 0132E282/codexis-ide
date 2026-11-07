@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityTerminal } from '@/components/ai-chat/activity-terminal';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
+import { BottomPanel } from '@/components/shell/bottom-panel';
+import { FloatingFrame } from '@/components/shell/floating-frame';
+import type { BottomTab } from '@/components/shell/bottom-panel';
 import { ChatGrid } from '@/components/shell/chat-grid';
 import { LoginScreen } from '@/components/shell/accounts';
 import { DialogsHost } from '@/components/shell/dialogs-host';
@@ -9,11 +11,13 @@ import { Sidebar } from '@/components/shell/sidebar';
 import { SidebarToggle } from '@/components/shell/sidebar-toggle';
 import { UpdateBanner } from '@/components/shell/update-banner';
 import { WorkspacePane } from '@/components/shell/workspace-pane';
+import { useFullscreen } from '@/hooks/use-fullscreen';
+import { useActivityEvents } from '@/hooks/use-activity-events';
 import { useFileDropGuard } from '@/hooks/use-file-drop-guard';
 import { FRESH, usePaneState } from '@/hooks/use-pane-state';
 import { canChat, useAuthStatus } from '@/hooks/use-auth-status';
+import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
-import { useWindowButtonsHover } from '@/hooks/use-window-buttons-hover';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { errorText, ide } from '@/lib/ide';
 import type { GridMember } from '@/lib/ide';
@@ -29,11 +33,22 @@ const MAX_GRID = 4;
 export default function App() {
     const workspace = useWorkspace();
     const { paneStates, patchPane } = usePaneState();
-    const [terminalOpen, setTerminalOpen] = useState(false);
-    const [backgroundOpen, setBackgroundOpen] = useState(false);
+    // * The bottom panel: the tab shown, or null when it is closed (the toolbar's Terminal and Background tasks buttons each open it on their own tab).
+    const [bottomTab, setBottomTab] = useState<BottomTab | null>(null);
+    const toggleBottomTab = (tab: BottomTab) =>
+        setBottomTab((current) => (current === tab ? null : tab));
+    // * The file whose history the Lịch sử tab shows (null: the whole project).
+    const [historyPath, setHistoryPath] = useState<string | null>(null);
+    const showFileHistory = (path: string | null = null) => {
+        setHistoryPath(path);
+        setBottomTab('history');
+    };
+    // * Where the bottom panel sits: under the work area, filling it, or floating over it.
+    const bottomPlacement = usePanelPlacement('bottom-panel', 'bottom');
 
-    const windowButtonsVisible = useWindowButtonsHover();
     useFileDropGuard();
+    useActivityEvents();
+    const isFullscreen = useFullscreen();
 
     // * The terminal is sized by dragging its top edge up (or down); the height is kept for next time.
     const terminalHeight = useResizableWidth(
@@ -89,29 +104,26 @@ export default function App() {
         gridRef.current = members;
         setGrid(members);
     }, []);
-    const readGrid = useCallback(
-        () => {
-            const request = ++gridRequest.current;
+    const readGrid = useCallback(() => {
+        const request = ++gridRequest.current;
 
-            void ide
-                .chatGridGet()
-                .then((members) => {
-                    if (request !== gridRequest.current) {
-                        return;
-                    }
+        void ide
+            .chatGridGet()
+            .then((members) => {
+                if (request !== gridRequest.current) {
+                    return;
+                }
 
-                    applyGrid(members);
+                applyGrid(members);
 
-                    // * At start the next chat goes to the last saved group, not to a group 1 that no longer exists.
-                    if (!targetChosen.current && members.length > 0) {
-                        targetChosen.current = true;
-                        setTargetGroup(members[members.length - 1].group);
-                    }
-                })
-                .catch(() => undefined);
-        },
-        [applyGrid],
-    );
+                // * At start the next chat goes to the last saved group, not to a group 1 that no longer exists.
+                if (!targetChosen.current && members.length > 0) {
+                    targetChosen.current = true;
+                    setTargetGroup(members[members.length - 1].group);
+                }
+            })
+            .catch(() => undefined);
+    }, [applyGrid]);
     useEffect(readGrid, [readGrid]);
     const countIn = (members: GridMember[], group: number) =>
         members.filter((member) => member.group === group).length;
@@ -226,6 +238,12 @@ export default function App() {
     const sidebarToggle = (
         <SidebarToggle collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
     );
+    // * Folded, the toggle heads the first header bar, so it starts after the three native window buttons (hidden in fullscreen).
+    const foldedSidebarToggle = (
+        <span className={cn('flex', !isFullscreen && 'pl-18')}>
+            {sidebarToggle}
+        </span>
+    );
     const chatProjects = projects.flatMap((project) =>
         project.folders[0] === undefined
             ? []
@@ -234,17 +252,6 @@ export default function App() {
 
     return (
         <div className="flex h-screen flex-col overflow-hidden bg-background text-sm text-foreground">
-            {/* * Same height as the header (so the two read as one bar) and drawn behind the native window buttons while they are shown; it never takes the pointer, so the page under it stays reachable. */}
-            <div
-                aria-hidden="true"
-                data-testid="window-buttons-bar"
-                className={cn(
-                    'pointer-events-none fixed top-0 left-0 z-40 h-12 w-24 border-b bg-background transition-transform duration-200 ease-out',
-                    windowButtonsVisible
-                        ? 'translate-y-0'
-                        : '-translate-y-full',
-                )}
-            />
             <div className="flex min-h-0 flex-1 overflow-clip">
                 {/* * The sidebar stays mounted at the width the user dragged it to; `inert` keeps the folded one out of focus. */}
                 <div
@@ -358,6 +365,7 @@ export default function App() {
                             onOpenSettings={setSettingsTab}
                             onOpenUsage={() => setUsageOpen(true)}
                             toggle={sidebarToggle}
+                            hasWindowButtons={!isFullscreen}
                         />
                     </div>
                 </div>
@@ -368,7 +376,9 @@ export default function App() {
                             members={openMembers}
                             projects={chatProjects}
                             headerStart={
-                                sidebarCollapsed ? sidebarToggle : undefined
+                                sidebarCollapsed
+                                    ? foldedSidebarToggle
+                                    : undefined
                             }
                             onChanged={refreshConversations}
                         />
@@ -382,11 +392,19 @@ export default function App() {
                         <div
                             className={
                                 showPanel && !showGrid
-                                    ? 'flex min-h-0 min-w-0 flex-1 flex-col'
+                                    ? 'relative flex min-h-0 min-w-0 flex-1 flex-col'
                                     : 'hidden'
                             }
                         >
-                            <div className="flex min-h-0 min-w-0 flex-1">
+                            <div
+                                className={cn(
+                                    'min-h-0 min-w-0 flex-1',
+                                    bottomTab !== null &&
+                                        bottomPlacement.placement === 'fill'
+                                        ? 'hidden'
+                                        : 'flex',
+                                )}
+                            >
                                 {panes.map((pane) => (
                                     <div
                                         key={pane.key}
@@ -403,18 +421,24 @@ export default function App() {
                                             }
                                             active={pane.key === activeKey}
                                             projects={chatProjects}
-                                            terminalOpen={terminalOpen}
-                                            backgroundOpen={backgroundOpen}
+                                            terminalOpen={
+                                                bottomTab === 'terminal'
+                                            }
+                                            backgroundOpen={
+                                                bottomTab === 'background'
+                                            }
+                                            plansOpen={bottomTab === 'plans'}
                                             phoneOpen={phoneOpen}
                                             sidebarCollapsed={sidebarCollapsed}
-                                            sidebarToggle={sidebarToggle}
+                                            sidebarToggle={foldedSidebarToggle}
                                             onToggleTerminal={() =>
-                                                setTerminalOpen((open) => !open)
+                                                toggleBottomTab('terminal')
                                             }
                                             onToggleBackground={() =>
-                                                setBackgroundOpen(
-                                                    (open) => !open,
-                                                )
+                                                toggleBottomTab('background')
+                                            }
+                                            onTogglePlans={() =>
+                                                toggleBottomTab('plans')
                                             }
                                             onOpenSettings={() =>
                                                 setSettingsTab('advanced')
@@ -426,6 +450,7 @@ export default function App() {
                                                 void openInVscode()
                                             }
                                             onPatch={patchPane}
+                                            onShowHistory={showFileHistory}
                                             onRefreshConversations={
                                                 refreshConversations
                                             }
@@ -433,21 +458,71 @@ export default function App() {
                                     </div>
                                 ))}
                             </div>
-                            {terminalOpen && activePane !== null && (
-                                <div
-                                    style={{ height: terminalHeight.width }}
-                                    className="relative max-h-[80%] shrink-0 border-t"
+                            {bottomTab !== null && activePane !== null && (
+                                <FloatingFrame
+                                    storageKey="ide.float.bottom"
+                                    enabled={
+                                        bottomPlacement.placement === 'float'
+                                    }
+                                    style={
+                                        bottomPlacement.placement === 'bottom'
+                                            ? { height: terminalHeight.width }
+                                            : undefined
+                                    }
+                                    className={cn(
+                                        'relative',
+                                        bottomPlacement.placement === 'float' &&
+                                            'absolute right-3 bottom-3 z-30 h-80 max-h-[80%] w-[min(48rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border shadow-xl',
+                                        bottomPlacement.placement ===
+                                            'bottom' &&
+                                            'max-h-[80%] shrink-0 border-t',
+                                        bottomPlacement.placement === 'fill' &&
+                                            'min-h-0 flex-1',
+                                    )}
                                 >
-                                    <ResizeHandle
-                                        horizontal
-                                        label={t('app.resize_terminal_height')}
-                                        {...terminalHeight.handleProps}
-                                    />
-                                    <ActivityTerminal
-                                        onClose={() => setTerminalOpen(false)}
+                                    {bottomPlacement.placement === 'bottom' && (
+                                        <ResizeHandle
+                                            horizontal
+                                            label={t(
+                                                'app.resize_terminal_height',
+                                            )}
+                                            {...terminalHeight.handleProps}
+                                        />
+                                    )}
+                                    <BottomPanel
+                                        tab={bottomTab}
                                         root={activePane.root}
+                                        placement={bottomPlacement.placement}
+                                        dockedPlacement={
+                                            bottomPlacement.dockedPlacement
+                                        }
+                                        onPlacementChange={
+                                            bottomPlacement.setPlacement
+                                        }
+                                        historyPath={historyPath}
+                                        onClearHistoryPath={() =>
+                                            setHistoryPath(null)
+                                        }
+                                        onTabChange={setBottomTab}
+                                        onClose={() => setBottomTab(null)}
+                                        onOpenFile={(path) =>
+                                            patchPane(activeKey, {
+                                                openFile: {
+                                                    path,
+                                                    n:
+                                                        (paneStates[activeKey]
+                                                            ?.openFile?.n ??
+                                                            0) + 1,
+                                                },
+                                            })
+                                        }
+                                        onOpenSubagent={(id) =>
+                                            patchPane(activeKey, {
+                                                viewSubagent: id,
+                                            })
+                                        }
                                     />
-                                </div>
+                                </FloatingFrame>
                             )}
                         </div>
                     )}

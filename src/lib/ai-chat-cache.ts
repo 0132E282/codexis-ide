@@ -106,12 +106,25 @@ export function refreshAiChatRequest<T>(
     return promise;
 }
 
+const invalidationListeners = new Set<(prefix: string) => void>();
+
+/** Tells `listener` the prefix of every invalidation, so a cache kept elsewhere (the git history list) can follow. Returns the way to stop listening. */
+export function onAiChatCacheInvalidated(
+    listener: (prefix: string) => void,
+): () => void {
+    invalidationListeners.add(listener);
+
+    return () => void invalidationListeners.delete(listener);
+}
+
 /**
  * Drops every cached entry whose key starts with `prefix`, in memory and in sessionStorage, for the current person. Call it after a write that changes that data
  * (`usage`, `local.`, `tree.{repo}`, `file.{repo}.`).
  */
 export function invalidateAiChatCache(prefix: string): void {
     const memoryPrefix = scoped(prefix);
+
+    invalidationListeners.forEach((listener) => listener(prefix));
 
     [requests, revalidated, inflight].forEach((map) =>
         [...map.keys()]

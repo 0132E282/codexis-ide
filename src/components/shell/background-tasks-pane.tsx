@@ -1,7 +1,5 @@
-import { ChevronDown, ChevronRight, Square, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Square } from 'lucide-react';
 import { useState } from 'react';
-import type { ReactNode } from 'react';
-import { useBackgroundTasks } from '@/components/shell/chat/use-background-tasks';
 import { Button } from '@/components/ui/button';
 import type { BackgroundTask, BackgroundTaskState } from '@/lib/api';
 import { t } from '@/lib/i18n';
@@ -117,57 +115,24 @@ function TaskRow({
     );
 }
 
-/** Dock pane listing what the AI runs in the background (shell commands and sub-agents) of one project, with stop, clear, maximize and close. */
+/** Background tab of the bottom panel: what the AI runs in the background (shell commands and sub-agents) of one project, with stop. */
 export function BackgroundTasksPane({
-    root,
-    placementMenu,
-    onClose,
+    tasks,
+    failed,
+    onStop,
     onOpenSubagent,
 }: {
-    root: string | undefined;
-    /** The Move / Fill and arrange menu button, shared by the dock panels. */
-    placementMenu: ReactNode;
-    onClose: () => void;
+    tasks: BackgroundTask[];
+    failed: boolean;
+    onStop: (id: string) => void;
     /** Opens the sub-agent view of the task with this id. */
     onOpenSubagent: (id: string) => void;
 }) {
-    const { tasks, failed, stopTask, clearFinished } = useBackgroundTasks(root);
-    const hasFinished = tasks.some((task) => task.state !== 'running');
-
     return (
         <section
             aria-label={t('background_tasks.title')}
             className="flex h-full min-h-0 flex-col bg-background"
         >
-            <header className="flex h-9 shrink-0 items-center justify-between border-b px-3 text-xs">
-                <h2 className="font-medium">{t('background_tasks.title')}</h2>
-                <div className="flex items-center gap-1">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        title={t('background_tasks.clear')}
-                        aria-label={t('background_tasks.clear')}
-                        disabled={!hasFinished}
-                        onClick={() => void clearFinished()}
-                    >
-                        <Trash2 aria-hidden="true" className="size-4" />
-                    </Button>
-                    {placementMenu}
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        title={t('background_tasks.close')}
-                        aria-label={t('background_tasks.close')}
-                        onClick={onClose}
-                    >
-                        <X aria-hidden="true" className="size-4" />
-                    </Button>
-                </div>
-            </header>
             {tasks.length === 0 ? (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-4 text-center">
                     <Square
@@ -189,7 +154,7 @@ export function BackgroundTasksPane({
                         <TaskRow
                             key={task.id}
                             task={task}
-                            onStop={(id) => void stopTask(id)}
+                            onStop={onStop}
                             onOpenSubagent={onOpenSubagent}
                         />
                     ))}

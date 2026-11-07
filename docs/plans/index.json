@@ -81,5 +81,22 @@
     "description": "Kế hoạch triển khai docs/system/session-rail.md: ngăn dock chỉ đọc với dữ liệu thật từ ContextUsage, tools_mcp, steps đã lưu, git và gh.",
     "tags": ["session-rail", "dock", "context", "github", "rust", "frontend"],
     "path": "docs/plans/session-rail-20261107.json"
+  },
+  {
+    "title": "Extensions dùng chung với VS Code qua LSP: rust-analyzer, Intelephense, C#",
+    "description": "Kế hoạch tích hợp tính năng ngôn ngữ bằng LSP, dùng chính language server nằm trong extension VS Code đã cài trên máy (quét chỉ đọc ~/.vscode, Insiders, Cursor, VSCodium), dự phòng server trong PATH, và chỉ khi cả hai đều không có mới cho tải riêng có xác nhận (giai đoạn sau). Rust khởi chạy server như tiến trình con stdio JSON-RPC trong sandbox, cầu nối tự viết tới Monaco, tab cài đặt Extensions. Đợt 1: Rust, PHP/Laravel, C#; TS/JSON/CSS/HTML giữ nguyên. Không chạy extension host/VSIX.",
+    "tags": [
+      "lsp",
+      "extensions",
+      "vscode",
+      "language-server",
+      "monaco",
+      "rust",
+      "frontend",
+      "settings",
+      "security",
+      "download"
+    ],
+    "path": "docs/plans/lsp-extensions-20261107.json"
   }
 ]

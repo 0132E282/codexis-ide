@@ -1,6 +1,7 @@
 use super::background::{BackgroundStore, ProjectTasks};
 use super::plan::project_data_dir;
 use super::state::AppState;
+use crate::activity;
 use crate::agent::{self, AgentCli, Decision, Responder, TurnObserver, TurnOptions, TurnRequest};
 use crate::background::{BackgroundChange, TaskKind, TaskState};
 use crate::cli::CliKind;
@@ -172,7 +173,21 @@ struct TauriTurnObserver {
     session: Mutex<Option<String>>,
     /// The project's background tasks, saved whenever they change.
     background: Arc<ProjectTasks>,
+    /// The project and where the CLI works (a worktree copy of it, maybe): to turn the path of an edit into a path of the project, and to keep the plan in the project when the person allows it.
+    project: ObservedProject,
+    /// Edit tool calls waiting for their result: tool id and the path they change. The event is stored only when the call succeeded.
+    pending_edits: Mutex<HashMap<String, String>>,
 }
+
+struct ObservedProject {
+    root: PathBuf,
+    work_root: PathBuf,
+    name: String,
+    id: String,
+}
+
+/// Most edit calls waiting for a result at once; more are not tracked.
+const MAX_PENDING_EDITS: usize = 256;
 
 impl TauriTurnObserver {
     fn log(&self, entry: &LogEntry<'_>) {
@@ -190,7 +205,57 @@ impl TauriTurnObserver {
             return;
         };
 
-        let _ = plans.record(session, plan);
+        let is_text = matches!(plan, Plan::Text { .. });
+        let session = session.to_string();
+
+        if plans.record(&session, plan).is_ok() && is_text {
+            super::activity::auto_save_plan(
+                &self.app,
+                &self.project.root,
+                &self.project.name,
+                &self.project.id,
+                &session,
+            );
+        }
+    }
+
+    /// Remembers an edit tool call (path only, never what it writes) until its result says it worked.
+    fn track_edit(&self, value: &serde_json::Value) {
+        let (Some(name), Some(id)) = (value["name"].as_str(), value["id"].as_str()) else {
+            return;
+        };
+        let roots = [
+            self.project.work_root.as_path(),
+            self.project.root.as_path(),
+        ];
+        let Some(path) = activity::ai_edit_path(name, &value["input"], &roots) else {
+            return;
+        };
+
+        if let Ok(mut pending) = self.pending_edits.lock() {
+            if pending.len() < MAX_PENDING_EDITS {
+                pending.insert(id.to_string(), path);
+            }
+        }
+    }
+
+    /// Stores the `ai_edit` event of a tracked edit whose result was not an error.
+    fn finish_edit(&self, value: &serde_json::Value) {
+        let Some(id) = value["id"].as_str() else {
+            return;
+        };
+        let path = self
+            .pending_edits
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.remove(id));
+
+        if let (Some(path), false) = (path, value["error"] == true) {
+            super::activity::log_file_event(
+                &self.app,
+                &activity::NewFileEvent::ai_edit(&self.project.root.display().to_string(), &path),
+            );
+        }
     }
 
     /// Keeps what the persisted data needs from `event`: the session id, plans and log lines.
@@ -208,6 +273,11 @@ impl TauriTurnObserver {
                 if let Some(name) = value["name"].as_str() {
                     self.log(&LogEntry::Tool(name));
                 }
+
+                self.track_edit(&value);
+            }
+            agent::Event::ToolResult(json) => {
+                self.finish_edit(&serde_json::from_str(json).unwrap_or_default());
             }
             agent::Event::Error(message) => self.log(&LogEntry::Error(message)),
             agent::Event::Done(_) => self.log(&LogEntry::End),
@@ -513,6 +583,7 @@ pub async fn agent_send(
     .validate()?;
 
     let root = state.workspace_for(root.as_deref())?.root().to_path_buf();
+    let project_root = root.clone();
     // * The plan and log of the turn belong to the project, not to the worktree copy the CLI may work in.
     let (project_name, project_id) = state.project_identity(&root);
     // * The background tasks of this project, and the turn that can stop them.
@@ -572,6 +643,13 @@ pub async fn agent_send(
             log: data_dir.map(|dir| RunLog::new(dir, &run_id, cli.kind().name())),
             session: Mutex::new(session.clone()),
             background: background.clone(),
+            project: ObservedProject {
+                root: project_root,
+                work_root: root.clone(),
+                name: project_name.clone(),
+                id: project_id.clone(),
+            },
+            pending_edits: Mutex::new(HashMap::new()),
         };
 
         observer.log(&LogEntry::Start);

@@ -11,7 +11,7 @@
   },
   "app": {
     "windows": [
-      { "title": "Codexis IDE", "width": 1280, "height": 800, "minWidth": 560, "minHeight": 360, "maximized": true, "titleBarStyle": "Overlay", "hiddenTitle": true, "backgroundColor": "#111113" }
+      { "title": "Codexis IDE", "width": 1280, "height": 800, "minWidth": 560, "minHeight": 360, "maximized": true, "titleBarStyle": "Overlay", "trafficLightPosition": { "x": 12, "y": 26.5 }, "hiddenTitle": true, "backgroundColor": "#111113" }
     ],
     "security": { "csp": null }
   },

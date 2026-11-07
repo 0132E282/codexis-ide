@@ -1,4 +1,5 @@
 use super::state::AppState;
+use crate::plan_docs::{self, PlanDocDetail, PlanDocsList};
 use crate::plan_store::PlanStore;
 use crate::project_data::ProjectData;
 use std::path::PathBuf;
@@ -25,4 +26,33 @@ pub fn plan_load(
     Ok(project_data_dir(&app, &name, &id)
         .map(PlanStore::new)
         .and_then(|store| store.load(&session)))
+}
+
+/// The plan documents of `docs/plans/` of the project at `root` (JSON preferred over Markdown), read only; an absent folder gives an empty list.
+#[tauri::command]
+pub async fn plan_docs_list(
+    state: State<'_, AppState>,
+    root: Option<String>,
+) -> Result<PlanDocsList, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("plan_docs.list_failed", move || {
+        Ok(plan_docs::list(&workspace))
+    })
+    .await
+}
+
+/// One plan of `docs/plans/` of the project at `root` in full (`path` is the `path` of a card), read only.
+#[tauri::command]
+pub async fn plan_doc_read(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<PlanDocDetail, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("plan_docs.read_failed", move || {
+        plan_docs::read(&workspace, &path).map_err(str::to_string)
+    })
+    .await
 }

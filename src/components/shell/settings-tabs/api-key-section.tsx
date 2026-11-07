@@ -13,7 +13,7 @@ import {
 
 const NAME: CredentialName = 'anthropic_api_key';
 
-/** Claude API key: kept in Rynox's own database, write-only here, and given to the `claude` CLI as `ANTHROPIC_API_KEY` for each chat turn. */
+/** Claude API key: kept in Codexis's own database, write-only here, and given to the `claude` CLI as `ANTHROPIC_API_KEY` for each chat turn. */
 export function ApiKeySection() {
     const [status, setStatus] = useState<CredentialStatus | null>(null);
     const [value, setValue] = useState('');

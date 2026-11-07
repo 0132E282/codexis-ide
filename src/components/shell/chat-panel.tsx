@@ -1,18 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { ProjectRow } from '@/components/shell/chat/project-row';
 import { MessageList } from '@/components/shell/chat/message-list';
 import { useAgentTurns } from '@/components/shell/chat/use-agent-turns';
+import { formatLines } from '@/components/shell/chat/attachment';
 import { useAttachments } from '@/components/shell/chat/use-attachments';
 import { useChatSession } from '@/components/shell/chat/use-chat-session';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
+import { useFreshAnswer } from '@/components/shell/chat/use-fresh-answer';
 import { useTooNarrow } from '@/components/shell/chat/use-too-narrow';
 import type { ContextUsage } from '@/components/shell/context-panel';
 import type { PlanData } from '@/components/shell/plan-pane';
 import { Composer } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
+import { markChatActive } from '@/hooks/use-voice-preferences';
 import { pickFiles } from '@/lib/ide';
 import type { AgentCli, Subagent } from '@/lib/ide';
 import { t } from '@/lib/i18n';
@@ -50,6 +60,7 @@ export function ChatPanel({
     viewSubagent,
     onLeaveSubagent,
     attachFile,
+    selectedFile = null,
     headerStart,
     headerActions,
     showHeader = true,
@@ -88,6 +99,8 @@ export function ChatPanel({
     viewSubagent: string | null;
     /** A file double-clicked in the tree: it joins the attachments of the message. */
     attachFile: { path: string; n: number } | null;
+    /** The file selected in the file tree (path inside the project): it shows as a chip above the message box and goes with the message. */
+    selectedFile?: string | null;
     /** Back from the view of a sub-agent to the conversation. */
     onLeaveSubagent: () => void;
     /** Button at the left end of the bar at the top of the chat (folds the sidebar). */
@@ -114,6 +127,8 @@ export function ChatPanel({
     const agentTeam = sharedOptions?.agentTeam ?? ownAgentTeam;
     const extraRoots = sharedOptions?.extraRoots ?? ownExtraRoots;
     const worktree = sharedOptions?.worktree ?? ownWorktree;
+    // * Names this chat among the chats of the grid: only the one in use reads its answers aloud.
+    const chatId = useId();
     const bottom = useRef<HTMLDivElement>(null);
     const section = useRef<HTMLElement>(null);
     const width = useResizableWidth(
@@ -124,13 +139,24 @@ export function ChatPanel({
         'x',
         'trailing',
     );
-    const attachmentState = useAttachments(root, attachFile);
+    // * The open conversation, so a pasted picture is kept in the database with it.
+    const conversationId = useRef<number | undefined>(undefined);
+    const getConversationId = useCallback(() => conversationId.current, []);
+    const attachmentState = useAttachments(
+        root,
+        attachFile,
+        selectedFile,
+        getConversationId,
+    );
     const { attachments, attachError } = attachmentState;
     const session = useChatSession({
         root,
         newChat,
         openConversation,
-        onConversation,
+        onConversation: (id) => {
+            conversationId.current = id ?? undefined;
+            onConversation?.(id);
+        },
         onChanged,
         onSubagents,
         onPlan,
@@ -138,6 +164,11 @@ export function ChatPanel({
         onReset: attachmentState.reset,
     });
     const { turns, busy, context } = session;
+    // * Only a finished answer: the speaker button reads it, and the message box is not redrawn for every streamed piece.
+    const lastAnswer =
+        [...turns].reverse().find((turn) => !turn.running && turn.answer !== '')
+            ?.answer ?? '';
+    const freshAnswer = useFreshAnswer(turns, chatId);
     const reportContext = useStableCallback((usage: ContextUsage | null) =>
         onContext?.(usage),
     );
@@ -235,7 +266,11 @@ export function ChatPanel({
         sendFromComposer(
             [
                 text.trim(),
-                ...attachments.map((attachment) => `@${attachment.path}`),
+                ...attachments.map((attachment) =>
+                    attachment.lines === undefined
+                        ? `@${attachment.path}`
+                        : `${attachment.path}:${formatLines(attachment.lines)}`,
+                ),
             ]
                 .filter((part) => part !== '')
                 .join('\n'),
@@ -263,6 +298,8 @@ export function ChatPanel({
     return (
         <section
             ref={section}
+            onFocusCapture={() => markChatActive(chatId)}
+            onPointerDownCapture={() => markChatActive(chatId)}
             aria-label={t('chat_panel.chat_with_ai')}
             style={fill ? undefined : { width: width.width }}
             className={cn(
@@ -337,7 +374,10 @@ export function ChatPanel({
                 attachError={attachError}
                 onPasteFiles={attachmentState.pasteFiles}
                 onPastePaths={attachmentState.pastePaths}
+                onPasteReference={attachmentState.pasteReference}
                 onRemoveAttachment={attachmentState.removeAttachment}
+                lastAnswer={lastAnswer}
+                freshAnswer={freshAnswer}
                 popup={popup}
             />
         </section>

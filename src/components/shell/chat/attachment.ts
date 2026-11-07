@@ -6,7 +6,18 @@ export type Attachment = {
     path: string;
     /** Object URL of an image's thumbnail (null for other files). */
     preview: string | null;
+    /** The file selected in the tree: its chip follows the selection until it is removed or the file is attached for good. */
+    selected?: boolean;
+    /** Lines of the file the person copied from the editor: the chip shows `name:start-end` and the message carries `path:start-end` (`path` is then relative to the project). */
+    lines?: { start: number; end: number };
 };
+
+/** `start-end`, or `start` for one line. */
+export function formatLines(lines: { start: number; end: number }): string {
+    return lines.end > lines.start
+        ? `${lines.start}-${lines.end}`
+        : `${lines.start}`;
+}
 
 const PATH_START = /^\/(Users|Volumes|home|private|tmp|opt|var|Applications)\//;
 

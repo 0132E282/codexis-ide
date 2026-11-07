@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
-const PROJECTS_DIR: &str = "projects";
+pub const PROJECTS_DIR: &str = "projects";
 const OWNER_FILE: &str = ".project-id";
 const MAX_KEY_CHARS: usize = 64;
 const ID_SUFFIX_CHARS: usize = 8;

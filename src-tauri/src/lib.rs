@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod agent;
 pub mod app_update;
 pub mod attachments;
@@ -11,9 +12,17 @@ pub mod credentials;
 pub mod db;
 pub mod formatter;
 pub mod git;
+pub mod git_history;
+pub mod language_server;
+pub mod language_server_catalog;
+pub mod language_server_config;
+pub mod language_server_convert;
+pub mod language_server_protocol;
 pub mod migrations;
 pub mod permission;
 pub mod plan;
+pub mod plan_docs;
+pub mod plan_project;
 pub mod plan_store;
 pub mod profiles;
 pub mod project_data;
@@ -24,12 +33,15 @@ pub mod run_log;
 pub mod seeders;
 pub mod session_rail;
 pub mod settings;
+pub mod speech;
 pub mod sql;
+pub mod storage;
 pub mod terminal;
 pub mod tools;
 pub mod usage;
 pub mod validation;
 pub mod vscode;
+pub mod vscode_extensions;
 pub mod window_buttons;
 pub mod workspace;
 
@@ -47,10 +59,19 @@ pub fn run() {
 
             app.manage(commands::AppState::new(store, chats));
             app.manage(terminal::Terminals::default());
+            app.manage(git_history::HistoryCache::default());
             app.manage(commands::agent::TurnRegistry::default());
             app.manage(commands::background::BackgroundStore::new(
                 app.path().app_data_dir()?,
             ));
+            let language_server_settings = language_server_config::setup(app, &database)?;
+
+            app.manage(language_server::LanguageServers::new(std::sync::Arc::new(
+                commands::language_server::WindowSink {
+                    app: app.handle().clone(),
+                    config: language_server_settings,
+                },
+            )));
             app.manage(remote::Remote::default());
             app.manage(app_update::UpdateState::default());
             app_update::start(app.handle());
@@ -58,8 +79,8 @@ pub fn run() {
             profiles::setup(app, &database)?;
             usage::setup(app, &database)?;
             settings::setup(app, &database)?;
+            activity::setup(app, &database)?;
             tools::setup(app, &database)?;
-            window_buttons::hide_at_startup(app.handle());
 
             Ok(())
         })
@@ -97,7 +118,28 @@ pub fn run() {
             commands::git::local_discard,
             commands::git::local_commit,
             commands::git::local_commit_message,
+            commands::git::git_log,
+            commands::git::git_commit_files,
+            commands::git::git_commit_file_diff,
+            commands::git::git_file_history,
+            commands::git::git_blame,
+            commands::git::git_branches_info,
+            commands::git::git_branch_compare,
+            commands::git::git_checkout,
+            commands::git::git_merge,
+            commands::git::git_pull,
             commands::inline_ask::inline_ask,
+            commands::language_server::language_server_list,
+            commands::language_server::language_server_configure,
+            commands::language_server::language_server_restart,
+            commands::language_server::language_server_stop,
+            commands::language_server::language_server_log,
+            commands::language_server::language_server_document_open,
+            commands::language_server::language_server_document_change,
+            commands::language_server::language_server_document_save,
+            commands::language_server::language_server_document_close,
+            commands::language_server::language_server_request,
+            commands::language_server::language_server_apply_edit,
             commands::agent::agent_send,
             commands::agent::agent_permission,
             commands::agent::agent_stop,
@@ -114,6 +156,20 @@ pub fn run() {
             commands::auth::auth_logout,
             commands::chat::chat_load,
             commands::plan::plan_load,
+            commands::plan::plan_docs_list,
+            commands::plan::plan_doc_read,
+            commands::activity::file_events_list,
+            commands::activity::file_events_delete,
+            commands::activity::file_events_clear,
+            commands::activity::chat_images_list,
+            commands::activity::chat_image_get,
+            commands::activity::chat_images_delete,
+            commands::activity::plan_records_list,
+            commands::activity::plan_records_delete,
+            commands::activity::plan_records_sync,
+            commands::activity::plan_save_to_project,
+            commands::storage::storage_usage,
+            commands::storage::storage_cleanup,
             profiles::profiles_list,
             profiles::profile_add,
             profiles::profile_remove,
@@ -127,6 +183,8 @@ pub fn run() {
             usage::usage_stats_profile,
             settings::settings_get,
             settings::settings_save,
+            commands::speech::speech_status,
+            commands::speech::speech_synthesize,
             tools::tools_skills,
             tools::tools_agents,
             tools::tools_mcp,
@@ -140,6 +198,7 @@ pub fn run() {
             commands::chat::chat_grid_get,
             commands::chat::chat_grid_save,
             window_buttons::window_buttons_visible,
+            window_buttons::window_is_fullscreen,
             commands::app_update::update_pending,
             commands::app_update::update_install,
         ])
@@ -149,6 +208,7 @@ pub fn run() {
             // * No turn may outlive the app: its CLI (and the background tasks it holds) is stopped.
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<commands::agent::TurnRegistry>().stop_all();
+                app.state::<language_server::LanguageServers>().stop_all();
                 app.state::<commands::background::BackgroundStore>()
                     .stop_all();
             }

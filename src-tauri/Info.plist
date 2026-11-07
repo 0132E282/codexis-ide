@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Codexis IDE dùng micro để bạn nhập tin nhắn cho trợ lý AI bằng giọng nói.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Codexis IDE dùng nhận dạng giọng nói để chuyển lời bạn nói thành chữ trong ô nhập tin nhắn.</string>
+</dict>
+</plist>

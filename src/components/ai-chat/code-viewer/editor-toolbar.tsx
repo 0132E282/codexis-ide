@@ -1,10 +1,14 @@
 import { t } from '@/lib/i18n';
-import { Check, Code2, Eye, Undo2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Check, Code2, Eye, GitCommitHorizontal, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssistantAvatar } from '@/components/ai-chat/assistant-avatar';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { AiChatProposal } from '@/types';
+import { cn } from '@/lib/utils';
+import { CursorPosition } from './cursor-position';
+import type { CursorStore } from './cursor-position';
 
 /** * The buttons of the open file, shown at the end of the tab bar: the markdown view switch, the AI edit buttons (apply / drop / take back) and ask the AI. */
 export function EditorToolbar({
@@ -18,6 +22,12 @@ export function EditorToolbar({
     showAsk,
     assistant,
     onAskTrigger,
+    showBlame,
+    blameEnabled,
+    onBlameChange,
+    optionsMenu,
+    cursorStore,
+    showCursor,
 }: {
     /** * The markdown is shown rendered instead of as code. */
     preview: boolean;
@@ -32,6 +42,15 @@ export function EditorToolbar({
     showAsk: boolean;
     assistant?: AssistantIdentity;
     onAskTrigger: () => void;
+    /** * Whether the git blame switch shows (a loaded local file in the code view). */
+    showBlame: boolean;
+    blameEnabled: boolean;
+    onBlameChange: (enabled: boolean) => void;
+    /** * The editor options menu, shown last. */
+    optionsMenu?: ReactNode;
+    /** * Where the caret is; shown while a text file is on screen. */
+    cursorStore: CursorStore;
+    showCursor: boolean;
 }) {
     return (
         <>
@@ -60,6 +79,26 @@ export function EditorToolbar({
                             </TabsTrigger>
                         </TabsList>
                     </Tabs>
+                )}
+                {showCursor && <CursorPosition store={cursorStore} />}
+                {showBlame && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-pressed={blameEnabled}
+                        aria-label={t('editor_toolbar.blame')}
+                        title={t('editor_toolbar.blame_hint')}
+                        onClick={() => onBlameChange(!blameEnabled)}
+                        className={cn(
+                            'size-7',
+                            blameEnabled
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-muted-foreground',
+                        )}
+                    >
+                        <GitCommitHorizontal aria-hidden="true" />
+                    </Button>
                 )}
                 {pendingEdit !== undefined && (
                     <>
@@ -121,6 +160,7 @@ export function EditorToolbar({
                         />
                     </Button>
                 )}
+                {optionsMenu}
             </span>
         </>
     );

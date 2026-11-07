@@ -106,14 +106,14 @@ Workflow [`.github/workflows/build.yml`](.github/workflows/build.yml) chạy m�
 1. `changes`: so sánh với commit nền để biết thay đổi nằm ở frontend (`src/`, `package.json`, `pnpm-lock.yaml`, cấu hình Vite/TypeScript/ESLint…) hay backend (`src-tauri/`). Chạy tay, nhánh mới hoặc sửa chính workflow thì chạy cả hai.
 2. `frontend`: chỉ chạy khi frontend đổi: `pnpm lint`, `pnpm build`.
 3. `backend`: chỉ chạy khi `src-tauri/` đổi: `pnpm build` (Tauri cần frontend đã build), `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`.
-4. `build`: chạy khi một trong hai phía đổi và không có job nào fail; chạy `pnpm tauri build` và upload bản `.app` thành artifact `codexis-ide-macos` (tải ở trang của lần chạy trong tab Actions). Chỉ đổi tài liệu thì không job nào ngoài `changes` chạy.
+4. `build`: chạy khi một trong hai phía đổi và không có job nào fail; chạy `pnpm tauri build` và upload bản `.app` thành artifact `codexis-ide-macos` (tải ở trang của lần chạy trong tab Actions). Chỉ đổi tài liệu thì không job nào ngoài `changes` chạy. Khi repo chưa có secret `TAURI_SIGNING_PRIVATE_KEY`, job build bỏ qua bản cập nhật và chỉ build `.app` không ký.
 
 ## Phát hành (cho developers)
 
 App tự cập nhật đọc `https://github.com/0132E282/codexis-ide/releases/latest/download/latest.json`, nên mỗi lần phát hành cần:
 
 1. Tăng `version` trong `src-tauri/tauri.conf.json` (phải cao hơn bản người dùng đang cài).
-2. Build với biến môi trường `TAURI_SIGNING_PRIVATE_KEY` (nội dung khoá riêng ký bản cập nhật) và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (để trống nếu khoá không có mật khẩu). Khoá riêng không nằm trong repo; mất khoá thì các máy đã cài không nhận được bản mới nữa, phải đổi `plugins.updater.pubkey` và cài tay một lần.
+2. Build với biến môi trường `TAURI_SIGNING_PRIVATE_KEY` (nội dung khoá riêng ký bản cập nhật) và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (để trống nếu khoá không có mật khẩu). Khoá riêng không nằm trong repo; mất khoá thì các máy đã cài không nhận được bản mới nữa, phải đổi `plugins.updater.pubkey` và cài tay một lần. Phát hành bằng CI cần hai secret GitHub `TAURI_SIGNING_PRIVATE_KEY` và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 3. Publish release **chính thức** (không phải draft hay pre-release) gồm `latest.json`, gói `*.app.tar.gz` kèm chữ ký `.sig` và tệp `.dmg`. `tauri-apps/tauri-action` với `includeUpdaterJson: true` tạo đủ các tệp này.
 
 Workflow CI hiện tại ([`build.yml`](.github/workflows/build.yml)) chỉ kiểm tra và upload artifact `.app`, chưa tự tạo release. Chi tiết luồng và giới hạn: [docs/system/app-update.md](docs/system/app-update.md).

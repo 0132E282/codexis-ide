@@ -3,6 +3,7 @@
 //! Kept as one JSON row (`settings.key = 'chat'`) in the IDE's SQLite file. The avatar is a small image data URL inside that row.
 
 use crate::cli::CliKind;
+use crate::speech;
 use crate::sql;
 use crate::validation;
 use crate::{db, migrations};
@@ -18,6 +19,12 @@ const KEY: &str = "chat";
 const MAX_NAME_CHARS: usize = 60;
 const MAX_INSTRUCTIONS_CHARS: usize = 8000;
 const MAX_VOICE_CHARS: usize = 200;
+const MAX_URL_CHARS: usize = 200;
+/// Largest `storageWarnMultiplier`.
+pub const MAX_WARN_MULTIPLIER: u32 = 100;
+/// Slowest and fastest reading speed, in percent.
+pub const MIN_VOICE_RATE: u32 = 80;
+pub const MAX_VOICE_RATE: u32 = 125;
 /// Largest avatar data URL (the front end shrinks the picture first).
 pub const MAX_AVATAR_BYTES: usize = validation::MAX_AVATAR_DATA_URL_BYTES;
 /// Subscription plans a CLI can be marked with; empty = not chosen. Only shown in the statistics, never sent anywhere.
@@ -53,7 +60,7 @@ impl fmt::Display for SettingsError {
 
 impl std::error::Error for SettingsError {}
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ChatSettings {
     /// Data URL of the assistant's picture; empty = default avatar.
@@ -81,14 +88,85 @@ pub struct ChatSettings {
     pub appearance: String,
     /// Colors of the code in the editor: `auto` (follow the interface), `light`, `dark` or empty (auto); the two `-colorblind` schemes avoid red/green pairs.
     pub code_colors: String,
+    /// Who reads answers aloud: `system` (the device voice), `vieneu` (a local VieNeu-TTS server) or empty (system).
+    pub voice_engine: String,
+    /// Loopback `http://` address of the VieNeu-TTS server; empty = `http://127.0.0.1:8000`.
+    pub vieneu_url: String,
+    /// VieNeu-TTS voice id; empty = the server's default.
+    pub vieneu_voice: String,
+    /// Reading speed in percent (80 to 125); 0 = not chosen (100).
+    pub voice_rate: u32,
+    /// Plans the AI writes in the chat are also saved as files in the project (`plans_dir`); off by default, nothing is written to the project folder otherwise.
+    pub save_plans_to_project: bool,
+    /// Folder of the saved plans, relative to the project and inside it; empty = `docs/plans`.
+    pub plans_dir: String,
+    /// Warn when the data of the IDE (logs, pictures, plans, history) grows big; on by default.
+    pub storage_warnings: bool,
+    /// The warning limits are multiplied by this (1 to 100); 0 = not chosen (1).
+    pub storage_warn_multiplier: u32,
+}
+
+impl Default for ChatSettings {
+    fn default() -> Self {
+        Self {
+            avatar: String::new(),
+            user_name: String::new(),
+            assistant_name: String::new(),
+            voice: String::new(),
+            custom_instructions: String::new(),
+            default_cli: String::new(),
+            claude_model: String::new(),
+            codex_model: String::new(),
+            claude_plan: String::new(),
+            codex_plan: String::new(),
+            fallback_enabled: false,
+            fallback_order: Vec::new(),
+            language: String::new(),
+            appearance: String::new(),
+            code_colors: String::new(),
+            voice_engine: String::new(),
+            vieneu_url: String::new(),
+            vieneu_voice: String::new(),
+            voice_rate: 0,
+            save_plans_to_project: false,
+            plans_dir: String::new(),
+            storage_warnings: true,
+            storage_warn_multiplier: 0,
+        }
+    }
 }
 
 impl ChatSettings {
+    /// The folder plans are saved to: `plans_dir`, or `docs/plans` when it is empty.
+    pub fn effective_plans_dir(&self) -> String {
+        crate::plan_project::checked_plans_dir(&self.plans_dir)
+            .unwrap_or_else(|| crate::plan_project::DEFAULT_PLANS_DIR.to_string())
+    }
+
+    /// The factor of the storage warning limits (at least 1).
+    pub fn effective_warn_multiplier(&self) -> u32 {
+        self.storage_warn_multiplier.max(1)
+    }
+
+    fn plans_dir_valid(dir: &str) -> bool {
+        crate::plan_project::checked_plans_dir(dir).is_some()
+    }
+
+    fn multiplier_valid(multiplier: u32) -> bool {
+        multiplier <= MAX_WARN_MULTIPLIER
+    }
+
     fn validate(&self) -> Result<(), SettingsError> {
         validation::avatar(&self.avatar)
             .map_err(|error| SettingsError::Rejected(rule_key(&error)))?;
 
-        for text in [&self.user_name, &self.assistant_name, &self.voice] {
+        for text in [
+            &self.user_name,
+            &self.assistant_name,
+            &self.voice,
+            &self.vieneu_url,
+            &self.vieneu_voice,
+        ] {
             validation::plain_text(text)
                 .map_err(|error| SettingsError::Rejected(rule_key(&error)))?;
         }
@@ -101,6 +179,10 @@ impl ChatSettings {
                 validation::valid_model(model)
                     .map_err(|error| SettingsError::Rejected(rule_key(&error)))?;
             }
+        }
+
+        if !Self::plans_dir_valid(&self.plans_dir) {
+            return Err(SettingsError::Rejected("settings.bad_plans_dir"));
         }
 
         if self.options_valid() {
@@ -124,7 +206,31 @@ impl ChatSettings {
             && self.voice.chars().count() <= MAX_VOICE_CHARS
             && self.custom_instructions.chars().count() <= MAX_INSTRUCTIONS_CHARS;
 
-        cli_ok && language_ok && theme_ok && plans_ok && order_ok && lengths_ok
+        let speech_ok = Self::speech_valid(&self.voice_engine, &self.vieneu_url)
+            && Self::rate_valid(self.voice_rate)
+            && self.vieneu_voice.chars().count() <= MAX_VOICE_CHARS;
+
+        let storage_ok = Self::plans_dir_valid(&self.plans_dir)
+            && Self::multiplier_valid(self.storage_warn_multiplier);
+
+        cli_ok
+            && language_ok
+            && theme_ok
+            && plans_ok
+            && order_ok
+            && lengths_ok
+            && speech_ok
+            && storage_ok
+    }
+
+    fn rate_valid(rate: u32) -> bool {
+        rate == 0 || (MIN_VOICE_RATE..=MAX_VOICE_RATE).contains(&rate)
+    }
+
+    fn speech_valid(engine: &str, url: &str) -> bool {
+        matches!(engine, "" | "system" | "vieneu")
+            && url.chars().count() <= MAX_URL_CHARS
+            && (url.is_empty() || speech::is_loopback_url(url))
     }
 
     fn cli_valid(cli: &str) -> bool {
@@ -167,6 +273,7 @@ impl ChatSettings {
             (&mut self.user_name, MAX_NAME_CHARS),
             (&mut self.assistant_name, MAX_NAME_CHARS),
             (&mut self.voice, MAX_VOICE_CHARS),
+            (&mut self.vieneu_voice, MAX_VOICE_CHARS),
         ] {
             if !text_ok(text, max) {
                 text.clear();
@@ -202,6 +309,21 @@ impl ChatSettings {
         }
         if !Self::code_colors_valid(&self.code_colors) {
             self.code_colors.clear();
+        }
+        if !Self::rate_valid(self.voice_rate) {
+            self.voice_rate = 0;
+        }
+        if !Self::plans_dir_valid(&self.plans_dir) {
+            self.plans_dir.clear();
+        }
+        if !Self::multiplier_valid(self.storage_warn_multiplier) {
+            self.storage_warn_multiplier = 0;
+        }
+        if !Self::speech_valid("", &self.vieneu_url) {
+            self.vieneu_url.clear();
+        }
+        if !Self::speech_valid(&self.voice_engine, "") {
+            self.voice_engine.clear();
         }
 
         self

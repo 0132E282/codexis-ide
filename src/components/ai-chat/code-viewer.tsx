@@ -17,6 +17,10 @@ import { TreePanel } from './code-viewer/tree-panel';
 import type { AskReference, InlineAskHandler } from './code-viewer/types';
 import { useAiEdit } from './code-viewer/use-ai-edit';
 import { useFileSession } from './code-viewer/use-file-session';
+import { useBlame } from './code-viewer/use-blame';
+import { useCursorStore } from './code-viewer/cursor-position';
+import { useEditorOptions } from './code-viewer/use-editor-options';
+import { EditorOptionsMenu } from './code-viewer/editor-options-menu';
 import { useFileTree } from './code-viewer/use-file-tree';
 import {
     useQuickOpenShortcut,
@@ -36,6 +40,7 @@ export function CodeViewer({
     openRequest = null,
     onAsk,
     onInlineAsk,
+    onShowHistory,
     assistant,
     onChangesUpdate,
     aiSelection,
@@ -67,6 +72,8 @@ export function CodeViewer({
     onAsk?: (reference: AskReference) => void;
     /** * "Chat với AI về đoạn này" answers in a comment box under the lines: asks about them and returns the answer (the same conversation continues with `conversation`). */
     onInlineAsk?: InlineAskHandler;
+    /** * "Lịch sử tệp": shows the git history of this file (missing: the menu entry is hidden). */
+    onShowHistory?: (path: string) => void;
     /** * Name and avatar of the assistant, shown on the answers of the comment box. */
     assistant?: AssistantIdentity;
     /** * The AI account and model picked in the chat: the commit box's "Tạo bằng AI" asks that one. */
@@ -105,6 +112,9 @@ export function CodeViewer({
               name: localRoot.split('/').pop() || localRoot,
           })
         : repo;
+    const cursorStore = useCursorStore();
+    const { options: editorOptions, setOption: setEditorOption } =
+        useEditorOptions();
     const {
         paths,
         error,
@@ -154,7 +164,12 @@ export function CodeViewer({
         paths,
         changed,
         openRequest,
+        isPreviewTabEnabled: editorOptions.previewTabs,
+        isAutoSaveEnabled: editorOptions.autoSave,
     });
+
+    // * Blame lines belong to the saved text: unsaved edits (typed or by the AI) hide the note.
+    const isBlameVisible = draft === null && typing === null;
 
     useEffect(() => {
         onActiveFile?.(selected);
@@ -190,6 +205,14 @@ export function CodeViewer({
     const isMarkdown = /\.(md|markdown)$/i.test(selected ?? '');
 
     useEffect(() => setPreview(true), [selected]);
+
+    const blame = useBlame({
+        root: localRoot,
+        path: selected,
+        content,
+        isActive:
+            proposed === null && image === null && !(preview && isMarkdown),
+    });
 
     const {
         pendingEdit,
@@ -229,6 +252,28 @@ export function CodeViewer({
 
     useQuickOpenShortcut(openQuickOpen);
 
+    // * Shift+Cmd/Ctrl+Y: shows or hides the file tree (when the host holds its closed state).
+    useEffect(() => {
+        if (onTreeClosedChange === undefined) {
+            return;
+        }
+
+        const onKey = (event: KeyboardEvent) => {
+            if (
+                (event.metaKey || event.ctrlKey) &&
+                event.shiftKey &&
+                event.key.toLowerCase() === 'y'
+            ) {
+                event.preventDefault();
+                onTreeClosedChange(treeClosed !== true);
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+
+        return () => window.removeEventListener('keydown', onKey);
+    }, [treeClosed, onTreeClosedChange]);
+
     // * Set by the editor: asks about its selection (the whole file when nothing is selected).
     const askTrigger = useRef<(() => void) | null>(null);
     // * The right-click menu of every file row (tree and change list) and of the open-file tabs shares these.
@@ -243,12 +288,13 @@ export function CodeViewer({
                 void copyPath(path.split('/').pop() ?? path);
             },
             rename: localRoot === null ? undefined : setRenaming,
+            history: localRoot === null ? undefined : onShowHistory,
             ask: onAsk
                 ? (path) =>
                       onAsk({ path, startLine: 0, endLine: 0, text: path })
                 : undefined,
         }),
-        [copyPath, onAsk, localRoot],
+        [copyPath, onAsk, localRoot, onShowHistory],
     );
 
     // * Stable handlers: the tab bar and the tree rows are memoized, so typing in the editor does not re-render them.
@@ -272,6 +318,16 @@ export function CodeViewer({
             }
         },
     );
+    // * A definition in another file: the file opens and the editor scrolls to its line.
+    const [jump, setJump] = useState<{
+        path: string;
+        line: number;
+        id: number;
+    } | null>(null);
+    const openDefinition = useStableCallback((path: string, line: number) => {
+        setJump({ path, line, id: Date.now() });
+        void openFile(path);
+    });
     const openPath = useStableCallback((path: string) => void openFile(path));
     const selectInTree = useStableCallback((path: string) => {
         setMarked(new Set());
@@ -413,6 +469,34 @@ export function CodeViewer({
                                 }
                                 assistant={assistant}
                                 onAskTrigger={() => askTrigger.current?.()}
+                                showBlame={
+                                    localRoot !== null &&
+                                    content !== null &&
+                                    proposed === null &&
+                                    image === null &&
+                                    !(preview && isMarkdown)
+                                }
+                                blameEnabled={blame.enabled}
+                                cursorStore={cursorStore}
+                                showCursor={
+                                    content !== null &&
+                                    proposed === null &&
+                                    image === null &&
+                                    !(preview && isMarkdown)
+                                }
+                                onBlameChange={blame.setEnabled}
+                                optionsMenu={
+                                    <EditorOptionsMenu
+                                        options={editorOptions}
+                                        onOptionChange={setEditorOption}
+                                        onQuickOpen={openQuickOpen}
+                                        treeClosed={treeClosed}
+                                        onTreeClosedChange={onTreeClosedChange}
+                                        treePlacement={treePlacement}
+                                        canCollapseAll={effectiveOpen.size > 0}
+                                        onCollapseAll={collapseAll}
+                                    />
+                                }
                             />
                         }
                         onOpen={openPath}
@@ -447,9 +531,20 @@ export function CodeViewer({
                             editable={editable}
                             typing={typing}
                             draft={draft}
-                            revealAt={revealAt}
+                            revealAt={
+                                jump !== null && jump.path === selected
+                                    ? { line: jump.line, count: 1, id: jump.id }
+                                    : revealAt
+                            }
+                            languageServer={{
+                                root: localRoot,
+                                onOpenDefinition: openDefinition,
+                            }}
                             revealed={revealed}
                             baseline={baseline}
+                            blame={isBlameVisible ? blame.lines : null}
+                            editorOptions={editorOptions}
+                            cursorStore={cursorStore}
                             boxHost={boxHost}
                             assistant={assistant}
                             askTrigger={askTrigger}

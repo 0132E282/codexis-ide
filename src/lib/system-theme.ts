@@ -1,3 +1,4 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useSyncExternalStore } from 'react';
 import type { CodeScheme } from '@/lib/code-palettes';
 
@@ -21,6 +22,15 @@ function applyClass() {
             : state.appearance === 'dark';
 
     document.documentElement.classList.toggle('dark', dark);
+
+    // * The native title bar (the strip macOS draws over the window in fullscreen) follows the same look instead of the system's.
+    try {
+        getCurrentWindow()
+            .setTheme(dark ? 'dark' : 'light')
+            .catch(() => undefined);
+    } catch {
+        // * Not inside the app (a plain browser): there is no native window to colour.
+    }
 }
 
 function notify() {

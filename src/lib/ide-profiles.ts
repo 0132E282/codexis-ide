@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 export type ProfileCli = 'claude' | 'codex' | 'github';
 
-/** One account of an AI CLI. Id 0 is the CLI's own login; the others are kept by Rynox. */
+/** One account of an AI CLI. Id 0 is the CLI's own login; the others are kept by Codexis. */
 export type Profile = {
     id: number;
     cli: ProfileCli;

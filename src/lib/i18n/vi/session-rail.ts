@@ -41,6 +41,7 @@ export const sessionRailVietnamese: Record<string, string> = {
     'session_rail.usage_note':
         'Token ước tính theo độ dài văn bản; CLI không báo chi phí hay thời gian.',
     'session_rail.github': 'GitHub',
+    'session_rail.git_history': 'Lịch sử Git',
     'session_rail.github_account': 'Tài khoản',
     'session_rail.github_repo': 'Repo',
     'session_rail.github_pull_request': 'Pull request',

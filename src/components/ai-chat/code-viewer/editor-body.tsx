@@ -6,6 +6,9 @@ import { LoadingRows } from '@/components/ai-chat/loading-rows';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import { isPdfSource } from '@/lib/media-file';
 import { cn } from '@/lib/utils';
+import type { GitBlameLine } from '@/lib/ide';
+import type { EditorOptions } from './use-editor-options';
+import type { CursorStore } from './cursor-position';
 import type { AskReference, InlineAskHandler } from './types';
 import { typedLines } from './typed-lines';
 
@@ -29,6 +32,9 @@ export function EditorBody({
     revealAt,
     revealed,
     baseline,
+    blame,
+    editorOptions,
+    cursorStore,
     boxHost,
     assistant,
     askTrigger,
@@ -37,6 +43,7 @@ export function EditorBody({
     onSave,
     onInlineAsk,
     onAsk,
+    languageServer,
 }: {
     selected: string;
     fileError: string | null;
@@ -53,6 +60,10 @@ export function EditorBody({
     /** * Lines of the AI's diff shown so far (null: all). */
     revealed: number | null;
     baseline: string | null;
+    /** * Git blame of the open file; null while there is none or the text has unsaved edits. */
+    blame: GitBlameLine[] | null;
+    editorOptions: EditorOptions;
+    cursorStore: CursorStore;
     boxHost: RefObject<HTMLDivElement | null>;
     assistant?: AssistantIdentity;
     askTrigger: RefObject<(() => void) | null>;
@@ -61,6 +72,10 @@ export function EditorBody({
     onSave: () => void;
     onInlineAsk?: InlineAskHandler;
     onAsk?: (reference: AskReference) => void;
+    languageServer?: {
+        root: string | null;
+        onOpenDefinition: (path: string, line: number, column: number) => void;
+    };
 }): ReactNode {
     return (
         <>
@@ -135,6 +150,7 @@ export function EditorBody({
                                 boxHost={boxHost}
                                 revealLine={revealAt}
                                 path={selected}
+                                languageServer={languageServer}
                                 value={typing ?? draft ?? content}
                                 onChange={
                                     editable
@@ -149,6 +165,9 @@ export function EditorBody({
                                 // * Ctrl/Cmd+S: applies the AI's edit when one is waiting, else saves the typed text now.
                                 onSave={onSave}
                                 baseline={baseline}
+                                blame={blame}
+                                editorOptions={editorOptions}
+                                cursorStore={cursorStore}
                                 assistant={assistant}
                                 askTrigger={askTrigger}
                                 onInlineAsk={

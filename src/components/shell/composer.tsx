@@ -1,5 +1,10 @@
 import { ArrowUp, Folder, Mic, Plus, Volume2, X } from 'lucide-react';
-import { memo, useRef, type FormEvent, type ReactNode } from 'react';
+import { memo, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
+import { useSpeechInput } from '@/hooks/use-speech-input';
+import { shutdownSpeech, useSpeechOutput } from '@/hooks/use-speech-output';
+import { setVoiceReply, useVoiceReply } from '@/hooks/use-voice-preferences';
+import { VoicePopup } from '@/components/shell/chat/voice-wave';
+import { followMicrophone } from '@/lib/voice-level';
 import {
     pastedFiles,
     pastedPaths,
@@ -17,6 +22,7 @@ import { referenceForPaste } from '@/lib/editor-copy';
 import type { AgentCli } from '@/lib/ide';
 import type { ToolEntry } from '@/lib/ide-tools';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { CHAT_PROMPT_MAX_LENGTH } from '@/lib/limits';
 
 export { MODES, pastedPaths };
@@ -40,7 +46,10 @@ export const Composer = memo(function Composer({
     attachError,
     onPasteFiles,
     onPastePaths,
+    onPasteReference,
     onRemoveAttachment,
+    lastAnswer,
+    freshAnswer,
     popup,
 }: {
     /** Name of the project the conversation is attached to (null: none). */
@@ -67,14 +76,92 @@ export const Composer = memo(function Composer({
     onPasteFiles: (files: File[]) => void;
     /** Paths of files on disk pasted as text. */
     onPastePaths: (paths: string[]) => void;
+    /** Code copied from the editor was pasted: `path:start-end`, shown as a chip. */
+    onPasteReference: (reference: string) => void;
     onRemoveAttachment: (id: string) => void;
+    /** The assistant's last finished answer (markdown): the speaker button reads it aloud. */
+    lastAnswer: string;
+    /** An answer that finished just now in this chat (not one loaded from the history): voice replies read it. */
+    freshAnswer: { id: string; text: string } | null;
     /** Laid above the top of the message box (the session rail popup). */
     popup?: ReactNode;
 }) {
+    // * Dictation: each final phrase is appended to what is typed (the ref keeps two phrases in a row from overwriting each other).
+    const typed = useRef(value);
+
+    typed.current = value;
+
+    const dictation = useSpeechInput((phrase) => {
+        if (phrase === '') {
+            return;
+        }
+
+        typed.current =
+            typed.current === '' || /\s$/.test(typed.current)
+                ? typed.current + phrase
+                : `${typed.current} ${phrase}`;
+        onChange(typed.current);
+    }, !busy);
+    const reading = useSpeechOutput(lastAnswer);
+    const voiceReply = useVoiceReply();
+    const { speak: speakReply, stop: stopReading } = reading;
+    // * Each fresh answer is looked at once; with voice replies off it is only marked as seen, so turning them on later does not read it.
+    const seenAnswer = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (freshAnswer === null || seenAnswer.current === freshAnswer.id) {
+            return;
+        }
+
+        seenAnswer.current = freshAnswer.id;
+
+        if (voiceReply) {
+            speakReply(freshAnswer.text);
+        }
+    }, [freshAnswer, voiceReply, speakReply]);
+
+    const { listening, failed: dictationFailed } = dictation;
+
+    // * With voice replies on, the wave follows the microphone while dictating (the level is simulated without the permission).
+    useEffect(() => {
+        if (!voiceReply) {
+            return;
+        }
+
+        void followMicrophone(listening);
+
+        return () => {
+            void followMicrophone(false);
+        };
+    }, [voiceReply, listening]);
+
+    // * Escape stops listening and reading, whatever has the focus.
+    const { stop: stopDictation } = dictation;
+
+    useEffect(() => {
+        if (!listening && !reading.active) {
+            return;
+        }
+
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                stopDictation();
+                stopReading();
+            }
+        };
+
+        window.addEventListener('keydown', onKey);
+
+        return () => window.removeEventListener('keydown', onKey);
+    }, [listening, reading.active, stopDictation, stopReading]);
+
     const submit = (event: FormEvent) => {
         event.preventDefault();
 
         if ((value.trim() !== '' || attachments.length > 0) && !busy) {
+            dictation.stop();
+            // * A new message ends the reading of the old answer.
+            stopReading();
             onSubmit();
         }
     };
@@ -98,7 +185,28 @@ export const Composer = memo(function Composer({
             onSubmit={submit}
             className="relative mx-auto w-[min(100%-2rem,48rem)] pb-4"
         >
-            {popup}
+            {voiceReply && (listening || reading.active || dictationFailed) ? (
+                <VoicePopup
+                    label={
+                        listening
+                            ? t('voice_transcript.listening')
+                            : reading.active
+                              ? t('voice_transcript.reading')
+                              : t('voice_transcript.failed')
+                    }
+                    reading={reading.active}
+                    failed={!listening && !reading.active}
+                    onClose={() => {
+                        dictation.stop();
+
+                        if (reading.active) {
+                            reading.stop();
+                        }
+                    }}
+                />
+            ) : (
+                popup
+            )}
             {project !== null && (
                 <div className="mb-2 flex items-center gap-2">
                     <>
@@ -155,7 +263,11 @@ export const Composer = memo(function Composer({
                 )}
                 <textarea
                     ref={input}
-                    value={value}
+                    value={
+                        dictation.interim === ''
+                            ? value
+                            : `${value}${value === '' || /\s$/.test(value) ? '' : ' '}${dictation.interim}`
+                    }
                     maxLength={CHAT_PROMPT_MAX_LENGTH}
                     onChange={(event) => {
                         onChange(event.target.value);
@@ -174,21 +286,9 @@ export const Composer = memo(function Composer({
                             event.preventDefault();
                             onPasteFiles(files);
                         } else if (reference !== null) {
-                            // * Code copied from the editor goes in as `file:lines`: the AI reads the file itself, so the message stays short.
+                            // * Code copied from the editor becomes a `file:lines` chip: the AI reads the file itself, so the message stays short.
                             event.preventDefault();
-
-                            const field = event.currentTarget;
-                            const start = field.selectionStart;
-                            const caret = start + reference.length;
-
-                            onChange(
-                                value.slice(0, start) +
-                                    reference +
-                                    value.slice(field.selectionEnd),
-                            );
-                            requestAnimationFrame(() =>
-                                field.setSelectionRange(caret, caret),
-                            );
+                            onPasteReference(reference);
                         } else if (paths.length > 0) {
                             event.preventDefault();
                             onPastePaths(paths);
@@ -252,7 +352,11 @@ export const Composer = memo(function Composer({
                     }}
                     rows={2}
                     aria-label={t('composer.message')}
-                    placeholder={t('composer.message_the_ai_assistant')}
+                    placeholder={
+                        listening
+                            ? t('voice_transcript.speak')
+                            : t('composer.message_the_ai_assistant')
+                    }
                     className="block w-full resize-none bg-transparent px-1 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
                 />
                 <div
@@ -276,18 +380,73 @@ export const Composer = memo(function Composer({
                             model={model}
                             onChoose={onChoose}
                         />
-                        <Inert
-                            label={t('composer.read_aloud')}
-                            className="text-muted-foreground"
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('composer.voice_reply')}
+                            aria-pressed={voiceReply}
+                            title={
+                                reading.failure !== null
+                                    ? t('composer.speech_output_failed', {
+                                          reason: reading.failure,
+                                      })
+                                    : t('composer.voice_reply')
+                            }
+                            disabled={!reading.supported}
+                            onClick={() => {
+                                const next = !voiceReply;
+
+                                setVoiceReply(next);
+
+                                // * Off: every voice stops at once and the audio machinery is let go.
+                                if (!next) {
+                                    shutdownSpeech();
+                                }
+                            }}
+                            onContextMenu={(event) => {
+                                // * Right click reads the last answer (or stops reading), as the old speaker button did.
+                                event.preventDefault();
+
+                                if (lastAnswer.trim() !== '') {
+                                    reading.toggle();
+                                }
+                            }}
+                            className={cn(
+                                'text-muted-foreground',
+                                voiceReply &&
+                                    'bg-accent text-accent-foreground',
+                            )}
                         >
                             <Volume2 aria-hidden="true" />
-                        </Inert>
-                        <Inert
-                            label={t('composer.record')}
-                            className="text-muted-foreground"
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('composer.record')}
+                            aria-pressed={dictation.listening}
+                            title={
+                                !dictation.supported
+                                    ? t('composer.no_speech_input')
+                                    : dictation.failed
+                                      ? t('composer.speech_input_failed')
+                                      : t('composer.record')
+                            }
+                            disabled={!dictation.supported || busy}
+                            onClick={dictation.toggle}
+                            className={cn(
+                                'text-muted-foreground',
+                                dictation.listening &&
+                                    'animate-pulse text-red-500',
+                                // * A failed recording (permission refused...) is a warning, not the red of "listening".
+                                !dictation.listening &&
+                                    dictation.failed &&
+                                    'text-amber-500',
+                            )}
                         >
                             <Mic aria-hidden="true" />
-                        </Inert>
+                        </Button>
                         <Button
                             type="submit"
                             size="icon-sm"

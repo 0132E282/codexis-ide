@@ -1,5 +1,6 @@
 import { t } from '@/lib/i18n';
 import { memo } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { FileIcon } from '@/components/ai-chat/file-icon';
 import { FileContextMenu } from '@/components/ai-chat/file-context-menu';
@@ -22,6 +23,9 @@ function TreeItemsList({
     changed,
     changedDirs,
     actions,
+    parentPath = '',
+    createIn = null,
+    renderCreateRow,
 }: {
     nodes: TreeNode[];
     depth: number;
@@ -37,9 +41,15 @@ function TreeItemsList({
     changed: Map<string, AiChatProposal['action']>;
     changedDirs: Set<string>;
     actions: FileActions;
+    /** * Folder these rows are the children of (empty: the project root). */
+    parentPath?: string;
+    /** * Folder where a new entry is being named (null: none): its row is drawn first in that folder. */
+    createIn?: string | null;
+    renderCreateRow?: (depth: number) => ReactNode;
 }) {
     return (
         <ul role={depth === 0 ? 'tree' : 'group'}>
+            {createIn === parentPath && renderCreateRow?.(depth)}
             {nodes.map((node) => {
                 const isDir = node.children !== null;
                 const isOpen = openDirs.has(node.path);
@@ -179,6 +189,9 @@ function TreeItemsList({
                                 changed={changed}
                                 changedDirs={changedDirs}
                                 actions={actions}
+                                parentPath={node.path}
+                                createIn={createIn}
+                                renderCreateRow={renderCreateRow}
                             />
                         )}
                     </li>

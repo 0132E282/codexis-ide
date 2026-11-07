@@ -164,11 +164,8 @@ export function DockLayout({
                                         trailingFirst && 'order-first border-r',
                                         trailingGrows
                                             ? 'flex-1'
-                                            : // * On the left the file tree is as wide as itself: the width kept for it on the right would show as an empty column between the tree and the chat.
-                                              trailingFirst
-                                              ? 'shrink-0'
-                                              : // * The tree sits at the edge of that wider column; this draws the header line across the empty part, so the line does not break.
-                                                'relative shrink-0 min-w-[20rem] before:pointer-events-none before:absolute before:inset-x-0 before:top-[47px] before:h-px before:bg-border',
+                                            : // * The file tree is as wide as itself: any width kept for it would show as an empty column between the tree and the chat.
+                                              'shrink-0',
                                     )}
                                 >
                                     <div className="flex min-h-0 min-w-0 flex-1">

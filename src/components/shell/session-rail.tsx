@@ -1,7 +1,15 @@
-import { GitBranch, GitPullRequest, Plug, Settings, X } from 'lucide-react';
+import {
+    GitBranch,
+    GitPullRequest,
+    History,
+    Plug,
+    Settings,
+    X,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { LocalBranchPopover } from '@/components/ai-chat/branch-popover';
 import { FileIcon } from '@/components/ai-chat/file-icon';
+import { StorageUsageBlock } from '@/components/shell/storage-usage-block';
 import { formatTokens } from '@/components/shell/context-panel';
 import type { ContextUsage } from '@/components/shell/context-panel';
 import { Button } from '@/components/ui/button';
@@ -204,7 +212,7 @@ function GithubBlock({ github, root }: { github: RailGithub; root: string }) {
             <Row
                 icon={<GitBranch aria-hidden="true" className="size-3.5" />}
                 label={t('session_rail.branch')}
-                value={<LocalBranchPopover root={root} />}
+                value={<LocalBranchPopover root={root} inRow />}
             />
             {github.status === 'ok' &&
                 (github.pullRequest === null ? (
@@ -240,6 +248,7 @@ export function SessionRail({
     placementMenu,
     onOpenSettings,
     onOpenFile,
+    onShowHistory,
     onClose,
 }: {
     root: string;
@@ -252,6 +261,8 @@ export function SessionRail({
     placementMenu: ReactNode;
     onOpenSettings: () => void;
     onOpenFile: (path: string) => void;
+    /** Opens the git history tab of the bottom panel. */
+    onShowHistory: () => void;
     onClose: () => void;
 }) {
     const { environment, connectors, outputs, usage, github } = useSessionRail({
@@ -462,9 +473,33 @@ export function SessionRail({
                         </div>
                     )}
                 </Block>
-                {!(github.data?.status === 'no_cli') && (
-                    <Block title={t('session_rail.github')}>
-                        {github.data === null ? (
+                <Block title={t('storage.title')}>
+                    <StorageUsageBlock root={root} refreshKey={refreshKey} />
+                </Block>
+                {(github.data?.status !== 'no_cli' ||
+                    environment.data?.branch != null) && (
+                    <Block
+                        title={t('session_rail.github')}
+                        // * Needs only a git repository, not a GitHub remote.
+                        action={
+                            environment.data?.branch != null && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    title={t('session_rail.git_history')}
+                                    aria-label={t('session_rail.git_history')}
+                                    className="h-6 gap-1 px-1.5 text-xs text-muted-foreground"
+                                    onClick={onShowHistory}
+                                >
+                                    <History aria-hidden="true" />
+                                    {t('session_rail.git_history')}
+                                </Button>
+                            )
+                        }
+                    >
+                        {github.data?.status ===
+                        'no_cli' ? null : github.data === null ? (
                             github.failed && (
                                 <Muted>{t('session_rail.load_failed')}</Muted>
                             )

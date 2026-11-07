@@ -24,6 +24,8 @@ pub const ADD_PROFILE_TO_USAGE_EVENTS: &str =
     include_str!("../database/migrations/0009_add_profile_to_usage_events.sql");
 pub const CREATE_CHAT_GRID_TABLE: &str =
     include_str!("../database/migrations/0010_create_chat_grid_table.sql");
+pub const CREATE_ACTIVITY_TABLES: &str =
+    include_str!("../database/migrations/0011_create_activity_tables.sql");
 
 /// Runs the `ALTER TABLE` in `migration` when a file made by an older version lacks `column` in `table`.
 ///

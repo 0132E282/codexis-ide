@@ -48,7 +48,7 @@ Chỉ có `row-actions-menu.tsx` (`RowActionsMenu`, mục `RowActionItem {label,
 
 ## 6. Hook UI dùng chung — `src/hooks/`
 
-`use-confirm.tsx` (xác nhận), `use-resizable-width.ts` (kéo đổi cỡ + lưu localStorage), `use-pane-state.ts`, `use-copy-to-clipboard.ts`, `use-typewriter.ts`, `use-file-drop-guard.ts`, `use-window-buttons-hover.ts`, `use-cached-request.ts`.
+`use-confirm.tsx` (xác nhận), `use-resizable-width.ts` (kéo đổi cỡ + lưu localStorage), `use-pane-state.ts`, `use-copy-to-clipboard.ts`, `use-typewriter.ts`, `use-file-drop-guard.ts`, `use-cached-request.ts`.
 
 ## 7. Class `pm-*` trong `src/css/app.css`
 

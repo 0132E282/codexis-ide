@@ -1,7 +1,10 @@
+use super::activity::CHAT_IMAGE_STORE_FAILED;
+use super::state::AppState;
+use crate::activity::{self, ActivityStore};
 use crate::attachments::{self, AttachmentError};
 use std::path::{Path, PathBuf};
 use tauri::ipc::{InvokeBody, Request};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Folder in the app cache where pasted attachments live.
 fn attachments_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -11,9 +14,13 @@ fn attachments_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|_| AttachmentError::SaveFailed.to_string())
 }
 
-/// Saves a pasted image or file (the raw bytes are the request body, its name is in the `x-name` header, percent-encoded) and returns the path to give the CLI as `@path`.
+/// Saves a pasted image or file (the raw bytes are the request body, its name is in the `x-name` header, percent-encoded) and returns the path to give the CLI as `@path`. A picture is also kept in the database to look at again, under the project named by the optional `x-root` header (percent-encoded; the open project when absent) and the conversation of the optional `x-conversation` header; a failure there is reported as the `chat-image-store-failed` event and never fails the save.
 #[tauri::command]
-pub fn attachment_save(app: AppHandle, request: Request<'_>) -> Result<String, String> {
+pub fn attachment_save(
+    app: AppHandle,
+    state: State<AppState>,
+    request: Request<'_>,
+) -> Result<String, String> {
     let InvokeBody::Raw(data) = request.body() else {
         return Err(AttachmentError::Empty.to_string());
     };
@@ -24,10 +31,40 @@ pub fn attachment_save(app: AppHandle, request: Request<'_>) -> Result<String, S
         .map(|value| percent_decode(truncate_to_boundary(value, attachments::MAX_RAW_NAME_BYTES)))
         .unwrap_or_default();
     let dir = attachments_dir(&app)?;
+    let path = attachments::save(&dir, &name, data).map_err(|error| error.to_string())?;
 
-    attachments::save(&dir, &name, data)
-        .map(|path| path.display().to_string())
-        .map_err(|error| error.to_string())
+    if activity::image_mime(data).is_some() {
+        let header = |key: &str| {
+            request
+                .headers()
+                .get(key)
+                .and_then(|value| value.to_str().ok())
+                .map(|value| {
+                    percent_decode(truncate_to_boundary(value, attachments::MAX_RAW_NAME_BYTES))
+                })
+        };
+        let conversation = header("x-conversation").and_then(|value| value.parse::<i64>().ok());
+        let stored = state
+            .workspace_key(header("x-root").as_deref())
+            .and_then(|root| {
+                app.try_state::<ActivityStore>()
+                    .ok_or_else(|| "activity.save_failed".to_string())
+                    .and_then(|store| {
+                        store
+                            .save_image(&root, conversation, &name, data)
+                            .map_err(|error| error.to_string())
+                    })
+            });
+
+        if let Err(error) = stored {
+            let _ = app.emit(
+                CHAT_IMAGE_STORE_FAILED,
+                serde_json::json!({ "error": error }),
+            );
+        }
+    }
+
+    Ok(path.display().to_string())
 }
 
 /// Bytes of a pasted image or file saved earlier by `attachment_save`, so the chat can show it; paths outside the attachments folder are refused.

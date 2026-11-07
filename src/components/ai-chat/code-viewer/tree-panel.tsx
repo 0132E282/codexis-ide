@@ -1,3 +1,12 @@
+import { toast } from 'sonner';
+import { FileIcon } from '@/components/ai-chat/file-icon';
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { ide } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -7,6 +16,7 @@ import {
     List,
     MoreHorizontal,
     PanelRightOpen,
+    Plus,
     Search,
     X,
 } from 'lucide-react';
@@ -19,6 +29,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Field } from '@/components/form';
 import { Input } from '@/components/ui/input';
 import { PanelMenu } from '@/components/shell/panel-menu';
 import { LoadingRows } from '@/components/ai-chat/loading-rows';
@@ -126,6 +137,111 @@ export function TreePanel({
     };
 
     const onLeft = placement.placement === 'left';
+    const isFloating = placement.placement === 'float';
+    // * Where a new file or folder is being named (folder: empty is the project root), and the name typed so far.
+    const [creating, setCreating] = useState<{
+        folder: string;
+        isFolder: boolean;
+    } | null>(null);
+    const [newName, setNewName] = useState('');
+    const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
+
+    const startCreate = (folder: string, isFolder: boolean) => {
+        setNewName('');
+        setCreating({ folder, isFolder });
+
+        // * The folder opens so the name row shows inside it.
+        if (folder !== '' && !openDirs.has(folder)) {
+            onToggle(folder);
+        }
+    };
+
+    const submitCreate = async () => {
+        const name = newName.trim();
+
+        if (creating === null || name === '') {
+            setCreating(null);
+
+            return;
+        }
+
+        if (name.includes('/')) {
+            toast.error(t('common.name_has_slash'));
+
+            return;
+        }
+
+        try {
+            const created = await ide.workspaceCreate(
+                creating.folder,
+                name,
+                creating.isFolder,
+                localRoot ?? undefined,
+            );
+
+            setCreating(null);
+            onReload();
+
+            if (!creating.isFolder) {
+                onSelect(created);
+            }
+        } catch (caught) {
+            toast.error(
+                t(
+                    typeof caught === 'string'
+                        ? caught
+                        : 'common.something_went_wrong',
+                ),
+            );
+        }
+    };
+
+    const createRow = (depth: number) => (
+        <li key="new-entry" role="none">
+            <form
+                // * Focused a moment after it appears, once the menu that opened it has finished giving the focus back.
+                ref={(form) => {
+                    if (form !== null) {
+                        window.setTimeout(
+                            () => form.querySelector('input')?.focus(),
+                            60,
+                        );
+                    }
+                }}
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitCreate();
+                }}
+                style={{ paddingLeft: `${depth * 12 + 8 + 20}px` }}
+                className="flex items-center gap-1.5 py-0.5 pr-2"
+            >
+                <FileIcon name={newName} dir={creating?.isFolder ?? false} />
+                <Field
+                    name="new-entry-name"
+                    className="min-w-0 flex-1 [&_input]:h-7 [&_input]:text-sm"
+                    value={newName}
+                    autoComplete="off"
+                    aria-label={
+                        creating?.isFolder
+                            ? t('common.new_folder_name')
+                            : t('common.new_file_name')
+                    }
+                    onChange={(event) => setNewName(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                            setCreating(null);
+                        }
+                    }}
+                    onBlur={() => setCreating(null)}
+                />
+            </form>
+        </li>
+    );
+    // * Menus of the rows (and the empty area) start entries through the shared actions.
+    const treeActions: FileActions = {
+        ...actions,
+        create: isLocal ? startCreate : undefined,
+    };
 
     // * The shared menu: Fill is the existing maximize; Move and Arrange pick the side of the editor.
     const changePlacement = (next: PanelPlacement) => {
@@ -174,7 +290,12 @@ export function TreePanel({
             style={{ width: treeWidth.width }}
             className={cn(
                 'relative hidden min-h-0 max-w-full shrink-0 flex-col md:flex',
-                onLeft ? 'mr-auto border-r' : 'ml-auto border-l',
+                // * Floating: a card over the window (it stays mounted, and takes no room from the editor).
+                isFloating
+                    ? 'bg-background fixed top-16 right-4 bottom-4 z-30 rounded-lg border shadow-xl'
+                    : onLeft
+                      ? 'mr-auto border-r'
+                      : 'ml-auto border-l',
             )}
         >
             <ResizeHandle
@@ -198,6 +319,37 @@ export function TreePanel({
                 >
                     <Search aria-hidden="true" />
                 </Button>
+                {isLocal && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={t('common.create_new')}
+                                title={t('common.create_new')}
+                                className="text-muted-foreground"
+                            >
+                                <Plus aria-hidden="true" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="start"
+                            onCloseAutoFocus={(event) => event.preventDefault()}
+                        >
+                            <DropdownMenuItem
+                                onSelect={() => startCreate('', false)}
+                            >
+                                {t('common.new_file')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => startCreate('', true)}
+                            >
+                                {t('common.new_folder')}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
                 <Button
                     type="button"
                     variant="ghost"
@@ -259,6 +411,7 @@ export function TreePanel({
                     <PanelMenu
                         placement={isMaximized ? 'fill' : placement.placement}
                         dockedPlacement={placement.dockedPlacement}
+                        floatable
                         edges={TREE_EDGES}
                         onPlacementChange={changePlacement}
                     />
@@ -338,7 +491,7 @@ export function TreePanel({
                     placeholder={t('tree_panel.filter_files2')}
                     className="h-8"
                 />
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
                     {paths === null ? (
                         <LoadingRows rows={10} className="px-2" />
                     ) : error !== null ? (
@@ -348,7 +501,7 @@ export function TreePanel({
                         >
                             {error}
                         </p>
-                    ) : tree.length === 0 ? (
+                    ) : tree.length === 0 && creating === null ? (
                         <p className="px-2 text-sm text-muted-foreground">
                             {t('tree_panel.no_files')}
                         </p>
@@ -365,8 +518,37 @@ export function TreePanel({
                             onMark={onMark}
                             changed={changed}
                             changedDirs={changedDirs}
-                            actions={actions}
+                            actions={treeActions}
+                            createIn={
+                                creating === null ? null : creating.folder
+                            }
+                            renderCreateRow={createRow}
                         />
+                    )}
+                    {/* * The empty area below the rows: a right-click there creates at the project root. */}
+                    {isLocal && (
+                        <ContextMenu>
+                            <ContextMenuTrigger asChild>
+                                <div className="min-h-12 flex-1" />
+                            </ContextMenuTrigger>
+                            <ContextMenuContent
+                                className="w-56"
+                                onCloseAutoFocus={(event) =>
+                                    event.preventDefault()
+                                }
+                            >
+                                <ContextMenuItem
+                                    onSelect={() => startCreate('', false)}
+                                >
+                                    {t('common.new_file')}
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onSelect={() => startCreate('', true)}
+                                >
+                                    {t('common.new_folder')}
+                                </ContextMenuItem>
+                            </ContextMenuContent>
+                        </ContextMenu>
                     )}
                 </div>
             </nav>

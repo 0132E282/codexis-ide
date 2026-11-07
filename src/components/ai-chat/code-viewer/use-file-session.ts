@@ -1,3 +1,4 @@
+import { notifyDocumentSaved } from '@/lib/language-save';
 import { t } from '@/lib/i18n';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -21,6 +22,8 @@ export function useFileSession({
     paths,
     changed,
     openRequest,
+    isPreviewTabEnabled,
+    isAutoSaveEnabled,
 }: {
     repo: string;
     branch: string | null;
@@ -29,6 +32,10 @@ export function useFileSession({
     paths: string[] | null;
     changed: Map<string, AiChatProposal>;
     openRequest: { repo: string; path: string; id: number } | null;
+    /** * Off: a file opened by a click gets a normal tab. */
+    isPreviewTabEnabled: boolean;
+    /** * Off: an edit is saved only by Cmd/Ctrl+S. */
+    isAutoSaveEnabled: boolean;
 }) {
     const [selected, setSelected] = useState<string | null>(null);
     // * Files open as tabs (the active one is `selected`); an unsaved edit of a tab that is not active waits in `drafts`.
@@ -202,7 +209,9 @@ export function useFileSession({
                 ? current.map((item) => (item === replaced ? path : item))
                 : [...current, path];
         });
-        setPreviewTab((current) => (tabs.includes(path) ? current : path));
+        setPreviewTab((current) =>
+            tabs.includes(path) || !isPreviewTabEnabled ? current : path,
+        );
         setView('files');
         setSelected(path);
         stopTyping.current();
@@ -380,6 +389,8 @@ export function useFileSession({
                 content: written,
                 original: content,
             });
+            // * A language server (if one runs for this file) hears that the file reached the disk.
+            notifyDocumentSaved(localRoot, selected, written);
             setContent(written);
             // * Typing went on during the request: that newer text stays a draft and is saved next.
             setDraft((current) => (current === typed ? null : current));
@@ -433,14 +444,14 @@ export function useFileSession({
     autoSave.current = save;
 
     useEffect(() => {
-        if (draft === null || saving) {
+        if (!isAutoSaveEnabled || draft === null || saving) {
             return;
         }
 
         const timer = window.setTimeout(() => void autoSave.current(), 800);
 
         return () => window.clearTimeout(timer);
-    }, [draft, saving]);
+    }, [draft, saving, isAutoSaveEnabled]);
 
     // * Only a plain local text file can be edited; GitHub files and AI proposals stay read-only.
     const editable =

@@ -374,7 +374,7 @@ export function ChatGrid({
                             repos={[`local:${picked.workspace}`]}
                             onViewRepo={ignore}
                             changes={[]}
-                            assistant={{ name: 'Rynox' }}
+                            assistant={{ name: 'Codexis' }}
                             onInlineAsk={askAssistant(picked.workspace)}
                         />
                     </div>
