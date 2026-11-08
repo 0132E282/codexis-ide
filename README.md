@@ -24,12 +24,12 @@ Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rus
 - **Trình soạn code**: Monaco, cây thư mục, tab tệp, đổi tên, lưu có kiểm tra xung đột bằng hash nội dung, diff thay đổi, mở nhanh tệp.
 - **Terminal thật**: shell chạy qua PTY ngay trong app.
 - **Git**: tệp thay đổi, commit, hoàn tác, lịch sử commit, lịch sử từng tệp, blame, nhánh (so sánh, checkout, merge, pull). IDE không push.
-- **AI agent**: điều khiển CLI `claude` và `codex`; lịch sử và mã phiên CLI được lưu theo thư mục dự án nên mở lại là tiếp tục đúng hội thoại. Có chế độ quyền, đính kèm ảnh/tệp, relay giữa hai AI (tối đa 6 lượt), tác vụ nền và sub-agent. CLI `gemini` chưa được hỗ trợ.
-- **Lưới chat và khung nổi**: đặt tối đa 4 chat cạnh nhau theo nhóm, chat song song (multichat), vùng tệp và panel ở chế độ nổi.
-- **Plans**: đọc `docs/plans/` của dự án thành danh sách thẻ (tiêu đề, trạng thái, tiến độ), chỉ đọc.
+- **AI agent**: điều khiển CLI `claude` và `codex`; lịch sử và mã phiên CLI được lưu theo thư mục dự án nên mở lại là tiếp tục đúng hội thoại. Có chế độ quyền, đính kèm ảnh/tệp, tin nhắn đang chờ hiện ngay trong khung chat, từ thẻ "Đã sửa tệp" mở thẳng màn thay đổi, relay giữa hai AI (tối đa 6 lượt), tác vụ nền và sub-agent. CLI `gemini` chưa được hỗ trợ.
+- **Lưới chat và khung nổi**: đặt tối đa 4 chat cạnh nhau theo nhóm, **Hỏi nhanh** (side chat: các tab hỏi AI chỉ đọc cạnh chat chính), vùng tệp và panel ở chế độ nổi. Mỗi panel đặt được vị trí qua menu, có thể lưu làm mặc định hoặc đặt lại.
+- **Plans**: đọc `docs/plans/` của dự án thành danh sách thẻ (tiêu đề, trạng thái, tiến độ), chỉ đọc; danh sách và chi tiết tự làm mới khi tệp trong `docs/plans/` đổi.
 - **Language server**: dùng lại language server có sẵn trong extension VS Code (VS Code, Insiders, Cursor, VSCodium) đã cài trên máy; IDE chỉ đọc manifest, không chạy script của extension.
 - **Giọng nói**: đọc câu trả lời bằng máy chủ TTS cục bộ (VieNeu-TTS) do người dùng tự chạy; chỉ kết nối địa chỉ loopback.
-- **Dữ liệu và dung lượng**: thống kê dung lượng dữ liệu của chính IDE, cảnh báo khi quá lớn, dọn dẹp khi người dùng xác nhận.
+- **Dữ liệu và dung lượng**: mục Tài liệu gom ảnh người dùng đính kèm và ảnh công cụ trả về cho AI; thống kê dung lượng dữ liệu của chính IDE, cảnh báo khi quá lớn, dọn dẹp khi người dùng xác nhận.
 - **Ứng dụng**: bố cục panel tuỳ chỉnh, giao diện Việt/Anh, tự cập nhật qua GitHub Releases, kết nối điện thoại từ xa.
 
 ## Bảo mật và quyền riêng tư
