@@ -924,7 +924,7 @@ sequenceDiagram
     participant P as CLI claude
     participant A as agent/claude.rs parse_line
     participant O as commands/agent.rs (observer)
-    participant D as app_data_dir/projects/&lt;khoá&gt;/
+    participant D as app_data_dir/projects/(khoá dự án)
     participant C as use-agent-turns / use-chat-session
 
     P-->>A: control_request can_use_tool ExitPlanMode {plan}

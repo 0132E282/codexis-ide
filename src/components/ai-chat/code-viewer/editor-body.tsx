@@ -12,6 +12,15 @@ import type { CursorStore } from './cursor-position';
 import type { AskReference, InlineAskHandler } from './types';
 import { typedLines } from './typed-lines';
 
+/** The markdown with its YAML front matter (`---` ... `---` at the very top) shown as a yaml code block: left as is, the closing `---` turns the lines above it into a heading. */
+function withFrontMatterAsCode(markdown: string): string {
+    const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(markdown);
+
+    return match === null
+        ? markdown
+        : `\`\`\`yaml\n${match[1]}\n\`\`\`\n\n${markdown.slice(match[0].length)}`;
+}
+
 // * Monaco is heavy: it loads only when a file is opened.
 const MonacoCode = lazy(() => import('@/components/ai-chat/monaco-code'));
 const MonacoDiff = lazy(() => import('@/components/ai-chat/monaco-diff'));
@@ -110,7 +119,7 @@ export function EditorBody({
                             : undefined
                     }
                 >
-                    <MarkdownContent content={content} />
+                    <MarkdownContent content={withFrontMatterAsCode(content)} />
                 </div>
             ) : (
                 <div className="relative min-h-0 flex-1">

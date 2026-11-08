@@ -366,7 +366,8 @@ export function CodeViewer({
     });
     const openPath = useStableCallback((path: string) => void openFile(path));
     const selectInTree = useStableCallback((path: string) => {
-        setMarked(new Set());
+        // * Keeps the same set when nothing is marked, so the tree rows do not see a new prop on every click.
+        setMarked((current) => (current.size === 0 ? current : new Set()));
         void openFile(path);
     });
     const markInTree = useStableCallback((path: string) =>

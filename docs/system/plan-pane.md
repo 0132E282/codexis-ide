@@ -216,7 +216,7 @@ sequenceDiagram
     participant R as agent_send (Rust)
     participant X as plan.rs
     participant S as project_data.rs
-    participant F as projects/&lt;khoá&gt;/
+    participant F as projects/(khoá dự án)
     participant C as ChatPanel
 
     R->>X: Plan::from_tool("ExitPlanMode", input)

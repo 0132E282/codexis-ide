@@ -18,6 +18,7 @@ pub mod language_server_catalog;
 pub mod language_server_config;
 pub mod language_server_convert;
 pub mod language_server_protocol;
+pub mod linter;
 pub mod migrations;
 pub mod permission;
 pub mod plans;
@@ -92,6 +93,7 @@ pub fn run() {
             commands::files::workspace_read_media,
             commands::files::workspace_write,
             commands::files::format_code,
+            commands::files::lint_code,
             commands::files::open_in_vscode,
             commands::terminal::terminal_open,
             commands::terminal::terminal_write,

@@ -4,6 +4,16 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { t } from '@/lib/i18n';
 
 export type FileContent = { content: string; hash: string };
+/** One problem ESLint found in a file (lines and columns start at 1; severity 1 is a warning, 2 an error). */
+export type LintMessage = {
+    rule: string | null;
+    severity: 1 | 2;
+    message: string;
+    line: number;
+    column: number;
+    endLine: number;
+    endColumn: number;
+};
 export type EnvVar = { key: string; value: string };
 export type Project = {
     id: string;
@@ -212,6 +222,9 @@ export const ide = {
         }),
     read: (path: string, root?: string) =>
         invoke<FileContent>('workspace_read', { path, root }),
+    /** The ESLint problems of `content` as the project's own ESLint finds them (none when it cannot be checked). */
+    lintCode: (path: string, content: string, root?: string) =>
+        invoke<LintMessage[]>('lint_code', { path, content, root }),
     write: (
         path: string,
         content: string,

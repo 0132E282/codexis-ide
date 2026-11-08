@@ -20,6 +20,7 @@ import {
 } from '@/components/ai-chat/monaco-setup';
 import { t } from '@/lib/i18n';
 import { useLanguageServer } from '@/components/ai-chat/code-viewer/use-language-server';
+import { useEslint } from './code-viewer/use-eslint';
 import { useBlameAnnotation } from '@/components/ai-chat/blame-annotation';
 import type { GitBlameLine } from '@/lib/ide';
 import type { CursorStore } from '@/components/ai-chat/code-viewer/cursor-position';
@@ -114,6 +115,13 @@ export default function MonacoCode({
         useState<editor.IStandaloneCodeEditor | null>(null);
 
     useBlameAnnotation(instance, blame ?? null);
+
+    // * ESLint underlines (editable local files only; a file the project cannot lint shows none).
+    useEslint({
+        instance: editable ? instance : null,
+        root: languageServer?.root ?? null,
+        path,
+    });
 
     const { active: serverActive, dialog: serverDialog } = useLanguageServer({
         instance: editable ? instance : null,

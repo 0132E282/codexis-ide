@@ -156,6 +156,22 @@ pub async fn format_code(
     .await
 }
 
+/// The ESLint problems of the text of a file (none when it cannot be checked), found with the project's ESLint; runs `eslint` off the UI thread.
+#[tauri::command]
+pub async fn lint_code(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+    content: String,
+) -> Result<Vec<crate::linter::LintMessage>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("files.lint_failed", move || {
+        Ok(crate::linter::lint(&workspace, &path, &content))
+    })
+    .await
+}
+
 #[tauri::command]
 pub fn open_in_vscode(
     state: State<AppState>,

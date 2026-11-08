@@ -65,6 +65,18 @@ impl CliKind {
     }
 }
 
+/// `PATH` with the usual install folders added at the end, for a program that starts others by name (a `node` script's `env node`): a desktop app does not inherit the shell's `PATH`.
+pub fn search_path() -> std::ffi::OsString {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let extra = EXTRA_BIN_DIRS.iter().map(|dir| match &home {
+        Some(home) if !dir.starts_with('/') => home.join(dir),
+        _ => PathBuf::from(dir),
+    });
+
+    std::env::join_paths(std::env::split_paths(&path).chain(extra)).unwrap_or(path)
+}
+
 /// Full path of the CLI, searched in `PATH` first and then in the usual install folders.
 pub fn locate(program: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
