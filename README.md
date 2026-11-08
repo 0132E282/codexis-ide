@@ -5,7 +5,7 @@
 
 <p align="center">
   <strong>Trình soạn code desktop có AI agent tích hợp.</strong><br />
-  Soạn code, theo dõi thay đổi Git, chạy terminal và làm việc cùng <code>claude</code> / <code>codex</code> ngay trong thư mục dự án của bạn.
+  Soạn code, theo dõi Git, chạy terminal và chat với <code>claude</code> / <code>codex</code> ngay trong dự án.
 </p>
 
 <p align="center">
