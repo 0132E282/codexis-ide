@@ -15,6 +15,7 @@ fn turn(id: &str, answer: &str) -> ChatTurn {
         answer: answer.into(),
         error: None,
         steps: None,
+        context: None,
     }
 }
 
@@ -452,4 +453,26 @@ fn chat_grids_span_projects_keep_groups_and_forget_deleted_conversations() {
 
     store.save_grid(&[]).unwrap();
     assert!(store.grid().unwrap().is_empty());
+}
+
+#[test]
+fn context_of_a_turn_is_saved_loaded_and_validated() {
+    let (_dir, mut store) = store();
+    let c = store.load("/a", None).unwrap().conversation;
+    let mut with_context = turn("t1", "một");
+
+    with_context.context = Some(r#"{"used":1200,"window":200000,"percent":0.6}"#.into());
+    store.save_turn("/a", c, &with_context).unwrap();
+    store.save_turn("/a", c, &turn("t2", "hai")).unwrap();
+
+    let turns = store.load("/a", Some(c)).unwrap().turns;
+
+    assert_eq!(turns[0].context, with_context.context);
+    assert_eq!(turns[1].context, None);
+
+    with_context.context = Some("{not json".into());
+    assert_eq!(
+        store.save_turn("/a", c, &with_context),
+        Err(ChatError::Rejected("validation.bad_steps"))
+    );
 }

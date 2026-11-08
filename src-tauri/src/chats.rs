@@ -86,6 +86,9 @@ pub struct ChatTurn {
     /// What the AI did during the turn, as the JSON the UI made; stored as is.
     #[serde(default)]
     pub steps: Option<String>,
+    /// Context usage after the turn, as the JSON the UI got from the agent; stored as is.
+    #[serde(default)]
+    pub context: Option<String>,
 }
 
 const MAX_TITLE_CHARS: usize = 60;
@@ -218,7 +221,7 @@ impl ChatStore {
             let turns = sql::list_ordered(
                 &self.connection,
                 "chat_turns",
-                &["id", "cli", "prompt", "answer", "error", "steps"],
+                &["id", "cli", "prompt", "answer", "error", "steps", "context"],
                 Condition::all().add(Expr::col(Alias::new("conversation")).eq(id)),
                 "position",
                 |row| {
@@ -229,6 +232,7 @@ impl ChatStore {
                         answer: row.get(3)?,
                         error: row.get(4)?,
                         steps: row.get(5)?,
+                        context: row.get(6)?,
                     })
                 },
             )?;
@@ -328,6 +332,10 @@ impl ChatStore {
             validation::steps_json(steps)?;
         }
 
+        if let Some(context) = &turn.context {
+            validation::steps_json(context)?;
+        }
+
         if CliKind::parse_agent(&turn.cli).is_none()
             || turn.answer.len() > MAX_ANSWER_BYTES
             || !self.owns(workspace, conversation)
@@ -357,14 +365,15 @@ impl ChatStore {
 
             // An update keeps the row's place and its conversation.
             transaction.execute(
-                "INSERT INTO chat_turns (workspace, id, position, cli, prompt, answer, error, conversation, steps)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                "INSERT INTO chat_turns (workspace, id, position, cli, prompt, answer, error, conversation, steps, context)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT (workspace, id) DO UPDATE SET
                      cli = excluded.cli,
                      prompt = excluded.prompt,
                      answer = excluded.answer,
                      error = excluded.error,
-                     steps = excluded.steps",
+                     steps = excluded.steps,
+                     context = excluded.context",
                 params![
                     workspace,
                     turn.id,
@@ -374,7 +383,8 @@ impl ChatStore {
                     turn.answer,
                     turn.error,
                     conversation,
-                    turn.steps
+                    turn.steps,
+                    turn.context
                 ],
             )?;
             transaction.execute(

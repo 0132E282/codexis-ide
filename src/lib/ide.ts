@@ -105,6 +105,8 @@ export type ChatTurnRecord = {
     error: string | null;
     /** What the AI did during the turn, as JSON of `Step[]`. */
     steps?: string | null;
+    /** Context usage after the turn, as JSON of `ContextUsage`. */
+    context?: string | null;
 };
 /** Saved chat of the open workspace; `workspace` is the key to hand back when saving. */
 export type ChatHistory = {

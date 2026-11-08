@@ -29,6 +29,8 @@ pub const CREATE_ACTIVITY_TABLES: &str =
 
 pub const ADD_CONVERSATION_INDEX_TO_CHAT_TURNS: &str =
     include_str!("../database/migrations/0012_add_conversation_index_to_chat_turns.sql");
+pub const ADD_CONTEXT_TO_CHAT_TURNS: &str =
+    include_str!("../database/migrations/0013_add_context_to_chat_turns.sql");
 
 /// Runs the `ALTER TABLE` in `migration` when a file made by an older version lacks `column` in `table`.
 ///

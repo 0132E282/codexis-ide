@@ -1,3 +1,4 @@
+import type { ContextUsage } from '@/components/shell/chat/turn-events';
 import type { AgentCli, ChangedFile, ChatHistory, Step } from '@/lib/ide';
 
 /** A tool the AI asks to use, waiting for the person's answer. */
@@ -23,6 +24,8 @@ export type Turn = {
     changed?: ChangedFile[];
     /** Questions of the AI ("Hỏi từng việc" mode) not answered yet; the first one is shown. */
     permissions?: PermissionRequest[];
+    /** Context usage the agent reported for this turn; saved with it. */
+    context?: ContextUsage;
     /** Loaded from the saved history: shown at once, not typed out. */
     restored?: boolean;
 };
@@ -71,10 +74,36 @@ function parseSteps(saved: string | null | undefined): Step[] | undefined {
     }
 }
 
+/** The saved context usage of a turn; undefined when there is none or it cannot be read. */
+function parseContext(
+    saved: string | null | undefined,
+): ContextUsage | undefined {
+    if (saved === null || saved === undefined || saved === '') {
+        return undefined;
+    }
+
+    try {
+        return JSON.parse(saved) as ContextUsage;
+    } catch {
+        return undefined;
+    }
+}
+
+/** The context usage saved with the last turn that has one; null when there is none. */
+export function restoreContext(history: ChatHistory): ContextUsage | null {
+    const saved = [...history.turns]
+        .reverse()
+        .map((turn) => parseContext(turn.context))
+        .find((usage) => usage !== undefined);
+
+    return saved ?? null;
+}
+
 /** The turns of a saved conversation, ready to show (nothing is running, nothing is typed out again). */
 export function restoreTurns(history: ChatHistory): Turn[] {
-    return history.turns.map(({ steps, ...turn }) => ({
+    return history.turns.map(({ steps, context, ...turn }) => ({
         ...turn,
+        context: parseContext(context),
         steps: parseSteps(steps),
         // * Turns saved by an older version hold the tool calls as `> ⚙ {json}` lines; they are not part of the answer.
         answer: turn.answer

@@ -83,6 +83,7 @@ fn prepare(path: &Path) -> rusqlite::Result<Connection> {
     add_archived_column(&connection)?;
     add_conversation_column(&connection)?;
     add_steps_column(&connection)?;
+    add_context_column(&connection)?;
     connection.execute_batch(migrations::ADD_CONVERSATION_INDEX_TO_CHAT_TURNS)?;
     group_old_turns(&connection)?;
 
@@ -124,6 +125,16 @@ fn add_steps_column(connection: &Connection) -> rusqlite::Result<()> {
         "chat_turns",
         "steps",
         migrations::ADD_STEPS_TO_CHAT_TURNS,
+    )
+}
+
+/// Files made before the context usage of a turn was kept lack the column.
+fn add_context_column(connection: &Connection) -> rusqlite::Result<()> {
+    migrations::apply_if_column_missing(
+        connection,
+        "chat_turns",
+        "context",
+        migrations::ADD_CONTEXT_TO_CHAT_TURNS,
     )
 }
 
@@ -227,6 +238,7 @@ pub fn in_memory() -> Connection {
     add_archived_column(&connection).expect("schema");
     add_conversation_column(&connection).expect("schema");
     add_steps_column(&connection).expect("schema");
+    add_context_column(&connection).expect("schema");
     connection
         .execute_batch(migrations::ADD_CONVERSATION_INDEX_TO_CHAT_TURNS)
         .expect("schema");

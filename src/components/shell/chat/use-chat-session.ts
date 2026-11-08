@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PlanData } from '@/components/shell/plan-pane';
 import { parsePayload } from '@/components/shell/chat/turn-events';
 import type { ContextUsage } from '@/components/shell/chat/turn-events';
-import { restoreTurns } from '@/components/shell/chat/turn';
+import { restoreContext, restoreTurns } from '@/components/shell/chat/turn';
 import type { Turn } from '@/components/shell/chat/turn';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { ide } from '@/lib/ide';
@@ -79,7 +79,7 @@ export function useChatSession({
         setTurns((current) => (replace ? restored : [...restored, ...current]));
 
         if (replace) {
-            setContext(null);
+            setContext(restoreContext(history));
             setPlan(null);
         }
 

@@ -173,6 +173,10 @@ export function useAgentTurns({
                                   key === 'images' ? undefined : value,
                               )
                             : null,
+                    context:
+                        turn.context === undefined
+                            ? null
+                            : JSON.stringify(turn.context),
                 })
                 .then(() => notifyChanged())
                 .catch((caught) => console.error(errorText(caught)));
@@ -307,6 +311,7 @@ export function useAgentTurns({
 
                     if (usage !== null) {
                         setContext(usage);
+                        update(runId, (turn) => ({ ...turn, context: usage }));
                     }
 
                     break;
