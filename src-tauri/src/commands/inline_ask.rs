@@ -10,16 +10,16 @@ use tauri::{AppHandle, Manager, State};
 /// Question about a snippet picked in the editor: the file, lines and code go to the Claude CLI.
 fn inline_prompt(path: &str, start_line: u32, end_line: u32, text: &str, question: &str) -> String {
     let lines = if start_line == 0 || end_line == 0 {
-        "cả tệp".to_string()
+        "whole file".to_string()
     } else if start_line == end_line {
-        format!("dòng {start_line}")
+        format!("line {start_line}")
     } else {
-        format!("dòng {start_line}-{end_line}")
+        format!("lines {start_line}-{end_line}")
     };
 
     format!(
-        "Trả lời ngắn gọn, đúng trọng tâm, bằng đúng ngôn ngữ của câu hỏi. Chỉ trả lời, không sửa tệp.\n\n\
-         Tệp: {path} ({lines})\n```\n{text}\n```\n\nCâu hỏi: {question}"
+        "Answer briefly and to the point, in the same language as the question. Only answer, do not edit files.\n\n\
+         File: {path} ({lines})\n```\n{text}\n```\n\nQuestion: {question}"
     )
 }
 

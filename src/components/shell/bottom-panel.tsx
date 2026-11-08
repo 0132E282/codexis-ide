@@ -9,7 +9,7 @@ import { GitHistoryPane } from '@/components/shell/git-history-pane';
 import { PanelMenu } from '@/components/shell/panel-menu';
 import { PlansPane } from '@/components/shell/plans-pane';
 import { BackgroundTasksPane } from '@/components/shell/background-tasks-pane';
-import { useBackgroundTasks } from '@/components/shell/chat/use-background-tasks';
+import type { useBackgroundTasks } from '@/components/shell/chat/use-background-tasks';
 import { Button } from '@/components/ui/button';
 import type {
     DockedPlacement,
@@ -32,22 +32,30 @@ export function BottomPanel({
     dockedPlacement,
     historyPath,
     onPlacementChange,
+    onSaveDefault,
+    onResetDefault,
     onClearHistoryPath,
     onTabChange,
     onClose,
+    background,
     onOpenSubagent,
     onOpenFile,
     onSendPrompt,
+    runningPrompts,
 }: {
     tab: BottomTab;
     /** Folder of the open project. */
     root: string | undefined;
+    /** The background tasks of the open project (one source, shared with the sidebar shortcuts). */
+    background: ReturnType<typeof useBackgroundTasks>;
     /** Where the panel sits: under the work area, filling it, or floating over it. */
     placement: PanelPlacement;
     dockedPlacement: DockedPlacement;
     /** The file the Lịch sử tab is limited to (null: the whole project). */
     historyPath: string | null;
     onPlacementChange: (placement: PanelPlacement) => void;
+    onSaveDefault: () => void;
+    onResetDefault: () => void;
     onClearHistoryPath: () => void;
     onTabChange: (tab: BottomTab) => void;
     onClose: () => void;
@@ -57,9 +65,11 @@ export function BottomPanel({
     onOpenFile: (path: string) => void;
     /** Sends a message to the chat of the open project. */
     onSendPrompt: (text: string) => void;
+    /** Prompts of the turns running in the chat of the open project. */
+    runningPrompts: string[];
 }) {
     const sessions = useTerminalSessions(onClose);
-    const { tasks, failed, stopTask, clearFinished } = useBackgroundTasks(root);
+    const { tasks, failed, stopTask, clearFinished } = background;
     const hasFinished = tasks.some((task) => task.state !== 'running');
     // * The shells start with the first visit to the Terminal tab and then stay alive while another tab is shown.
     const [terminalStarted, setTerminalStarted] = useState(tab === 'terminal');
@@ -159,6 +169,8 @@ export function BottomPanel({
                         floatable
                         edges={['bottom']}
                         onPlacementChange={onPlacementChange}
+                        onSaveDefault={onSaveDefault}
+                        onResetDefault={onResetDefault}
                     />
                     <Button
                         type="button"
@@ -195,6 +207,7 @@ export function BottomPanel({
                         root={root}
                         onOpenFile={onOpenFile}
                         onSendPrompt={onSendPrompt}
+                        runningPrompts={runningPrompts}
                     />
                 )}
                 {terminalStarted && (

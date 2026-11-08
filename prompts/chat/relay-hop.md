@@ -1,5 +1,5 @@
-[Chuyển tiếp trong cùng cuộc trò chuyện] {from} (một AI khác trong Codexis IDE) gửi bạn tin nhắn bên dưới. Trả lời trực tiếp và ngắn gọn; câu trả lời của bạn sẽ được gửi lại cho {from}. Chỉ nhờ một AI khác khi thật sự cần, bằng khối mã có ngôn ngữ `relay:<tên AI>` (tên là `claude` hoặc `codex`), không nhờ chính bạn.{context}
+[Relay within the same conversation] {from} (another AI in Codexis IDE) sent you the message below. Answer directly and briefly; your answer will be sent back to {from}. Ask another AI only when truly needed, with a code block of language `relay:<AI name>` (the name is `claude` or `codex`), never ask yourself.{context}
 
-Tin nhắn từ {from}:
+Message from {from}:
 
 {message}

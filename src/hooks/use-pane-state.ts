@@ -29,6 +29,8 @@ export type PaneState = {
     openFile: { path: string; n: number } | null;
     /** A message a button of the plans list asked the chat to send (`n` changes on every click). */
     sendPrompt: { text: string; n: number } | null;
+    /** The prompts of the turns of the chat that are running now, for the plans list to mark the plans being worked on. */
+    runningPrompts: string[];
 };
 
 export const FRESH: PaneState = {
@@ -44,6 +46,7 @@ export const FRESH: PaneState = {
     attachFile: null,
     openFile: null,
     sendPrompt: null,
+    runningPrompts: [],
 };
 
 /** The per-pane state, keyed by pane; `patchPane` changes some fields of one pane and does nothing when nothing differs. */

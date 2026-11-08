@@ -22,8 +22,11 @@ export function ChangesPanel({
     width,
     edge,
     isFilling,
+    startInset = false,
 }: {
     localRoot: string;
+    /** Leftmost column of the window: leaves room for the macOS window buttons. */
+    startInset?: boolean;
     localChanges: ReturnType<typeof useLocalChanges>;
     /** * The AI account and model picked in the chat: the commit box's "Tạo bằng AI" asks that one. */
     aiSelection?: { accountId: number | null; model: string | null };
@@ -67,7 +70,12 @@ export function ChangesPanel({
                         : 'flex shrink-0 flex-col'
                 }
             >
-                <div className="flex h-12 shrink-0 items-center gap-1 border-b px-3 text-sm">
+                <div
+                    className={cn(
+                        'flex h-12 shrink-0 items-center gap-1 border-b px-3 text-sm',
+                        startInset && 'pl-[4.5rem]',
+                    )}
+                >
                     <button
                         type="button"
                         aria-expanded={isOpen}

@@ -1,6 +1,6 @@
 # Thiết kế: ngăn Plan (kế hoạch AI đang viết khi làm việc)
 
-Trạng thái: **thiết kế đề xuất, triển khai một phần** (`plan.rs`, `project_data.rs`, `plan-pane.tsx` đã có). **Sửa 2026-11-07 theo kết quả chụp CLI thật (TASK-P01, claude 2.1.319, mục 2.1): đợt này chỉ làm phần văn bản kế hoạch qua `ExitPlanMode`; phần todo HOÃN (mục 6).** Nguồn yêu cầu: ảnh chụp ngăn "Plan" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (tiêu đề Plan, nút phóng to và đóng, trạng thái rỗng "Chưa có plan — AI viết plan ở đây khi khám phá, cứ tiếp tục chat"). Căn cứ mã `[đã kiểm]`: `agent.rs` (`parse_line`, `tool_started`, `Event::Tool`), `use-agent-turns.ts`, `turn-steps.tsx`, `workspace-pane.tsx`, `use-pane-state.ts`. `[chưa kiểm]` và `[giả định]` ghi rõ. Dock dùng chung với [side-chat.md](./side-chat.md) mục 3.7; tổng quan: [architecture.md](./architecture.md).
+Trạng thái: **đã triển khai; kiểm chứng một phần (xem mục 7)**: mã (`plan.rs`, `plan_store.rs`, `run_log.rs`, `project_data.rs`, `commands/plan.rs`, `plan-pane.tsx`) đã có và qua kiểm tự động, còn các AC cần app Tauri thật với CLI `claude` thật ghi "chưa kiểm". **Sửa 2026-11-07 theo kết quả chụp CLI thật (TASK-P01, claude 2.1.319, mục 2.1): đợt này chỉ làm phần văn bản kế hoạch qua `ExitPlanMode`; phần todo HOÃN (mục 6).** Nguồn yêu cầu: ảnh chụp ngăn "Plan" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (tiêu đề Plan, nút phóng to và đóng, trạng thái rỗng "Chưa có plan — AI viết plan ở đây khi khám phá, cứ tiếp tục chat"). Căn cứ mã `[đã kiểm]`: `agent.rs` (`parse_line`, `tool_started`, `Event::Tool`), `use-agent-turns.ts`, `turn-steps.tsx`, `workspace-pane.tsx`, `use-pane-state.ts`. `[chưa kiểm]` và `[giả định]` ghi rõ. Dock dùng chung với [side-chat.md](./side-chat.md) mục 3.7; tổng quan: [architecture.md](./architecture.md).
 
 ## 1. Phạm vi
 
@@ -263,3 +263,42 @@ Lưu ý mới từ P01:
 - **Lý do**: với claude 2.1.319, app chạy `claude -p` không có `--tools` nên CLI không có `TodoWrite`/`Task*` (mục 2.1). Bật được chỉ bằng `--tools` liệt kê **toàn bộ** tool (đổi tập tool của chat) hoặc bộ `Task*` (`CLAUDE_CODE_ENABLE_TASKS=1`, cần gộp theo `id`, khác hẳn `TodoWrite` gửi cả danh sách).
 - **Điều kiện mở lại** (một trong): (a) bản `claude` đang cài có `TodoWrite`/`Task*` trong tập tool mặc định của `-p`/stream-json; (b) người dùng duyệt việc truyền `--tools` đầy đủ hoặc `CLAUDE_CODE_ENABLE_TASKS` cho chat; (c) chụp được `todo_list` của `codex exec --json`.
 - **Đã có sẵn, giữ nguyên**: nhánh `TodoWrite` trong `plan.rs` (trường khớp chụp thật, bỏ qua `activeForm`), `TodoList` và khoá `plan_pane.status_*` trong `plan-pane.tsx`. Khi mở lại: chụp lại CLI, thêm `Task*` gộp theo id, lập task mới (TASK-P10 trong plan).
+
+## 7. Trạng thái kiểm chứng (TASK-P06, 2026-11-08)
+
+### 7.1. Năm lệnh kiểm chứng (chạy thật)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Pass (mã thoát 0) |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` | Pass (mã thoát 0) |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal` | Pass: 556 passed, 0 failed (1 test bỏ qua theo ý người dùng) |
+| `pnpm typecheck` | Pass: 0 lỗi `error TS` (mục "Vấn đề đã biết" của AGENTS.md ghi 22 lỗi cũ không còn thấy) |
+| `pnpm lint` | Pass: 0 error, 66 warning (có sẵn, không thuộc plan) |
+
+Chạy nhắm riêng `-- plan project_data run_log relay remote ...`: 103 test qua.
+
+### 7.2. Từng AC
+
+"Pass (tự động)" nghĩa là có test Rust hoặc ảnh Playwright đã chạy; "chưa kiểm" nghĩa là chỉ kiểm được trên app Tauri thật (`pnpm start`) với CLI `claude` thật, phiên kiểm này không chạy được.
+
+| AC | Trạng thái | Bằng chứng / lý do |
+| --- | --- | --- |
+| P1 Mở, phóng to, đóng; chung dock với Side chat | Pass (tự động, phần UI trên vite) | Ảnh Playwright của TASK-P05 trong `.agents/storage/evidence/plan-pane/`: `vi-expanded.png`, `en-expanded.png`, `vi-placement-menu.png`, `en-placement-menu.png`, `vi-narrow-420.png`. Chạy trong app Tauri: chưa kiểm |
+| P3 Rust phát `Event::Plan` rồi `Event::Permission`; không đưa `planFilePath`; chế độ plan chạy stdio | Pass phần Rust (tự động); markdown trong ngăn khớp lượt CLI thật: chưa kiểm | `agent::claude::tests::claude_exit_plan_mode_request_gives_a_plan_then_the_question`, `agent::tests::plan_mode_asks_the_person_but_the_side_chat_stays_read_only`, `plan::tests::exit_plan_mode_gives_text`, `plan::tests::json_contract_is_camel_case_tagged`. Ảnh `vi-markdown.png`, `en-markdown.png` là dữ liệu giả lập trên vite, không phải lượt CLI thật |
+| P4 Trạng thái rỗng vi/en | Pass (tự động) | `vi-empty.png`, `en-empty.png` |
+| P5 Frontend chỉ đọc `Event::Plan` | Pass (đối chiếu mã) | Tìm trong `src/`: không còn chỗ tách plan từ `Event::Tool`/`Event::Permission`; chỉ `case 'plan'` trong `use-agent-turns.ts` và `planLoad` trong `use-chat-session.ts`. Test cùng loại: dòng `assistant` mang `ExitPlanMode`/`TodoWrite` không phát plan (trong test P3) |
+| P6 Sub-agent không phát; đổi chat reset ngăn | Pass một phần | `Plan::from_tool` chỉ được gọi ở nhánh `control_request` của `parse_line` (mã `agent/claude.rs`), dòng `assistant` không phát plan (test P3). Reset khi chuyển chat: mã `use-chat-session.ts` (`setPlan(null)` khi `replace`), chưa có test chạy. `control_request` không có `parent_tool_use_id`, sub-agent gọi `ExitPlanMode`: chưa kiểm |
+| P7 Chỉ thêm `plan_load`; `db.rs`, `Cargo.toml` không đổi | Pass một phần | `plan_load` có trong `generate_handler` (`lib.rs`); `git status` không báo `db.rs`, `Cargo.toml`, `lib.rs` đổi. `generate_handler` hiện còn các lệnh khác của tính năng khác (ví dụ `plan_docs_*`), nên vế "chỉ thêm" không so được với mốc ban đầu |
+| P8 Điện thoại bỏ qua kind `plan` | Chưa kiểm | `remote.rs::event_message` chỉ loại `runId` `side-`; `Event::Plan` vẫn được chuyển tới điện thoại như mọi `agent-event`. Chưa kiểm trang điện thoại có bỏ qua kind lạ không (Q3) |
+| P9 Plan lưu ở `projects/<khoá>/plans/<session>.json`, thư mục dự án không có tệp mới | Pass phần lưu (tự động); đối chiếu thư mục dự án thật: chưa kiểm | `plan_store::tests::a_recorded_plan_loads_back_and_merges_kinds`, `plan_store::tests::a_corrupt_file_is_replaced_by_the_next_record`, `plan_store::tests::unknown_or_unsafe_sessions_give_none_or_error`, `project_data::tests::*` (chặn `..`, symlink, ghi nguyên tử, khoá dự án). Lưu ý: `settings.save_plans_to_project` (mặc định `false`) khi bật sẽ ghi plan vào dự án (`commands/activity.rs::auto_save_plan`), khác với AC này |
+| P10 Logs theo ngày, không chứa prompt/answer/khoá, 14 ngày, 5 MB | Pass (tự động) | `run_log::tests::lines_hold_only_allowed_fields`, `run_log::tests::records_go_to_the_day_file_and_stop_at_the_size_limit`, `run_log::tests::files_older_than_fourteen_days_are_removed`, `run_log::tests::dates_round_trip_and_format`. `LogEntry` chỉ có `Start`, `Tool`, `Error`, `End`, không mang văn bản tự do. File log từ lượt thật: chưa kiểm |
+| P11 Duyệt/từ chối bằng thẻ hỏi quyền; không lượt nào treo | Chưa kiểm | Có test cho `Responder` (`agent::tests::a_permission_can_only_be_answered_once_and_only_if_asked`), nhưng `control_response` allow/deny của `ExitPlanMode` với CLI thật và hành vi sau allow (Q6, Q7) chưa chạy |
+
+### 7.3. Chưa kiểm (cần `pnpm start` với CLI `claude` thật)
+
+- Lượt chế độ plan thật: Markdown trong ngăn khớp `input.plan`, thẻ hỏi quyền `ExitPlanMode`.
+- Deny: dự án thử không đổi; allow: hành vi sau khi CLI thoát plan mode, các thẻ hỏi quyền kế tiếp (Q6, Q7).
+- Tệp `plans/<session>.json` và `logs/<ngày>.log` sinh từ lượt thật trong dữ liệu app; `git status` của dự án thử sạch.
+- Điện thoại bỏ qua kind `plan` (Q3); sub-agent gọi `ExitPlanMode`.
+- Todo (P2) hoãn, không thuộc đợt này.

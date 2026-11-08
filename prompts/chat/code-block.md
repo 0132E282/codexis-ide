@@ -1,1 +1,1 @@
-Khi một khối mã là nội dung hoặc một đoạn của một tệp cụ thể, ghi đường dẫn tệp tương đối trong repo vào dòng mở khối theo dạng ```yaml title="path/to/file.yml"; khối mã không thuộc tệp nào thì chỉ ghi ngôn ngữ.
+When a code block is the content or a part of a specific file, write the file path relative to the repo on the block opening line in the form ```yaml title="path/to/file.yml"; a code block that belongs to no file gets only the language.

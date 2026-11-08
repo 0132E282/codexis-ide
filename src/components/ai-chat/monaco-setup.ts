@@ -93,6 +93,9 @@ for (const scheme of Object.keys(CODE_PALETTES) as CodeScheme[]) {
         rules: [
             { token: 'comment', foreground: hex(palette.comment) },
             { token: 'keyword', foreground: hex(palette.keyword) },
+            // * Monaco's TS/JS Monarch tags import/export/return/if... all as plain 'keyword' (no control split) and emits no function-name token, so only languages that emit 'keyword.flow' get the control color.
+            { token: 'keyword.flow', foreground: hex(palette.control) },
+            { token: 'regexp', foreground: hex(palette.regexp) },
             { token: 'metatag', foreground: hex(palette.keyword) },
             { token: 'string', foreground: hex(palette.string) },
             { token: 'number', foreground: hex(palette.number) },

@@ -464,6 +464,12 @@ export const onTerminalData = (
 export const onTerminalExit = (handler: (id: string) => void) =>
     listen<string>('terminal-exit', ({ payload }) => handler(payload));
 
+/** Listens to changes of the plan files of a project (`docs/plans/`); the handler gets the project folder. Resolves to the function that stops listening. */
+export const onPlansChanged = (handler: (root: string) => void) =>
+    listen<{ root: string }>('plans-changed', ({ payload }) =>
+        handler(payload.root),
+    );
+
 /** Native folder picker; resolves to the chosen folders (empty when cancelled). */
 export async function pickFolders(): Promise<string[]> {
     const chosen = await open({ directory: true, multiple: true });

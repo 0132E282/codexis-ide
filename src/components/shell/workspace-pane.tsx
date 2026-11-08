@@ -1,4 +1,5 @@
 import {
+    ClipboardList,
     Code2,
     Files,
     LayoutGrid,
@@ -18,12 +19,15 @@ import { DockLayout } from '@/components/shell/dock-layout';
 import type { DockPanel } from '@/components/shell/dock-layout';
 import { PanelMenu } from '@/components/shell/panel-menu';
 import { PanelsMenu } from '@/components/shell/panels-menu';
+import { PlanPane } from '@/components/shell/plan-pane';
+import type { PlanData } from '@/components/shell/plan-pane';
 import { RailPopup } from '@/components/shell/rail-popup';
 import { SessionRail } from '@/components/shell/session-rail';
 import { SideChatDock } from '@/components/shell/side-chat-dock';
 import type { ContextUsage } from '@/components/shell/context-panel';
 import { Button } from '@/components/ui/button';
 import type { Pane, PaneState } from '@/hooks/use-pane-state';
+import { ChangesViewerContext } from '@/contexts/changes-viewer-context';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -65,6 +69,7 @@ export function WorkspacePane({
     plansOpen,
     sidebarCollapsed,
     sidebarToggle,
+    hasWindowButtons,
     bottomPanel,
     onToggleTerminal,
     onToggleBackground,
@@ -87,6 +92,8 @@ export function WorkspacePane({
     phoneOpen: boolean;
     sidebarCollapsed: boolean;
     sidebarToggle: ReactNode;
+    /** The native window buttons sit at the top-left (every case but fullscreen). */
+    hasWindowButtons: boolean;
     /** The bottom panel when it sits under the work area: drawn under the file area only, never under the main chat. */
     bottomPanel: ReactNode;
     onToggleTerminal: () => void;
@@ -104,9 +111,19 @@ export function WorkspacePane({
     const [sideChatOpen, setSideChatOpen] = useState(false);
     const sideChat = useSideChat(pane.root);
     const sideChatPlacement = usePanelPlacement('side-chat', 'bottom');
+    // * The plan the AI wrote in the open chat, the Plan panel (right column by default) and whether a plan waits unseen behind the closed panel.
+    const [plan, setPlan] = useState<PlanData | null>(null);
+    const [planOpen, setPlanOpen] = useState(false);
+    const [planWaiting, setPlanWaiting] = useState(false);
+    const planPlacement = usePanelPlacement('plan', 'right');
+    const planUnseen = planWaiting && !planOpen;
+    const togglePlan = () => {
+        setPlanOpen((open) => !open);
+        setPlanWaiting(false);
+    };
     // * The session rail: open or not, the context usage the chat reports, a counter bumped when a turn was saved (the rail reads files, branch and pull request again) and the file the rail asked the viewer to open.
     const [railOpen, setRailOpen] = useState(false);
-    // * Left of the editor moves the whole file area (tree and editor, with the Multichat under them) in front of the main chat.
+    // * Left of the editor moves the whole file area (tree and editor, with the side chat under them) in front of the main chat.
     const treePlacement = usePanelPlacement('file-tree', 'right');
     const [railContext, setRailContext] = useState<ContextUsage | null>(null);
     const [railRefresh, setRailRefresh] = useState(0);
@@ -115,6 +132,8 @@ export function WorkspacePane({
         path: string;
         id: number;
     } | null>(null);
+    // * Bumped by the card of changed files in the chat: the viewer then switches to its Changes view.
+    const [changesRequest, setChangesRequest] = useState(0);
     // * A plan picked in the Plans tab opens in the viewer, like a file the rail asked for.
     const [seenOpenFile, setSeenOpenFile] = useState(state.openFile);
 
@@ -153,6 +172,35 @@ export function WorkspacePane({
             ...(filesHidden ? {} : { chatCollapsed: false }),
         });
     };
+    // * Sidebar folded, tree on the left but closed, a file open: the file column is the leftmost one, so the window buttons sit over its tabs and the sidebar toggle goes there instead of in the chat header.
+    const filesLeadWindow =
+        sidebarCollapsed &&
+        treePlacement.placement === 'left' &&
+        !filesHidden &&
+        treeClosed &&
+        state.editorVisible;
+    const changesViewer = {
+        open: () => {
+            setChangesRequest((count) => count + 1);
+
+            if (filesHidden) {
+                onPatch(pane.key, { filesHidden: false });
+            }
+        },
+    };
+    // * The open tree on the left is the leftmost column, so the window buttons sit over it; in any other layout the column holding the toggle is leftmost and the toggle starts after the buttons.
+    const treeLeadsWindow =
+        treePlacement.placement === 'left' && !filesHidden && !treeClosed;
+    const windowedSidebarToggle = (
+        <span
+            className={cn(
+                'flex',
+                hasWindowButtons && !treeLeadsWindow && 'pl-16',
+            )}
+        >
+            {sidebarToggle}
+        </span>
+    );
     const toggleRail = () => setRailOpen((open) => !open);
     // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
     const sideChatAlone =
@@ -204,12 +252,15 @@ export function WorkspacePane({
             dockedPlacement={placement.dockedPlacement}
             floatable={floatable}
             onPlacementChange={placement.setPlacement}
+            onSaveDefault={placement.saveAsDefault}
+            onResetDefault={placement.resetToDefault}
         />
     );
 
     // * One menu for the three dock panels; every row ticks with the real state and shares the toolbar toggles.
     const panelsMenu = (
         <PanelsMenu
+            unseen={planUnseen}
             items={[
                 {
                     id: 'side-chat',
@@ -225,6 +276,13 @@ export function WorkspacePane({
                     label: t('background_tasks.title'),
                     open: backgroundOpen,
                     onToggle: onToggleBackground,
+                },
+                {
+                    id: 'plan',
+                    icon: ClipboardList,
+                    label: t('plan_pane.title'),
+                    open: planOpen,
+                    onToggle: togglePlan,
                 },
                 {
                     id: 'plans',
@@ -302,6 +360,19 @@ export function WorkspacePane({
                 />
             ),
         },
+        {
+            id: 'plan',
+            placement: planPlacement.placement,
+            open: planOpen,
+            size: 360,
+            content: (
+                <PlanPane
+                    plan={plan}
+                    placementMenu={placementMenu(planPlacement)}
+                    onClose={() => setPlanOpen(false)}
+                />
+            ),
+        },
     ];
 
     return (
@@ -323,8 +394,9 @@ export function WorkspacePane({
                         chatCollapsed={state.chatCollapsed}
                         treePlacement={treePlacement}
                         tabsStart={
-                            state.chatCollapsed && sidebarCollapsed
-                                ? sidebarToggle
+                            (state.chatCollapsed && sidebarCollapsed) ||
+                            filesLeadWindow
+                                ? windowedSidebarToggle
                                 : undefined
                         }
                         tabsEnd={
@@ -365,6 +437,7 @@ export function WorkspacePane({
                             })
                         }
                         openRequest={openRequest}
+                        changesRequest={changesRequest}
                         repo={`local:${pane.root}`}
                         repos={[`local:${pane.root}`]}
                         onViewRepo={noViewerChange}
@@ -381,124 +454,143 @@ export function WorkspacePane({
                     />
                 }
             >
-                <ChatPanel
-                    root={pane.root}
-                    acceptsRemote={active}
-                    projects={projects}
-                    fill
-                    headerStart={sidebarCollapsed ? sidebarToggle : null}
-                    headerActions={
-                        <>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={t('common.open_in_vs_code')}
-                                title={t('common.open_in_vs_code')}
-                                onClick={onOpenInVscode}
-                                className="text-muted-foreground"
-                            >
-                                <Code2 aria-hidden="true" className="size-4" />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Terminal"
-                                aria-pressed={terminalOpen}
-                                onClick={onToggleTerminal}
-                                className={cn(
-                                    'text-muted-foreground',
-                                    terminalOpen &&
-                                        'bg-accent text-accent-foreground',
-                                )}
-                            >
-                                <Terminal
-                                    aria-hidden="true"
-                                    className="size-4"
-                                />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={t(
-                                    railOpen
-                                        ? 'session_rail.hide'
-                                        : 'session_rail.show',
-                                )}
-                                title={t(
-                                    railOpen
-                                        ? 'session_rail.hide'
-                                        : 'session_rail.show',
-                                )}
-                                aria-expanded={railOpen}
-                                aria-haspopup="dialog"
-                                data-rail-toggle=""
-                                onClick={toggleRail}
-                                className={cn(
-                                    'text-muted-foreground',
-                                    railOpen &&
-                                        'bg-accent text-accent-foreground',
-                                )}
-                            >
-                                {/* * A box fills its whole square, so it is drawn smaller (14px against 16px) to look as big as the open icons beside it. */}
-                                <SquareMenu
-                                    aria-hidden="true"
-                                    className="size-3.5"
-                                />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={filesLabel}
-                                title={filesLabel}
-                                aria-pressed={!filesHidden}
-                                onClick={toggleFiles}
-                                className="text-muted-foreground"
-                            >
-                                <FilesIcon
-                                    aria-hidden="true"
-                                    className="size-4"
-                                />
-                            </Button>
-                            {panelsMenu}
-                        </>
-                    }
-                    canCollapse={!filesHidden}
-                    onTooNarrow={() =>
-                        onPatch(pane.key, { chatCollapsed: true })
-                    }
-                    attachFile={state.attachFile}
-                    sendRequest={state.sendPrompt}
-                    selectedFile={state.activeFile}
-                    viewSubagent={state.viewSubagent}
-                    onLeaveSubagent={() =>
-                        onPatch(pane.key, { viewSubagent: null })
-                    }
-                    popup={railPopup}
-                    collapsed={
-                        state.chatCollapsed &&
-                        !filesHidden &&
-                        (state.editorVisible || sideChatOpen)
-                    }
-                    newChat={state.newChat}
-                    openConversation={state.picked}
-                    onConversation={(id) => {
-                        onPatch(pane.key, { conversation: id });
-                        onRefreshConversations(pane.root);
-                    }}
-                    onChanged={() => {
-                        onRefreshConversations(pane.root);
-                        setRailRefresh((count) => count + 1);
-                    }}
-                    onContext={setRailContext}
-                    onSubagents={(subagents) =>
-                        onPatch(pane.key, { subagents })
-                    }
-                    onPlan={() => undefined}
-                />
+                <ChangesViewerContext.Provider value={changesViewer}>
+                    <ChatPanel
+                        root={pane.root}
+                        acceptsRemote={active}
+                        projects={projects}
+                        fill
+                        headerStart={
+                            sidebarCollapsed && !filesLeadWindow
+                                ? sidebarToggle
+                                : null
+                        }
+                        headerActions={
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={t('common.open_in_vs_code')}
+                                    title={t('common.open_in_vs_code')}
+                                    onClick={onOpenInVscode}
+                                    className="text-muted-foreground"
+                                >
+                                    <Code2
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="Terminal"
+                                    aria-pressed={terminalOpen}
+                                    onClick={onToggleTerminal}
+                                    className={cn(
+                                        'text-muted-foreground',
+                                        terminalOpen &&
+                                            'bg-accent text-accent-foreground',
+                                    )}
+                                >
+                                    <Terminal
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={t(
+                                        railOpen
+                                            ? 'session_rail.hide'
+                                            : 'session_rail.show',
+                                    )}
+                                    title={t(
+                                        railOpen
+                                            ? 'session_rail.hide'
+                                            : 'session_rail.show',
+                                    )}
+                                    aria-expanded={railOpen}
+                                    aria-haspopup="dialog"
+                                    data-rail-toggle=""
+                                    onClick={toggleRail}
+                                    className={cn(
+                                        'text-muted-foreground',
+                                        railOpen &&
+                                            'bg-accent text-accent-foreground',
+                                    )}
+                                >
+                                    {/* * A box fills its whole square, so it is drawn smaller (14px against 16px) to look as big as the open icons beside it. */}
+                                    <SquareMenu
+                                        aria-hidden="true"
+                                        className="size-3.5"
+                                    />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={filesLabel}
+                                    title={filesLabel}
+                                    aria-pressed={!filesHidden}
+                                    onClick={toggleFiles}
+                                    className="text-muted-foreground"
+                                >
+                                    <FilesIcon
+                                        aria-hidden="true"
+                                        className="size-4"
+                                    />
+                                </Button>
+                                {panelsMenu}
+                            </>
+                        }
+                        canCollapse={!filesHidden}
+                        onTooNarrow={() =>
+                            onPatch(pane.key, { chatCollapsed: true })
+                        }
+                        attachFile={state.attachFile}
+                        sendRequest={state.sendPrompt}
+                        selectedFile={state.activeFile}
+                        viewSubagent={state.viewSubagent}
+                        onLeaveSubagent={() =>
+                            onPatch(pane.key, { viewSubagent: null })
+                        }
+                        popup={railPopup}
+                        collapsed={
+                            state.chatCollapsed &&
+                            !filesHidden &&
+                            (state.editorVisible || sideChatOpen)
+                        }
+                        newChat={state.newChat}
+                        openConversation={state.picked}
+                        onConversation={(id) => {
+                            onPatch(pane.key, { conversation: id });
+                            onRefreshConversations(pane.root);
+                        }}
+                        onChanged={() => {
+                            onRefreshConversations(pane.root);
+                            setRailRefresh((count) => count + 1);
+                        }}
+                        onContext={setRailContext}
+                        onRunningPrompts={(runningPrompts) =>
+                            onPatch(pane.key, { runningPrompts })
+                        }
+                        onSubagents={(subagents) =>
+                            onPatch(pane.key, { subagents })
+                        }
+                        onPlan={(next) => {
+                            setPlan(next);
+                            setPlanWaiting(
+                                next !== null &&
+                                    (next.todos.length > 0 ||
+                                        (next.markdown ?? '').trim() !== ''),
+                            );
+                        }}
+                    />
+                </ChangesViewerContext.Provider>
             </DockLayout>
         </div>
     );

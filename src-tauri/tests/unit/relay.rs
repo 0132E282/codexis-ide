@@ -49,7 +49,7 @@ fn an_address_starts_a_hop_and_the_answer_returns_to_the_asker() {
     let prompt = relay.prompt(&hop);
 
     assert!(prompt.contains("xem giúp"));
-    assert!(prompt.contains("Yêu cầu gốc của người dùng: làm X"));
+    assert!(prompt.contains("The user's original request: làm X"));
     assert!(prompt.contains("claude"));
 
     // * Codex addresses nobody: its answer goes back to Claude, then Claude's plain answer ends the relay.
@@ -60,7 +60,7 @@ fn an_address_starts_a_hop_and_the_answer_returns_to_the_asker() {
         (CliKind::Claude, "xong rồi")
     );
     assert!(!back.first_visit);
-    assert!(!relay.prompt(&back).contains("Yêu cầu gốc"));
+    assert!(!relay.prompt(&back).contains("original request"));
     assert_eq!(relay.next(CliKind::Claude, "kết luận"), Ok(None));
 }
 

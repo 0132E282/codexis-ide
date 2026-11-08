@@ -24,6 +24,8 @@ export const MessageList = forwardRef<
         ) => void;
         /** Name of the project, shown on the card of the files a turn changed. */
         projectName: string;
+        /** Messages sent while a turn runs: shown at the end at once, as sent but not answered yet. */
+        waiting?: string[];
     }
 >(function MessageList(
     {
@@ -34,6 +36,7 @@ export const MessageList = forwardRef<
         onSwitchAccount,
         onPermission,
         projectName,
+        waiting = [],
     },
     bottom,
 ) {
@@ -74,6 +77,19 @@ export const MessageList = forwardRef<
                                 onPermission={onPermission}
                                 projectName={projectName}
                             />
+                        ))}
+                        {waiting.map((prompt, index) => (
+                            <div
+                                key={`${index}-${prompt}`}
+                                className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-1"
+                            >
+                                <p className="max-h-80 max-w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap opacity-70 [overflow-wrap:anywhere]">
+                                    {prompt}
+                                </p>
+                                <span className="text-xs text-muted-foreground">
+                                    {t('message_list.waiting')}
+                                </span>
+                            </div>
                         ))}
                     </>
                 )}

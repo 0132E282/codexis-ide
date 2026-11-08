@@ -895,6 +895,48 @@ pub fn base64_encode(data: &[u8]) -> String {
     text
 }
 
+/// The bytes of a `data:<type>;base64,<data>` URL; `None` when it is not one or the data is not valid base64.
+pub fn base64_data_url_bytes(url: &str) -> Option<Vec<u8>> {
+    let (head, body) = url.strip_prefix("data:")?.split_once(',')?;
+
+    if !head.ends_with(";base64") {
+        return None;
+    }
+
+    let mut bytes = Vec::with_capacity(body.len() / 4 * 3);
+    let mut group = 0u32;
+    let mut count = 0u32;
+
+    for symbol in body.bytes().take_while(|symbol| *symbol != b'=') {
+        let value = match symbol {
+            b'A'..=b'Z' => symbol - b'A',
+            b'a'..=b'z' => symbol - b'a' + 26,
+            b'0'..=b'9' => symbol - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        };
+
+        group = (group << 6) | u32::from(value);
+        count += 1;
+
+        if count == 4 {
+            bytes.extend_from_slice(&group.to_be_bytes()[1..]);
+            group = 0;
+            count = 0;
+        }
+    }
+
+    match count {
+        0 => {}
+        2 => bytes.push((group >> 4) as u8),
+        3 => bytes.extend_from_slice(&[(group >> 10) as u8, (group >> 2) as u8]),
+        _ => return None,
+    }
+
+    Some(bytes)
+}
+
 pub fn now_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

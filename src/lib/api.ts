@@ -173,7 +173,7 @@ export type BackgroundTask = {
     outputTail: string;
 };
 
-/** Background tasks: the Rust commands `background_list`, `background_stop`, `background_clear` (not in the backend until TASK-B04). */
+/** Background tasks: the Rust commands `background_list`, `background_stop`, `background_clear`. */
 export const backgroundApi = {
     list: (root: string) =>
         invoke<{ tasks: BackgroundTask[] }>('background_list', { root }),

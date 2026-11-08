@@ -1,9 +1,10 @@
-import { Eye, HardDrive, Undo2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Eye, FileDiff, HardDrive, Undo2 } from 'lucide-react';
+import { useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FileIcon } from '@/components/ai-chat/file-icon';
 import { UnifiedDiff } from '@/components/ai-chat/unified-diff';
 import { Button } from '@/components/ui/button';
+import { ChangesViewerContext } from '@/contexts/changes-viewer-context';
 import { useConfirm } from '@/hooks/use-confirm';
 import { api } from '@/lib/api';
 import { invalidateAiChatCache } from '@/lib/ai-chat-cache';
@@ -95,6 +96,7 @@ export function ChangedFilesCard({
     const [reverted, setReverted] = useState(false);
     const [busy, setBusy] = useState(false);
     const { confirm, dialog } = useConfirm();
+    const changesViewer = useContext(ChangesViewerContext);
     const changes = changesByPath(steps);
 
     // * Puts every file back as git `HEAD` has it (a new file is removed); asks first, since the edits are lost.
@@ -201,6 +203,17 @@ export function ChangedFilesCard({
                     <Eye aria-hidden="true" />
                     {t('changed_files.review')}
                 </Button>
+                {changesViewer !== null && (
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={changesViewer.open}
+                    >
+                        <FileDiff aria-hidden="true" />
+                        {t('changed_files.open_changes')}
+                    </Button>
+                )}
                 {!reverted && (
                     <Button
                         type="button"

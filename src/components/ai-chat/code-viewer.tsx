@@ -9,6 +9,7 @@ import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import { api } from '@/lib/api';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
+import { useFullscreen } from '@/hooks/use-fullscreen';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import type { AiChatProposal } from '@/types';
 import { ChangesPanel } from './code-viewer/changes-panel';
@@ -41,6 +42,7 @@ export function CodeViewer({
     branch = null,
     changes,
     openRequest = null,
+    changesRequest = 0,
     onAsk,
     onInlineAsk,
     onShowHistory,
@@ -72,6 +74,8 @@ export function CodeViewer({
     changes: AiChatProposal[];
     /** * A file to open right away (clicked in an edit proposal of the chat). */
     openRequest?: { repo: string; path: string; id: number } | null;
+    /** * Counter the host bumps to switch to the Changes view (local projects only). */
+    changesRequest?: number;
     /** * The person picked lines and chose "Chat với AI": the chat takes them as a reference. */
     onAsk?: (reference: AskReference) => void;
     /** * "Chat với AI về đoạn này" answers in a comment box under the lines: asks about them and returns the answer (the same conversation continues with `conversation`). */
@@ -106,6 +110,7 @@ export function CodeViewer({
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
     onMarkedFiles?: (paths: string[]) => void;
 }) {
+    const isFullscreen = useFullscreen();
     const { copy: copyPath } = useCopyToClipboard();
     const { fileWidth, changesWidth, treeWidth } = usePanelWidths(
         chatCollapsed,
@@ -244,6 +249,18 @@ export function CodeViewer({
         selected,
         () => void (pendingEdit !== undefined ? decideEdit('apply') : save()),
     );
+
+    // * A bump of the counter (not its first value) opens the Changes view.
+    const [seenChangesRequest, setSeenChangesRequest] =
+        useState(changesRequest);
+
+    if (changesRequest !== seenChangesRequest) {
+        setSeenChangesRequest(changesRequest);
+
+        if (localRoot !== null) {
+            setView('changes');
+        }
+    }
 
     const showChanges = localRoot !== null && view === 'changes';
     const editorVisible = selected !== null || showChanges;
@@ -386,6 +403,7 @@ export function CodeViewer({
     // * File tree: the explorer column, on the right of the editor unless moved to the left.
     const treePanel = (
         <TreePanel
+            onQuickOpen={openQuickOpen}
             placement={treePlacement}
             closed={treeClosed}
             onClosedChange={onTreeClosedChange}
@@ -444,6 +462,12 @@ export function CodeViewer({
                     onOpenFile={openPath}
                     width={changesWidth}
                     isFilling={isFilling}
+                    startInset={
+                        tabsStart !== undefined &&
+                        (treePlacement.placement !== 'left' ||
+                            treeClosed === true) &&
+                        !isFullscreen
+                    }
                     edge={
                         treePlacement.placement === 'left'
                             ? 'trailing'

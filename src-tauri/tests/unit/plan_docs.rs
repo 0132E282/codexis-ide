@@ -433,3 +433,32 @@ fn detail_refuses_a_link_leaving_the_project() {
         "plan_docs.not_found"
     );
 }
+
+#[test]
+fn fingerprint_of_a_missing_folder_is_empty() {
+    let dir = tempfile::tempdir().unwrap();
+
+    assert!(fingerprint(&dir.path().join("docs/plans")).is_empty());
+}
+
+#[test]
+fn fingerprint_changes_when_a_plan_is_added_edited_or_removed() {
+    let (dir, _workspace) = project();
+    let folder = dir.path().join("docs/plans");
+    let empty = fingerprint(&folder);
+
+    put(&dir, "a.json", "{}");
+    let added = fingerprint(&folder);
+    assert_ne!(empty, added);
+    assert_eq!(added, fingerprint(&folder));
+
+    put(&dir, "a.json", "{\"status\":\"DONE\"}");
+    let edited = fingerprint(&folder);
+    assert_ne!(added, edited);
+
+    put(&dir, "notes.txt", "ignored");
+    assert_eq!(edited, fingerprint(&folder));
+
+    fs::remove_file(folder.join("a.json")).unwrap();
+    assert_eq!(empty, fingerprint(&folder));
+}

@@ -259,7 +259,7 @@ impl Responder {
                 serde_json::json!({"behavior": "allow", "updatedInput": input})
             }
             Decision::Deny => {
-                serde_json::json!({"behavior": "deny", "message": "Người dùng từ chối."})
+                serde_json::json!({"behavior": "deny", "message": "The user denied this."})
             }
         };
         let line = serde_json::json!({
@@ -355,7 +355,7 @@ impl EventFilter {
 /// The language rule of the chat for the interface language (`vi`, `en`); none while the language is not chosen.
 fn language_rule(language: &str) -> Option<&'static str> {
     match language {
-        "vi" => Some("Luôn trả lời bằng tiếng Việt, kể cả khi người dùng viết bằng ngôn ngữ khác."),
+        "vi" => Some("Always answer in Vietnamese, even when the user writes in another language."),
         "en" => Some("Always answer in English, even when the user writes in another language."),
         _ => None,
     }

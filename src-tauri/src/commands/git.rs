@@ -147,8 +147,8 @@ pub async fn local_commit_message(
     super::blocking("git.ai_message_failed", move || {
         let diff = GitRepo::new(&workspace).diff_text().map_err(|error| error.to_string())?;
         let prompt = format!(
-            "Viết commit message cho thay đổi dưới đây. Dòng đầu là tiêu đề ngắn (tối đa 72 ký tự, không dấu chấm cuối), \
-             sau đó một dòng trống rồi phần mô tả ngắn gọn. Chỉ trả về message, không giải thích, không dùng markdown.\n\n{diff}"
+            "Write a commit message for the change below. The first line is a short title (at most 72 characters, no trailing period), \
+             then a blank line, then a brief description. Return only the message, no explanation, no markdown.\n\n{diff}"
         );
         let answer = ClaudeAgent.ask_once(workspace.root(), &prompt, &environment)?;
         let (title, description) = agent::split_message(&answer);

@@ -1,5 +1,5 @@
 import { FileJson, FileText, Play, RefreshCw } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Field } from '@/components/form';
 import { PlanDetail } from '@/components/shell/plan-detail';
 import {
@@ -10,7 +10,7 @@ import {
 } from '@/components/shell/plan-status';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
-import { errorText, ide } from '@/lib/ide';
+import { errorText, ide, onPlansChanged } from '@/lib/ide';
 import type { PlanDoc, PlanDocStatus, PlanDocsList } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
@@ -73,8 +73,11 @@ function PlanCard({
     plan,
     onOpen,
     onContinue,
+    isWorking,
 }: {
     plan: PlanDoc;
+    /** A turn of the chat that started from this plan is running. */
+    isWorking: boolean;
     onOpen: (path: string) => void;
     onContinue: (plan: PlanDoc) => void;
 }) {
@@ -99,10 +102,32 @@ function PlanCard({
                     <span
                         className={cn(
                             'shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium',
-                            STATUS_STYLE[plan.status],
+                            STATUS_STYLE[
+                                isWorking ? 'in_progress' : plan.status
+                            ],
                         )}
                     >
-                        {t(STATUS_TEXT[plan.status])}
+                        {isWorking ? (
+                            <span className="flex items-center gap-1.5">
+                                {t('plans.status_in_progress')}
+                                <span
+                                    aria-hidden="true"
+                                    className="flex items-center gap-0.5"
+                                >
+                                    {[0, 150, 300].map((delay) => (
+                                        <span
+                                            key={delay}
+                                            style={{
+                                                animationDelay: `${delay}ms`,
+                                            }}
+                                            className="size-1 animate-bounce rounded-full bg-current motion-reduce:animate-none"
+                                        />
+                                    ))}
+                                </span>
+                            </span>
+                        ) : (
+                            t(STATUS_TEXT[plan.status])
+                        )}
                     </span>
                 </span>
                 {plan.description !== '' && (
@@ -197,6 +222,7 @@ export function PlansPane({
     root,
     onOpenFile,
     onSendPrompt,
+    runningPrompts,
 }: {
     /** Folder of the open project. */
     root: string | undefined;
@@ -204,6 +230,8 @@ export function PlansPane({
     onOpenFile: (path: string) => void;
     /** Sends a message to the chat of the project. */
     onSendPrompt: (text: string) => void;
+    /** Prompts of the turns running in the chat: a plan whose path one contains is being worked on. */
+    runningPrompts: string[];
 }) {
     const [load, setLoad] = useState<Load>({ state: 'loading' });
     const [filter, setFilter] = useState<PlanFilter>(readFilter);
@@ -239,6 +267,40 @@ export function PlansPane({
             isCurrent = false;
         };
     }, [root, reload]);
+
+    // * The folder the list was read from: a change of another project is not ours.
+    const listedRoot = useRef('');
+    const loadedRoot = load.state === 'done' ? load.value.root : '';
+
+    useEffect(() => {
+        listedRoot.current = loadedRoot;
+    }, [loadedRoot]);
+
+    // * A plan file changed: read the folder again, keeping the old list on screen meanwhile.
+    useEffect(() => {
+        let isActive = true;
+        let stop: (() => void) | undefined;
+
+        void onPlansChanged((changedRoot) => {
+            if (
+                listedRoot.current === '' ||
+                changedRoot === listedRoot.current
+            ) {
+                setReload((count) => count + 1);
+            }
+        }).then((unlisten) => {
+            if (isActive) {
+                stop = unlisten;
+            } else {
+                unlisten();
+            }
+        });
+
+        return () => {
+            isActive = false;
+            stop?.();
+        };
+    }, []);
 
     const refresh = () => {
         setLoad({ state: 'loading' });
@@ -389,13 +451,16 @@ export function PlansPane({
                         {body}
                     </p>
                 ) : (
-                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(max(16rem,calc((100%-2.25rem)/4)),1fr))] gap-3">
+                    <ul className="grid grid-cols-[repeat(auto-fit,minmax(max(16rem,calc((100%-2.25rem)/4)),1fr))] gap-3">
                         {visible.map((plan) => (
                             <PlanCard
                                 key={plan.id}
                                 plan={plan}
                                 onOpen={setSelected}
                                 onContinue={continuePlan}
+                                isWorking={runningPrompts.some((prompt) =>
+                                    prompt.includes(plan.path),
+                                )}
                             />
                         ))}
                     </ul>

@@ -13,14 +13,13 @@ import {
     Check,
     ChevronDown,
     ChevronsDownUp,
+    FileSearch,
     List,
     MoreHorizontal,
     PanelRightOpen,
-    Plus,
-    Search,
     X,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +32,6 @@ import { Field } from '@/components/form';
 import { Input } from '@/components/ui/input';
 import { PanelMenu } from '@/components/shell/panel-menu';
 import { LoadingRows } from '@/components/ai-chat/loading-rows';
-import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import type {
     PanelPlacement,
@@ -63,6 +61,7 @@ export function TreePanel({
     changedFileCount,
     filter,
     onFilterChange,
+    onQuickOpen,
     onCollapseAll,
     onReload,
     paths,
@@ -100,6 +99,7 @@ export function TreePanel({
     changedFileCount: number;
     filter: string;
     onFilterChange: (filter: string) => void;
+    onQuickOpen: () => void;
     onCollapseAll: () => void;
     onReload: () => void;
     /** * The project's paths, null while the tree is loading. */
@@ -123,6 +123,27 @@ export function TreePanel({
     const isClosed = closed ?? ownClosed;
     const setIsClosed = onClosedChange ?? setOwnClosed;
     const isMaximized = treeWidth.width >= TREE_MAX_WIDTH;
+    // * Closing keeps the full column mounted while it slides out (no wait with reduced motion).
+    const [previousClosed, setPreviousClosed] = useState(isClosed);
+    const [isLeaving, setIsLeaving] = useState(false);
+
+    if (previousClosed !== isClosed) {
+        setPreviousClosed(isClosed);
+        setIsLeaving(
+            isClosed &&
+                !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        );
+    }
+
+    useEffect(() => {
+        if (!isLeaving) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => setIsLeaving(false), 300);
+
+        return () => window.clearTimeout(timer);
+    }, [isLeaving]);
 
     const toggleMaximize = () => {
         if (isMaximized) {
@@ -254,11 +275,11 @@ export function TreePanel({
         }
     };
 
-    if (isClosed && closed !== undefined) {
+    if (isClosed && !isLeaving && closed !== undefined) {
         return null;
     }
 
-    if (isClosed) {
+    if (isClosed && !isLeaving) {
         return (
             <aside
                 aria-label={t('tree_panel.file_tree_name', {
@@ -290,9 +311,18 @@ export function TreePanel({
             style={{ width: treeWidth.width }}
             className={cn(
                 'relative hidden min-h-0 max-w-full shrink-0 flex-col md:flex',
-                // * It slides in when opened again (it is not mounted while closed).
-                'animate-in fade-in-0 duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
-                onLeft ? 'slide-in-from-left-6' : 'slide-in-from-right-6',
+                // * It slides in when opened again (it is not mounted while closed), and slides back out for a moment when closing.
+                'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
+                isLeaving
+                    ? 'animate-out fade-out-0 fill-mode-forwards pointer-events-none'
+                    : 'animate-in fade-in-0',
+                isLeaving
+                    ? onLeft
+                        ? 'slide-out-to-left-6'
+                        : 'slide-out-to-right-6'
+                    : onLeft
+                      ? 'slide-in-from-left-6'
+                      : 'slide-in-from-right-6',
                 // * Floating: a card over the window (it stays mounted, and takes no room from the editor).
                 isFloating
                     ? 'bg-background fixed top-16 right-4 bottom-4 z-30 rounded-lg border shadow-xl'
@@ -301,11 +331,6 @@ export function TreePanel({
                       : 'ml-auto border-l',
             )}
         >
-            <ResizeHandle
-                label={t('tree_panel.resize_file_tree')}
-                className={cn(onLeft && 'right-0 left-auto translate-x-1/2')}
-                {...treeWidth.handleProps}
-            />
             <div
                 role="toolbar"
                 aria-label={t('tree_panel.tools')}
@@ -315,44 +340,13 @@ export function TreePanel({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={t('tree_panel.search')}
-                    title={t('tree_panel.search')}
-                    onClick={() => filterInput.current?.focus()}
                     className="text-muted-foreground"
+                    aria-label={t('quick_open.find_file')}
+                    title={t('quick_open.find_file')}
+                    onClick={onQuickOpen}
                 >
-                    <Search aria-hidden="true" />
+                    <FileSearch aria-hidden="true" />
                 </Button>
-                {isLocal && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={t('common.create_new')}
-                                title={t('common.create_new')}
-                                className="text-muted-foreground"
-                            >
-                                <Plus aria-hidden="true" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="start"
-                            onCloseAutoFocus={(event) => event.preventDefault()}
-                        >
-                            <DropdownMenuItem
-                                onSelect={() => startCreate('', false)}
-                            >
-                                {t('common.new_file')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={() => startCreate('', true)}
-                            >
-                                {t('common.new_folder')}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
                 <Button
                     type="button"
                     variant="ghost"
@@ -391,25 +385,37 @@ export function TreePanel({
                         )}
                     </Button>
                 )}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('tree_panel.more')}
-                            title={t('tree_panel.more')}
-                            className="text-muted-foreground"
+                {isLocal && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={t('tree_panel.more')}
+                                title={t('tree_panel.more')}
+                                className="text-muted-foreground"
+                            >
+                                <MoreHorizontal aria-hidden="true" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="start"
+                            onCloseAutoFocus={(event) => event.preventDefault()}
                         >
-                            <MoreHorizontal aria-hidden="true" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start">
-                        <DropdownMenuItem onSelect={onReload}>
-                            {t('tree_panel.reload')}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            <DropdownMenuItem
+                                onSelect={() => startCreate('', false)}
+                            >
+                                {t('common.new_file')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => startCreate('', true)}
+                            >
+                                {t('common.new_folder')}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
                 <span className="ml-auto flex items-center gap-0.5">
                     <PanelMenu
                         placement={isMaximized ? 'fill' : placement.placement}
@@ -417,6 +423,8 @@ export function TreePanel({
                         floatable
                         edges={TREE_EDGES}
                         onPlacementChange={changePlacement}
+                        onSaveDefault={placement.saveAsDefault}
+                        onResetDefault={placement.resetToDefault}
                     />
                     <Button
                         type="button"

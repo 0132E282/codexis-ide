@@ -883,6 +883,62 @@ flowchart LR
     L --> CH["Gợi ý / và @ trong khung chat"]
 ```
 
+### 8.2b. Side chat ("Hỏi nhanh") và ranh giới `runId` `side-`
+
+Side chat là khung hỏi nhanh chỉ đọc cạnh chat chính, **không thêm lệnh Tauri**: dùng lại `agent_send`/`agent_stop` và sự kiện `agent-event`. Chi tiết, tiêu chí và kết quả kiểm: [side-chat.md](./side-chat.md). Tên hiển thị là "Hỏi nhanh"/"Quick ask" (khoá i18n `side_chat.*`).
+
+```mermaid
+sequenceDiagram
+    actor U as Người dùng
+    participant SC as SideChatDock + use-side-chat.ts
+    participant A as agent_send (Rust)
+    participant P as CLI claude
+    participant M as use-agent-turns (chat chính)
+    participant R as remote.rs
+
+    U->>SC: hỏi (Cmd/Ctrl+; mở khung)
+    SC->>A: agent_send(runId "side-<uuid>", cli claude, mode plan, session của tab, worktree null)
+    A->>P: chạy trong thư mục dự án
+    P-->>A: dòng JSON
+    A-->>SC: agent-event {runId side-…}
+    A-->>M: cùng sự kiện, bỏ qua (runId không thuộc runs của hook chính)
+    A-->>R: cùng sự kiện, event_message trả None (không tới điện thoại)
+    SC->>SC: giữ session id theo tab; không chat_save_turn, không ghi DB
+```
+
+Ranh giới `runId`:
+
+| Tiền tố | Chủ | Ai xử lý sự kiện |
+| --- | --- | --- |
+| `run-…` (chat chính) | `use-agent-turns.ts` | hook chính (lọc theo `runs`); `remote.rs` phát cho điện thoại |
+| `side-…` (side chat) | `use-side-chat.ts` (map `runId` → tab) | chỉ hook side chat; `remote.rs::event_message` lọc theo hằng `SIDE_RUN_PREFIX = "side-"` (khớp tiền tố chính xác trên `runId` kiểu chuỗi) |
+
+Giữ nguyên: danh sách cuộc chat, `chat_save_turn`, `usage` không bị side chat đụng tới (trạng thái chỉ nằm trong bộ nhớ React, đóng app là mất). Hiện chỉ Claude (`--permission-mode plan`); `agent/codex.rs::turn_args` chưa có cờ chỉ đọc nên side chat không gửi `codex`.
+
+### 8.2c. Ngăn Plan: `Event::Plan`, `plan_load` và dữ liệu theo dự án
+
+Chi tiết, tiêu chí và trạng thái kiểm: [plan-pane.md](./plan-pane.md). Chế độ `plan` của Claude chạy `--input-format stream-json --permission-prompt-tool stdio` (có `Responder`); side chat vẫn chỉ đọc, không stdio.
+
+```mermaid
+sequenceDiagram
+    participant P as CLI claude
+    participant A as agent/claude.rs parse_line
+    participant O as commands/agent.rs (observer)
+    participant D as app_data_dir/projects/&lt;khoá&gt;/
+    participant C as use-agent-turns / use-chat-session
+
+    P-->>A: control_request can_use_tool ExitPlanMode {plan}
+    A-->>O: Event::Plan (kind text, markdown) rồi Event::Permission
+    O-->>C: agent-event kind=plan
+    O->>D: PlanStore.record: plans/&lt;session&gt;.json; RunLog: logs/&lt;ngày&gt;.log
+    C->>O: plan_load(session, root) khi mở chat cũ
+    O->>D: đọc plans/&lt;session&gt;.json
+```
+
+- `Event::Plan(String)`: JSON camelCase `{"kind":"text","markdown":...}` (dạng `todos` có trong `plan.rs` nhưng không được phát, P2 hoãn); chỉ lấy từ `control_request`, không từ dòng `assistant`; không mang `planFilePath`.
+- `plan_load(root, session) -> Option<String>`: lệnh Tauri trong `commands/plan.rs`, qua `workspace_for(root)`, đọc `PlanStore` của dự án.
+- Lưu theo dự án: `project_data.rs` (`ProjectData::dir/read/write_atomic/append_line`) tạo `projects/<khoá-dự-án>/` trong `app_data_dir`, chặn `..` và symlink; `plan_store.rs` ghi `plans/<session>.json`; `run_log.rs` ghi `logs/<yyyy-mm-dd>.log` (chỉ `Start`, `Tool`, `Error`, `End`; 14 ngày, 5 MB mỗi tệp). Lỗi ghi bị bỏ qua, không làm hỏng lượt. Thư mục dự án của người dùng chỉ nhận plan khi bật `save_plans_to_project` (mặc định tắt).
+
 ## 9. Bộ sơ đồ bổ sung
 
 Vẽ từ mã hiện có (không phải thiết kế đề xuất), trừ khi ghi khác. Class Diagram ở mục 4.2 và 6.4; sequence ở mục 8; ERD ở mục 10 và `database.md`; Authentication Flow ở mục 8.3.

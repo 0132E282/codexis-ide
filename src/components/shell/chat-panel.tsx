@@ -17,7 +17,10 @@ import { useChatSession } from '@/components/shell/chat/use-chat-session';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { useFreshAnswer } from '@/components/shell/chat/use-fresh-answer';
 import { useTooNarrow } from '@/components/shell/chat/use-too-narrow';
-import type { ContextUsage } from '@/components/shell/context-panel';
+import {
+    ContextPanel,
+    type ContextUsage,
+} from '@/components/shell/context-panel';
 import type { PlanData } from '@/components/shell/plan-pane';
 import { Composer } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
@@ -55,6 +58,7 @@ export function ChatPanel({
     onSubagents,
     onPlan,
     onContext,
+    onRunningPrompts,
     collapsed,
     popup,
     onTooNarrow,
@@ -93,6 +97,8 @@ export function ChatPanel({
     onPlan: (plan: PlanData | null) => void;
     /** Told the context usage of the open conversation whenever it changes (null: none reported yet), for the session rail. */
     onContext?: (usage: ContextUsage | null) => void;
+    /** Told the prompts of the turns that are running, whenever that list changes. */
+    onRunningPrompts?: (prompts: string[]) => void;
     /** Closed by dragging the editor columns over it: hidden, but still mounted so a running turn goes on. */
     collapsed: boolean;
     /** Laid above the top of the message box (the session rail popup). */
@@ -187,6 +193,19 @@ export function ChatPanel({
     );
 
     useEffect(() => reportContext(context), [context, reportContext]);
+
+    // * Joined text as the key: a streamed piece changes `turns` but not which prompts run, so nothing is reported then.
+    const reportRunningPrompts = useStableCallback((prompts: string[]) =>
+        onRunningPrompts?.(prompts),
+    );
+    const runningPromptsKey = JSON.stringify(
+        turns.filter((turn) => turn.running).map((turn) => turn.prompt),
+    );
+
+    useEffect(
+        () => reportRunningPrompts(JSON.parse(runningPromptsKey) as string[]),
+        [runningPromptsKey, reportRunningPrompts],
+    );
 
     useTooNarrow(section, canCollapse && !collapsed, onTooNarrow);
 
@@ -377,6 +396,7 @@ export function ChatPanel({
                         )}
                     </div>
                     <span className="flex shrink-0 items-center gap-0.5">
+                        <ContextPanel usage={context} cli={cli} />
                         {headerActions}
                     </span>
                 </header>
@@ -390,6 +410,7 @@ export function ChatPanel({
                 onSwitchAccount={switchAccount}
                 onPermission={answerPermission}
                 projectName={projectName}
+                waiting={waitingPrompts}
             />
             <Composer
                 project={null}

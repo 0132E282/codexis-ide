@@ -1,6 +1,6 @@
 # Thiết kế: bảng Context (mức dùng ngữ cảnh của cuộc chat)
 
-Trạng thái: **C02 và C03 đã có mã (`context.rs`; `Event::Context` phát từ `agent/claude.rs`, `agent/codex.rs`; Codex `[chưa kiểm]`), chưa nối frontend**. Nguồn yêu cầu: ảnh chụp bảng "Environment / Context" của ứng dụng Claude do người dùng gửi ngày 2026-11-06. Căn cứ mã: `src-tauri/src/agent.rs` (`parse_line`, `Event`), `commands/agent.rs`, `src/components/shell/chat/use-agent-turns.ts`, `chat-panel.tsx`. Tổng quan hệ thống: [architecture.md](./architecture.md). Ký hiệu: `[đã kiểm]` đọc được trong mã; `[chưa kiểm]` suy từ giao thức CLI, phải chạy thật để xác nhận; `[giả định]` đề xuất.
+Trạng thái: **đã có mã Rust (C02, C03; Codex `[chưa kiểm]`) và đã nối frontend (`context-panel.tsx` gắn vào header `chat-panel.tsx`); phần hiển thị UI `[chưa kiểm]` (chưa chạy app), chưa đóng TASK-C06**. Nguồn yêu cầu: ảnh chụp bảng "Environment / Context" của ứng dụng Claude do người dùng gửi ngày 2026-11-06. Căn cứ mã: `src-tauri/src/agent.rs` (`parse_line`, `Event`), `commands/agent.rs`, `src/components/shell/chat/use-agent-turns.ts`, `chat-panel.tsx`. Tổng quan hệ thống: [architecture.md](./architecture.md). Ký hiệu: `[đã kiểm]` đọc được trong mã; `[chưa kiểm]` suy từ giao thức CLI, phải chạy thật để xác nhận; `[giả định]` đề xuất.
 
 ## 1. Phạm vi
 
@@ -32,12 +32,12 @@ Trước C03 mã bỏ qua `usage`. Nay `agent/claude.rs` và `agent/codex.rs` (t
 - **Claude** (`--output-format stream-json`) `[đã kiểm: claude 2.1.319, 2026-11-07]`: dòng `result` có `usage.{input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens}` và `modelUsage.<model>.contextWindow` (ví dụ 1000000). **Cẩn thận**: `result.usage` và `modelUsage` là TỔNG qua mọi lần gọi model của lượt (lượt 3 lần gọi: cache_read 60244, trong khi lần cuối chỉ 26588), nên KHÔNG dùng để tính "đã dùng". Dùng `result.usage.iterations[-1]` (bằng `usage` của message `assistant` cuối). `contextWindow` chỉ có khi lượt kết thúc, nên bảng chỉ cập nhật cuối lượt.
 - **Codex** (`exec --json`) `[chưa kiểm]`: giả định dòng `{"type":"turn.completed","usage":{input_tokens, cached_input_tokens, output_tokens}}`, không có cửa sổ và không có tên model trong dòng (nên `window`/`percent` null cho tới khi biết model từ nguồn khác). Chưa chụp được vì tài khoản bị chặn.
 
-### 2.1. Kết quả chạy thật (TASK-C01, 2026-11-06): chưa xác nhận
+### 2.1. Kết quả chạy thật (TASK-C01, chạy lại 2026-11-08)
 
-- **Claude** (`claude -p "say hi" --output-format stream-json --verbose`): lượt bị chặn bởi giới hạn 5 giờ của tài khoản (`is_error:true`, `api_error_status:429`, `terminal_reason:"api_error"`), nên `usage` toàn số 0 và `modelUsage` rỗng `{}`. Đã thấy thật trên dòng `result`: các khoá `usage.input_tokens`, `usage.cache_creation_input_tokens`, `usage.cache_read_input_tokens`, `usage.output_tokens` (đúng tên đã giả định), thêm `modelUsage` và `model_usage_since_last_result`. **Chưa thấy** `modelUsage.<model>.contextWindow` có số; công thức `used` chưa kiểm bằng số thật.
-- **Codex** (`codex exec --json`): model mặc định của cấu hình máy không dùng được với tài khoản ChatGPT (`turn.failed`); thử thêm 4 tên model khác cũng bị từ chối, nên dừng. Chưa có `turn.completed`, chưa thấy `usage`.
-- Hệ quả: các `[chưa kiểm]` ở mục 2 giữ nguyên. Cần chạy lại khi hết giới hạn Claude (sau 12:00 sáng) và khi Codex có model được hỗ trợ. Mã phải chịu được `result` lỗi có `usage` toàn 0 (không phát `Event::Context` khi mọi số bằng 0, hợp với C5).
-- Mẫu đã lưu (che nội dung): `/private/tmp/claude-501/-Users-hoangphuc01975-Documents-developers-codexis-ide/98e946d9-f5db-40b5-acbf-6de721cfb46a/scratchpad/ph1-context/fixture-claude-result-ratelimited.json`, `.../fixture-codex-turn-failed.json`.
+- **Claude `[đã kiểm: claude 2.1.319, 2026-11-08]`** (`claude -p "say hi" --output-format stream-json --verbose`, lượt thành công, `is_error:false`): tên trường khớp mã. Dòng `assistant`: `message.model` (chuỗi), `message.usage.{input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens}` (số nguyên). Dòng `result`: `usage` cùng bốn khoá đó (tổng cả lượt) cộng `usage.iterations[]` (mỗi phần tử có bốn khoá trên và `type`), `modelUsage.<model>.{inputTokens, outputTokens, cacheReadInputTokens, cacheCreationInputTokens, contextWindow, maxOutputTokens, costUSD,...}` (camelCase; `contextWindow` = 1000000), `model_usage_since_last_result` cùng dạng. Lượt 1 lần gọi: `usage.iterations[-1]` trùng `usage` của `assistant`, nên công thức `used = input + cache_read + cache_creation` trên `iterations[-1]` đúng.
+- **Codex `[chưa kiểm]`** (`codex exec --json`, không `-m`, dùng model mặc định của `~/.codex/config.toml` là `gpt-5.6-sol`): `turn.failed` / `error` với thông báo model không hỗ trợ tài khoản ChatGPT. Dòng thật thấy được: `thread.started`, `item.completed` (`item.type:"error"`), `turn.started`, `error`, `turn.failed{error.message}`. Chưa có `turn.completed`, chưa thấy `usage`; tên trường Codex vẫn là giả định. Cần model mặc định được hỗ trợ (đổi `model` trong config của người dùng) rồi chạy lại.
+- Mã phải chịu được `result` lỗi có `usage` toàn 0 (không phát `Event::Context` khi mọi số bằng 0, hợp với C5).
+- Mẫu Claude đã lưu: `src-tauri/src/agent/fixtures/claude-result-*.jsonl`.
 
 **Mức đã dùng** = `input_tokens + cache_read + cache_creation` của lần gọi model CUỐI trong lượt (`usage.iterations[-1]`; đầu ra tính vào lượt kế) `[đã kiểm với Claude]`. Công thức nằm một chỗ ở Rust (`context.rs`), có test.
 
@@ -163,3 +163,20 @@ classDiagram
 3. Lưu `ContextUsage` theo cuộc chat vào DB? Mặc định: không.
 4. Điện thoại có cần xem bảng? Mặc định: không.
 5. (Đã thử 2026-11-06, CHƯA xác nhận được, xem mục 2.1) Cần chụp một dòng `result` (Claude) và `turn.completed` (Codex) thật để chốt tên trường và công thức `used`. Mặc định: chạy một lượt thật trước khi code.
+
+## 6. Kiểm chứng (TASK-C06, 2026-11-08)
+
+**Đã kiểm (đã chạy, có bằng chứng)**:
+
+- `cargo fmt --check`: sạch. `cargo clippy -- -D warnings`: sạch. `cargo test --lib` (bỏ `terminal::tests::a_shell_runs_in_a_pseudo_terminal`): 556 passed, 0 failed.
+- `pnpm typecheck`: 0 lỗi. `pnpm lint`: 0 error, 66 warning (không có warning nào ở tệp context-panel).
+- Đọc mã: `src-tauri/Cargo.toml`, `db.rs`, `lib.rs` (`generate_handler!`) không có thay đổi trong `git status`; `context.rs` có test ở `src-tauri/tests/unit/context.rs`; `context-panel.tsx` chỉ làm tròn và kẹp 0..100 từ `percent` của backend, không có hằng cửa sổ (C3, C4).
+- Claude: tên trường và công thức `used` khớp lượt thật (mục 2.1).
+
+**Chưa kiểm**:
+
+- Giao diện: chưa chạy `pnpm start` (ChatPanel cần backend Tauri, chưa có Playwright MCP), chưa có ảnh chứng; C1 (số trong bảng khớp `usage` ở một lượt thật), C6 (i18n, giao diện) chưa đóng.
+- Codex: vẫn `[chưa kiểm]` vì tài khoản không chạy được model, chưa thấy `turn.completed`.
+- `architecture.md`: chưa thêm `Event::Context` vào danh sách sự kiện.
+
+**Vấn đề mở**: `ContextPanel` ở header `chat-panel.tsx` và khối Context trong `session-rail.tsx` (popup mở bằng `railOpen`) cùng đọc một nguồn `context`; khi popup mở thì cùng hiện hai nơi. Chờ quyết định giữ nơi nào.

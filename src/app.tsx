@@ -17,6 +17,7 @@ import { FRESH, usePaneState } from '@/hooks/use-pane-state';
 import { canChat, useAuthStatus } from '@/hooks/use-auth-status';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
+import { useBackgroundTasks } from '@/components/shell/chat/use-background-tasks';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { errorText, ide } from '@/lib/ide';
 import type { GridMember } from '@/lib/ide';
@@ -75,6 +76,15 @@ export default function App() {
         refreshConversations,
     } = workspace;
     const activeState = paneStates[activeKey] ?? FRESH;
+    // * One table of background tasks for the open project: the bottom panel lists it and the sidebar shortcuts to its sub-agents come from it.
+    const background = useBackgroundTasks(activePane?.root);
+    const backgroundSubagents = background.tasks
+        .filter((task) => task.kind === 'subagent')
+        .map((task) => ({
+            id: task.id,
+            label: task.label,
+            done: task.state !== 'running',
+        }));
     // * Chat settings (the open tab) and the AI statistics, both opened from the sidebar's ⋮ menu.
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [usageOpen, setUsageOpen] = useState(false);
@@ -200,9 +210,12 @@ export default function App() {
             <BottomPanel
                 tab={bottomTab}
                 root={activePane.root}
+                background={background}
                 placement={bottomPlacement.placement}
                 dockedPlacement={bottomPlacement.dockedPlacement}
                 onPlacementChange={bottomPlacement.setPlacement}
+                onSaveDefault={bottomPlacement.saveAsDefault}
+                onResetDefault={bottomPlacement.resetToDefault}
                 historyPath={historyPath}
                 onClearHistoryPath={() => setHistoryPath(null)}
                 onTabChange={setBottomTab}
@@ -215,6 +228,7 @@ export default function App() {
                         },
                     })
                 }
+                runningPrompts={activeState.runningPrompts}
                 onSendPrompt={(text) =>
                     patchPane(activeKey, {
                         sendPrompt: {
@@ -267,7 +281,7 @@ export default function App() {
     );
     // * Folded, the toggle heads the first header bar, so it starts after the three native window buttons (hidden in fullscreen).
     const foldedSidebarToggle = (
-        <span className={cn('flex', !isFullscreen && 'pl-18')}>
+        <span className={cn('flex', !isFullscreen && 'pl-16')}>
             {sidebarToggle}
         </span>
     );
@@ -339,7 +353,7 @@ export default function App() {
                             }
                             conversations={workspace.conversations}
                             currentConversation={activeState.conversation}
-                            subagents={activeState.subagents}
+                            subagents={backgroundSubagents}
                             onOpenConversation={(id) => {
                                 leaveGrid();
                                 // * Picking a chat opens the chat pane too, even when a file had folded it away.
@@ -457,7 +471,8 @@ export default function App() {
                                             plansOpen={bottomTab === 'plans'}
                                             phoneOpen={phoneOpen}
                                             sidebarCollapsed={sidebarCollapsed}
-                                            sidebarToggle={foldedSidebarToggle}
+                                            sidebarToggle={sidebarToggle}
+                                            hasWindowButtons={!isFullscreen}
                                             bottomPanel={
                                                 pane.key === activeKey &&
                                                 bottomPlacement.placement ===

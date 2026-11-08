@@ -3,7 +3,15 @@ import { resolveCodeScheme, useThemeState } from '@/lib/system-theme';
 
 type Kind = keyof Pick<
     CodePalette,
-    'comment' | 'keyword' | 'string' | 'number' | 'type' | 'variable'
+    | 'comment'
+    | 'keyword'
+    | 'control'
+    | 'function'
+    | 'regexp'
+    | 'string'
+    | 'number'
+    | 'type'
+    | 'variable'
 >;
 
 // * A short sample, split into the kinds of token the editor colors differently.
@@ -11,7 +19,7 @@ const SAMPLE: { kind?: Kind; text: string }[][] = [
     [{ kind: 'comment', text: '// Chào bạn' }],
     [
         { kind: 'keyword', text: 'const ' },
-        { kind: 'variable', text: 'greet' },
+        { kind: 'function', text: 'greet' },
         { text: ' = (' },
         { kind: 'variable', text: 'name' },
         { text: ': ' },
@@ -19,7 +27,7 @@ const SAMPLE: { kind?: Kind; text: string }[][] = [
         { text: ') => {' },
     ],
     [
-        { kind: 'keyword', text: '    return ' },
+        { kind: 'control', text: '    return ' },
         { kind: 'string', text: "'Xin chào, '" },
         { text: ' + ' },
         { kind: 'variable', text: 'name' },
@@ -28,6 +36,13 @@ const SAMPLE: { kind?: Kind; text: string }[][] = [
         { text: ';' },
     ],
     [{ text: '};' }],
+    [
+        { kind: 'keyword', text: 'const ' },
+        { kind: 'variable', text: 'digits' },
+        { text: ' = ' },
+        { kind: 'regexp', text: '/\\d+/g' },
+        { text: ';' },
+    ],
 ];
 
 /** Sample code in the code colors that are chosen now, so a choice can be judged before it is kept. */

@@ -118,7 +118,7 @@
     {
       "id": "TASK-C01",
       "title": "Chụp usage thật của Claude và Codex để chốt tên trường",
-      "status": "TODO",
+      "status": "PARTIAL_CLAUDE_XONG_CODEX_CHUA_KIEM",
       "priority": "P0",
       "priorityReason": "Thiết kế đang dựa vào giao thức chưa kiểm; sai tên trường thì cả tính năng im lặng",
       "requirements": ["REQ-C1", "REQ-C2"],
@@ -252,7 +252,7 @@
     {
       "id": "TASK-C06",
       "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
-      "status": "TODO",
+      "status": "PARTIAL_LENH_SACH_UI_CHUA_KIEM",
       "priority": "P1",
       "priorityReason": "Đóng AC có bằng chứng chạy thật",
       "requirements": [

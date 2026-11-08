@@ -166,7 +166,7 @@ impl Relay {
     /// The prompt `hop`'s target receives.
     pub fn prompt(&self, hop: &Hop) -> String {
         let context = if hop.first_visit && !self.request.trim().is_empty() {
-            format!("\n\nYêu cầu gốc của người dùng: {}", self.request.trim())
+            format!("\n\nThe user's original request: {}", self.request.trim())
         } else {
             String::new()
         };

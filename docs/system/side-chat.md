@@ -1,6 +1,6 @@
 # Thiết kế: Side chat (hỏi nhanh bên cạnh cuộc chat chính)
 
-Trạng thái: **thiết kế đề xuất, chưa triển khai** (làm lại 2026-11-06 theo ảnh mẫu thứ hai: dock, nhiều tab, đứng một mình). Nguồn yêu cầu: ảnh chụp "Side chat" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (nút trên thanh công cụ, phím tắt, khung "No messages yet", ô "Ask a quick question", hiện dạng cửa sổ nổi hoặc ngăn dưới). Căn cứ mã `[đã kiểm]`: `commands/agent.rs` (`agent_send`, `run_id`, `TurnRegistry`), `use-agent-turns.ts` (lọc sự kiện theo `runId`), `remote.rs` (nghe `agent-event`), `commands/inline_ask.rs`. Mục `[chưa kiểm]` và `[giả định]` ghi rõ. Tổng quan: [architecture.md](./architecture.md). Bảng Context liên quan: [context-panel.md](./context-panel.md).
+Trạng thái: **đã triển khai phía giao diện và `remote.rs`; kiểm chứng một phần (xem mục 6)**. Tên hiển thị hiện là **"Hỏi nhanh"/"Quick ask"** (trước đây "Side chat", rồi "Multichat"); bố cục thực tế theo mục "Cập nhật 2026-11-07" cuối tệp (panel dock dưới vùng file hoặc thẻ nổi), không phải cột phải của mục 3.7. Nguồn yêu cầu: ảnh chụp "Side chat" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (nút trên thanh công cụ, phím tắt, khung "No messages yet", ô "Ask a quick question", hiện dạng cửa sổ nổi hoặc ngăn dưới). Căn cứ mã `[đã kiểm]`: `commands/agent.rs` (`agent_send`, `run_id`, `TurnRegistry`), `use-agent-turns.ts` (lọc sự kiện theo `runId`), `remote.rs` (nghe `agent-event`), `commands/inline_ask.rs`. Mục `[chưa kiểm]` và `[giả định]` ghi rõ. Tổng quan: [architecture.md](./architecture.md). Bảng Context liên quan: [context-panel.md](./context-panel.md).
 
 ## 1. Phạm vi
 
@@ -209,3 +209,41 @@ Không đổi DB, không đổi serde của `Event`. Trạng thái nằm trong b
 - Vị trí mặc định: panel dock `bottom` nằm **dưới vùng file** (editor + cây file), không dưới chat chính, cao khoảng 40% cửa sổ, kéo đổi được (`DockPanel.underTrailing`, `DockLayout` prop `trailing`).
 - Chế độ **nổi** (`placement = 'float'`): thẻ 320px treo vào mép phải của chat chính (neo không rộng nằm giữa chat chính và vùng file), không đẩy bố cục. Nút "Thu nhỏ" (header) chuyển dock sang nổi; ở chế độ nổi có nút "Đưa về dock" và nút thu gọn thành nút tròn (Escape cũng thu gọn). Panel vẫn mounted nên tab và câu trả lời đang viết giữ nguyên. Menu vị trí có thêm mục "Nổi" (chỉ side chat bật `floatable`).
 - Thanh phiên (session rail) không còn là dock: mở thành popup neo trên hàng dưới ô nhập chat chính (`rail-popup.tsx`, `ChatPanel` prop `popup`), đóng bằng Escape hoặc bấm ra ngoài.
+
+## 6. Kết quả kiểm chứng (TASK-S05, 2026-11-08)
+
+### 6.1. Lệnh kiểm chứng (đã chạy)
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Pass (exit 0) |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings` | Pass (exit 0) |
+| `cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal` | Pass: 556 passed, 0 failed |
+| `pnpm typecheck` | Pass: 0 lỗi (lần chạy này; `AGENTS.md` ghi 22 lỗi có sẵn nay không còn) |
+| `pnpm lint` | 0 lỗi, 66 cảnh báo (không có cảnh báo ở tệp side chat) |
+
+### 6.2. Tiêu chí chấp nhận
+
+Cách kiểm UI: Playwright (Chrome hệ thống) trên vite với **giả lập `__TAURI_INTERNALS__`** (script tạm ngoài repo, không có backend Tauri thật); ảnh ở `.agents/storage/evidence/side-chat/` (git-ignore). Giả lập chỉ chứng minh hành vi frontend và tham số gửi đi, không chứng minh hành vi CLI.
+
+| AC | Kết quả | Bằng chứng |
+| --- | --- | --- |
+| S1 | Đạt (UI giả lập) | Cmd+; mở, Esc đóng, mở lại còn nội dung (`s01-open-vi.png`, `s01-reopen.png`); nút trong menu "Các ngăn" đọc từ mã |
+| S2 | Chưa kiểm thật | Hai lượt song song thật cần CLI. Giả lập: sự kiện `run-main` không lọt vào khung (`runId` khác); đối chiếu mã `use-side-chat.ts` (map `runId` → tab) |
+| S3 | Chưa kiểm thật (DB) | Giả lập: không có `chat_save_turn`, `chat_create`, `usage_record` nào được gọi; mã `use-side-chat.ts` không gọi chúng. Chưa mở DB thật sau khi dùng |
+| S4 | Chưa kiểm thật | Cần CLI sửa tệp thật. Mã: `agent_send` nhận `mode = "plan"`. Kết quả thử tay 2026-11-07 ở mục 3.6 |
+| S5 | Đạt (giả lập) | `agent_send` lượt 2 có `session = "sess-1"` sau sự kiện `session` của lượt 1 (`s05-two-turns.png`) |
+| S6 | Đạt (đối chiếu mã) | `git diff HEAD` không chạm `Cargo.toml`, `db.rs`; không thêm lệnh vào `generate_handler` (chỉ `agent_send`, `agent_stop`) |
+| S7 | Đạt | Test `events_of_side_runs_are_not_sent_to_the_phone` và 2 test lân cận trong `tests/unit/remote.rs` pass (nằm trong 556) |
+| S8 | Đạt | 16 khoá `side_chat.*` giống nhau ở vi và en; typecheck 0 lỗi; ô nhập dùng `Field` |
+| S9 | Đạt (giả lập) | `+` thêm "Hỏi nhanh 2" với `session = null`; đóng tab 2 gọi `agent_stop` đúng `runId` của tab (`s09-two-tabs.png`) |
+| S10 | Một phần | Kéo thanh đổi kích thước: cao 359 → 500 px (`s10-resized.png`); chế độ nổi 320 px (`s10-float.png`). Bố cục thực tế là dock dưới vùng file, không có cột phải; AC viết theo thiết kế cũ |
+| S11 | Chưa kiểm UI | Mã `workspace-pane.tsx`: `sideChatAlone = open && !editorVisible && chatCollapsed` → `placement 'fill'`. `chatCollapsed` chỉ bật khi chat quá hẹp nên chưa dựng được. Quan sát: ẩn khung tệp mà chat chưa thu gọn thì khung đang mở có kích thước 0 (`s11-editor-hidden.png`) |
+| S12 | Đạt (giả lập) | Terminal và Hỏi nhanh cùng hiện; đóng Hỏi nhanh không gọi `terminal_close`, xterm còn; mở lại còn nội dung (`s12-terminal-and-sidechat.png`, `s12-side-closed-terminal-stays.png`). Chiều: đóng terminal rồi xem side chat chưa chạy riêng |
+
+### 6.3. Thực trạng cần biết
+
+- **Chỉ Claude**: `use-side-chat.ts` luôn gửi `cli = "claude"`, `mode = "plan"` (hằng `READ_ONLY_MODE`).
+- **Codex chỉ đọc**: đã chốt cờ (`-s read-only`, `-c sandbox_mode="read-only"` khi resume) nhưng `agent/codex.rs::turn_args` hiện chưa truyền cờ nào cho lượt `side-*` (chỉ `--add-dir`, `-m`, `resume`, `--json`, `--skip-git-repo-check`). Vì side chat chưa gửi `codex` nên chưa ảnh hưởng, nhưng **chưa được phép bật Codex** cho tới khi `turn_args` thêm cờ.
+- Phím tắt: Cmd/Ctrl+; đã có; chưa kiểm xung đột với Monaco/xterm khi con trỏ nằm trong đó.
+- Chưa chạy `pnpm start` với CLI thật: S2, S3 (DB), S4 vẫn mở.

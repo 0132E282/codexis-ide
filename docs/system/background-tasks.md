@@ -1,6 +1,6 @@
 # Thiết kế: ngăn Background tasks (việc chạy nền của AI)
 
-Trạng thái: **B01 đã chụp CLI thật (2026-11-07, claude 2.1.319, mục 2.1). B02 đã có mã (`background.rs`: `BackgroundTasks`, `Task`, có test) nhưng chưa nối: chưa `manage` ở `lib.rs` (dời sang B04), chưa có lệnh Tauri, `agent.rs` và frontend**. Nguồn yêu cầu: ảnh chụp ngăn "Background tasks" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (tiêu đề, nút xoá, phóng to, đóng; trạng thái rỗng "Việc chạy nền hiện ở đây"; nằm ở ngăn dưới cạnh Files). Gộp chung quy ước với [plan-pane.md](./plan-pane.md) (nơi lưu theo tên dự án trong dữ liệu app, mục 3.8) và dock của [side-chat.md](./side-chat.md) mục 3.7. Căn cứ mã `[đã kiểm]`: `agent.rs` (`Event`, `TurnRequest::stream`, `Responder`), `agent/claude.rs` (`parse_line`, `turn_args`), `commands/agent.rs` (`TurnRegistry`, `agent_stop`), `terminal.rs`. `[chưa kiểm]` và `[giả định]` ghi rõ.
+Trạng thái (2026-11-08): **đã có mã và test đơn vị cho toàn luồng** (B01 đã chụp CLI thật claude 2.1.319, mục 2.1; B02 `background.rs`; B03 `agent/claude_background.rs` + nối `TauriTurnObserver`; B04 `commands/background.rs` đã `manage` ở `lib.rs`, đăng ký 3 lệnh, dừng khi thoát; B05 tab "Việc chạy nền" ở dock dưới). **Chưa kiểm trên CLI thật**: vòng đời tự xong, lệnh nền sau khi CLI thoát, `stop_task`, `ps` sau khi thoát app (mục 6). Nguồn yêu cầu: ảnh chụp ngăn "Background tasks" của ứng dụng Claude do người dùng gửi ngày 2026-11-06 (tiêu đề, nút xoá, phóng to, đóng; trạng thái rỗng "Việc chạy nền hiện ở đây"; nằm ở ngăn dưới cạnh Files). Gộp chung quy ước với [plan-pane.md](./plan-pane.md) (nơi lưu theo tên dự án trong dữ liệu app, mục 3.8) và dock của [side-chat.md](./side-chat.md) mục 3.7. Căn cứ mã `[đã kiểm]`: `agent.rs` (`Event`, `TurnRequest::stream`, `Responder`), `agent/claude.rs` (`parse_line`, `turn_args`), `commands/agent.rs` (`TurnRegistry`, `agent_stop`), `terminal.rs`. `[chưa kiểm]` và `[giả định]` ghi rõ.
 
 ## 1. Phạm vi
 
@@ -205,8 +205,8 @@ Quy ước định danh (theo B01): `Task.id` = `tool_use_id` (cùng không gian
 
 - `Event::Background(String)`: JSON `{"tasks":[{"id","kind":"shell|subagent","label","state","startedAt","outputTail"}]}` (camelCase), phát khi bảng đổi. Giới hạn: 50 việc, `label` 200 ký tự, `outputTail` 2 000 ký tự. Biến thể thêm cuối enum, không đổi biến thể cũ.
 - Nội bộ Rust (không ra frontend): `AgentCli::background_change(line)` mặc định `None` (Codex), Claude đọc 4 subtype `system` ở mục 2.1 (`task_started` chỉ khi `is_backgrounded = true` và `task_type = local_bash`); `TurnObserver::background(change)` mặc định không làm gì. Không suy ra việc nền từ `tool_use` `Bash`/`TaskStop`.
-- Lệnh Tauri mới: `background_list(root)`, `background_stop(root, id)`, `background_clear(root)`; đều qua `workspace_for(root)`. Key lỗi cố định (`background.not_found`, `background.stop_failed`). `background_stop`: id lạ → `not_found`; không Running, lượt đã hết hoặc stdin đã đóng → `stop_failed`; không tự dừng cả lượt (Q8). Phía frontend dùng `backgroundApi` ở `src/lib/api.ts`.
-- Cơ chế dừng lệnh nền (Q2): ưu tiên `control_request` ghi vào stdin đang mở của lượt nếu B03 (iv) xác nhận CLI nhận; nếu không thì ghi một tin `user` yêu cầu model gọi `TaskStop` với đúng `task_id` (tốn ít nhất một lượt model, phụ thuộc model làm đúng; ghi chi phí đo ở B03 (v)).
+- Lệnh Tauri (đã có, đăng ký ở `lib.rs`): `background_list(root)`, `background_stop(root, id)`, `background_clear(root)`; đều qua `workspace_for(root)`. Key lỗi cố định (`background.not_found`, `background.stop_failed`). `background_stop`: id lạ → `not_found`; không Running, lượt đã hết hoặc stdin đã đóng → `stop_failed`; không tự dừng cả lượt (Q8). Phía frontend dùng `backgroundApi` ở `src/lib/api.ts`.
+- Cơ chế dừng lệnh nền (Q2), **theo mã hiện tại**: `Responder::stop_task` ghi `control_request` `{"subtype":"stop_task","task_id":…}` vào stdin đang mở của lượt (không gọi model). **Chưa kiểm CLI thật có nhận `stop_task`** (B03 (iv) chưa chụp) và **chưa có nhánh dự phòng nhờ model gọi `TaskStop`** trong mã; stdin chỉ mở ở chế độ "Hỏi từng việc", chế độ khác trả `background.stop_failed`. Dòng sub-agent (không có `task_id`): `background_stop` gửi `kill` tới pid CLI của lượt rồi đánh dấu dòng đó Stopped.
 - Lưu `projects/<khoá-dự-án>/tasks.json` (nơi lưu và khoá dự án theo plan-pane.md 3.8); chỉ giữ việc đã kết thúc gần đây (tối đa 50), việc đang chạy không sống sau khi app đóng.
 
 ### 3.7. An toàn
@@ -233,3 +233,23 @@ Quy ước định danh (theo B01): `Task.id` = `tool_use_id` (cùng không gian
 7. Đầu ra gần nhất nằm ở tệp `output_file` của CLI: Rust có đọc phần cuối không? Mặc định: không đọc ở đợt này.
 8. Không gửi được lệnh dừng qua CLI (stdin đã đóng): có tự dừng cả lượt không? Mặc định: không, trả `background.stop_failed`.
 9. Có bật `--input-format stream-json` cho mọi chế độ để dừng được lệnh nền không (kéo theo `AskUserQuestion`/`EnterPlanMode`/`ExitPlanMode`)? Mặc định: không trong plan này.
+
+## 6. Kiểm chứng (TASK-B06, 2026-11-08)
+
+Lệnh: `cargo fmt --check` OK; `cargo clippy -- -D warnings` OK; `cargo test --lib` (bỏ `terminal::tests::a_shell_runs_in_a_pseudo_terminal`) 556 passed, 0 failed; `pnpm typecheck` 0 lỗi (AGENTS.md ghi 22 lỗi có sẵn nay không còn); `pnpm lint` 0 lỗi, 66 cảnh báo.
+
+Ảnh chứng (vite + Chrome, Tauri **giả lập ở trình duyệt**: `background_list` trả dữ liệu mẫu, không có backend Rust) ở `.agents/storage/evidence/background-tasks/` (git-ignore): `menu-full.png` (menu "..." có mục Việc chạy nền), `pane-full.png` (5 dòng: lệnh Đang chạy/Xong/Lỗi/Đã dừng và sub-agent Đang chạy, nút dừng ở dòng Running, nút thùng rác), `pane-empty.png` (rỗng: biểu tượng, "Việc chạy nền hiện ở đây" + gợi ý, thùng rác bị khoá), `menu-open-*.png` (menu khi ngăn đang mở). Chỉ chứng minh phần vẽ, không chứng minh dữ liệu thật.
+
+| AC | Kết quả | Căn cứ / lý do |
+| -- | ------- | -------------- |
+| B1 | Pass một phần | Ảnh: mục menu mở tab ở dock dưới cạnh Terminal/Lịch sử/Kế hoạch/Dữ liệu; có nút phóng to và đóng. **Lệch tài liệu**: menu (`panels-menu.tsx`) chỉ đặt `aria-checked`, ảnh không thấy dấu ✓ nhìn được. Chưa bấm phóng to/đóng để thử |
+| B2 | Pass (test đơn vị, fixture từ B01) | `agent_claude_background.rs`, `background.rs` (`changes_drive_the_table`); `Bash` đơn lẻ không tạo việc. Tự xong exit 0/1: ánh xạ `completed`→Done, `failed`→Failed là **giả định**, chưa chụp |
+| B3 | Chưa kiểm | `stop_target`/lỗi `not_found`/`stop_failed` có test mức bảng; đường `stop_task` tới CLI thật chưa chạy; không có dự phòng `TaskStop`; chi phí model chưa đo |
+| B4 | Pass (test đơn vị) | `clear_finished`, `the_same_root_gives_the_same_table_and_clear_keeps_running` |
+| B5 | Pass (đọc mã) | Frontend không còn `run_in_background`/`TaskStop`; danh sách chỉ từ `backgroundApi.list` + `onChange` |
+| B6 | Pass một phần | Test lưu/đọc `tasks.json` (chỉ việc đã kết thúc, tệp quá lớn bị bỏ); chưa kiểm tệp thật trong dữ liệu app và thư mục dự án không đổi |
+| B7 | Pass (ảnh vi) | `pane-empty.png`; bản en chưa chụp, chữ qua i18n |
+| B8 | Chưa kiểm | Mã: `RunEvent::Exit` gọi `TurnRegistry::stop_all` (kill pid CLI) và `BackgroundStore::stop_all` (Running→Stopped, lưu). Chưa chạy app thật, chưa `ps`; lệnh nền có sống sau khi CLI bị kill chưa biết (mục 2.1 (ii)) |
+| B9 | Pass một phần | Sub-agent đi chung bảng (start/finish trong `TauriTurnObserver::event`, đóng khi hết lượt), ảnh có dòng sub-agent; chưa bấm mở khung xem, chưa thử dừng thật |
+
+Chạy thật chưa làm (cần `pnpm start` với claude đăng nhập): lệnh nền thật Running, dừng, tự xong, thoát app rồi `ps`.

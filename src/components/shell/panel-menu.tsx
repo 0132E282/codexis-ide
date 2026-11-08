@@ -6,6 +6,8 @@ import {
     PanelRight,
     PanelTop,
     PictureInPicture2,
+    Pin,
+    RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -16,6 +18,7 @@ import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type {
@@ -85,6 +88,8 @@ export function PanelMenu({
     floatable = false,
     edges,
     onPlacementChange,
+    onSaveDefault,
+    onResetDefault,
 }: {
     placement: PanelPlacement;
     /** The edge to return to when the panel leaves `fill`. */
@@ -94,6 +99,10 @@ export function PanelMenu({
     /** The edges offered under Move (default: all four). */
     edges?: readonly DockedPlacement[];
     onPlacementChange: (placement: PanelPlacement) => void;
+    /** Offers "Set as default position": keeps the current placement as the one the panel starts with. */
+    onSaveDefault?: () => void;
+    /** Offers "Reset to default position". */
+    onResetDefault?: () => void;
 }) {
     const filled = placement === 'fill';
     const floating = placement === 'float';
@@ -195,6 +204,24 @@ export function PanelMenu({
                         />
                     </div>
                 </DropdownMenuGroup>
+                {(onSaveDefault !== undefined ||
+                    onResetDefault !== undefined) && (
+                    <>
+                        <DropdownMenuSeparator />
+                        {onSaveDefault !== undefined && (
+                            <DropdownMenuItem onSelect={onSaveDefault}>
+                                <Pin aria-hidden="true" />
+                                {t('panel_menu.save_default')}
+                            </DropdownMenuItem>
+                        )}
+                        {onResetDefault !== undefined && (
+                            <DropdownMenuItem onSelect={onResetDefault}>
+                                <RotateCcw aria-hidden="true" />
+                                {t('panel_menu.reset_default')}
+                            </DropdownMenuItem>
+                        )}
+                    </>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

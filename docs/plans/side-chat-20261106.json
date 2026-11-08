@@ -205,7 +205,7 @@
     {
       "id": "TASK-S02",
       "title": "remote.rs: không phát sự kiện của run side-* cho điện thoại",
-      "status": "DONE",
+      "status": "CHO_KIEM_TRA",
       "priority": "P1",
       "priorityReason": "Tránh lộ nội dung side chat sang điện thoại",
       "requirements": ["REQ-S7"],
@@ -382,7 +382,8 @@
       ],
       "approach": "1. Chạy 5 lệnh kiểm chứng. 2. Chạy app và thử hai lượt song song. 3. Cập nhật tài liệu.",
       "test": "Hai lượt chạy song song không chen nội dung; DB không có cuộc chat mới sau khi dùng side chat",
-      "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã"
+      "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã",
+      "result": "Chưa đóng hẳn (2026-11-08): 5 lệnh kiểm chứng đạt (cargo fmt/clippy/test 556 pass, typecheck 0 lỗi, lint 0 lỗi); AC-S1, S5, S6, S7, S8, S9, S12 đạt (giả lập Tauri trên vite + đối chiếu mã); S10 đạt một phần; AC-S2, S3, S4 chưa kiểm thật (cần pnpm start với CLI và DB thật), S11 chưa kiểm UI. Đã cập nhật docs/system/side-chat.md (mục 6) và architecture.md (mục 8.2b). Ảnh chứng ở .agents/storage/evidence/side-chat/."
     }
   ],
   "risks": [

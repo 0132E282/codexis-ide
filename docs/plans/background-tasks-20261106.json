@@ -242,7 +242,7 @@
     {
       "id": "TASK-B04",
       "title": "Lệnh Tauri background_list, background_stop, background_clear, manage state, dừng khi thoát và lưu tasks.json",
-      "status": "PARTIAL",
+      "status": "DONE",
       "statusNote": "Mã xong 2026-11-07: commands/background.rs, BackgroundStore, tasks.json, stop qua control_request stop_task (chỉ khi stdin mở, chế độ manual), dừng lượt khi thoát app. CHƯA chạy app thật/ps. 2026-11-07: fmt, clippy --all-targets -D warnings sạch; cargo test --lib: 246 pass, 2 fail không thuộc task (git::file_named_star_does_not_pull_in_other_files, workspace::binary_files_are_read_as_bytes_but_not_as_text).",
       "priority": "P1",
       "priorityReason": "Điều khiển và lưu theo dự án",
@@ -289,7 +289,7 @@
     {
       "id": "TASK-B05",
       "title": "Frontend: use-background-tasks.ts và background-tasks-pane.tsx trong dock dưới",
-      "status": "PARTIAL",
+      "status": "DONE",
       "statusNote": "2026-11-07 (kiểm lại): đã NỐI xong: app.tsx (dock dưới cạnh Terminal, phóng to/đóng, onOpenSubagent -> viewSubagent), workspace-pane.tsx (nút bật/tắt aria-pressed), use-background-tasks.ts, background-tasks-pane.tsx, backgroundApi, i18n vi/en; pnpm typecheck sạch, eslint 0 lỗi trên các tệp này. CHƯA: Playwright/ảnh chứng, chạy app thật; mục menu ... dấu ✓ đang là nút ở thanh công cụ, chưa theo design (menu ...); lối tắt sidebar (Q5) chưa đổi nguồn. Ghi chú cũ: Đã tạo use-background-tasks.ts, background-tasks-pane.tsx, backgroundApi trong src/lib/api.ts, khoá i18n vi/en. CHUA NOI: app.tsx, chat-panel.tsx, turn-events.ts, sidebar.tsx, subagent-view; chua co backend (TASK-B04) nen background_* se loi; chua chay Playwright. Ghi chú 2026-11-07 (theo B01): không có BashOutput nên outputTail có thể rỗng; dòng shell cần hiển thị ổn khi không có đầu ra; nút dừng phải chờ Event::Background để đổi Stopped (có thể mất vài giây, có thể tốn một lượt model) và hiện lỗi background.stop_failed khi lượt đã kết thúc.",
       "priority": "P1",
       "priorityReason": "Phần người dùng nhìn thấy theo ảnh mẫu",
@@ -344,7 +344,7 @@
     {
       "id": "TASK-B06",
       "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
-      "status": "TODO",
+      "status": "PARTIAL",
       "priority": "P1",
       "priorityReason": "Đóng AC có bằng chứng chạy thật",
       "requirements": [

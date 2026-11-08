@@ -18,6 +18,9 @@ export function usePanelWidths(
         FILE_PANEL_DEFAULT_WIDTH,
         320,
         window.innerWidth,
+        'x',
+        // * With the tree on the left, the file column's drag bar is on its right edge, like the tree's.
+        treeEdge === 'trailing' ? 'trailing' : 'leading',
     );
     const changesWidth = useResizableWidth(
         'ai-chat.width.changes',

@@ -6,6 +6,9 @@ export type CodePalette = {
     base: 'vs' | 'vs-dark';
     comment: string;
     keyword: string;
+    control: string;
+    function: string;
+    regexp: string;
     string: string;
     number: string;
     type: string;
@@ -23,6 +26,9 @@ export const CODE_PALETTES: Record<CodeScheme, CodePalette> = {
         base: 'vs',
         comment: '#008000',
         keyword: '#0000ff',
+        control: '#af00db',
+        function: '#795e26',
+        regexp: '#811f3f',
         string: '#a31515',
         number: '#098658',
         type: '#267f99',
@@ -37,6 +43,9 @@ export const CODE_PALETTES: Record<CodeScheme, CodePalette> = {
         base: 'vs-dark',
         comment: '#6a9955',
         keyword: '#569cd6',
+        control: '#c586c0',
+        function: '#dcdcaa',
+        regexp: '#d16969',
         string: '#ce9178',
         number: '#b5cea8',
         type: '#4ec9b0',
@@ -51,6 +60,9 @@ export const CODE_PALETTES: Record<CodeScheme, CodePalette> = {
         base: 'vs',
         comment: '#6e7781',
         keyword: '#0072b2',
+        control: '#8e4585',
+        function: '#7a5c00',
+        regexp: '#b45309',
         string: '#b45309',
         number: '#8e4585',
         type: '#007a8c',
@@ -65,6 +77,9 @@ export const CODE_PALETTES: Record<CodeScheme, CodePalette> = {
         base: 'vs-dark',
         comment: '#8b949e',
         keyword: '#56b4e9',
+        control: '#cc79a7',
+        function: '#f0e442',
+        regexp: '#e69f00',
         string: '#e69f00',
         number: '#cc79a7',
         type: '#66d9e8',

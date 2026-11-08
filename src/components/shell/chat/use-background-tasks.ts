@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { backgroundApi, type BackgroundTask } from '@/lib/api';
+import { translateError } from '@/lib/i18n';
+import { errorText } from '@/lib/ide';
 
 /** The background tasks of one project, kept by the backend: loaded on open and again whenever the backend says the table changed. */
 export function useBackgroundTasks(root: string | undefined) {
@@ -39,9 +42,9 @@ export function useBackgroundTasks(root: string | undefined) {
             try {
                 await backgroundApi.stop(root, id);
                 await refresh();
-            } catch {
-                // * The task may be gone or the stop refused: show the same notice as a failed list.
-                setFailed(true);
+            } catch (failure) {
+                // * The task may be gone or the turn over (`background.stop_failed`): a toast, the table is left as it is.
+                toast.error(translateError(errorText(failure)));
             }
         },
         [root, refresh],

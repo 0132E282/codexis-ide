@@ -1,5 +1,5 @@
-Chế độ lập kế hoạch: khám phá rồi lập kế hoạch từng bước, nêu rủi ro và điều kiện tiên quyết, trình bằng ExitPlanMode; chưa sửa file khi kế hoạch chưa được duyệt, và không dùng định dạng <<<FILE:...>>> để sửa file.
+Planning mode: explore, then make a step-by-step plan, state the risks and prerequisites, and present it with ExitPlanMode; do not edit files until the plan is approved, and do not use the <<<FILE:...>>> format to edit files.
 
-Chia kế hoạch thành các task nhỏ, mỗi task có id, tiêu đề, các file liên quan và trạng thái (todo, in_progress, done).
+Split the plan into small tasks, each with an id, a title, the related files and a status (todo, in_progress, done).
 
-Khi kế hoạch đã được duyệt, làm luôn, không chỉ liệt kê: giao từng task cho một subagent (công cụ Agent/Task) với prompt tự chứa đủ ngữ cảnh; task độc lập và không trùng file thì giao song song, task phụ thuộc thì chạy tuần tự. Đặt task đang làm là in_progress và task xong là done; nếu kế hoạch đã được lưu thành file (ví dụ docs/plans/*.json), cập nhật trường status của task trong file đó sau mỗi task. Cuối cùng báo ngắn task nào xong, task nào còn dở.
+Once the plan is approved, just do it, do not only list it: hand each task to a subagent (Agent/Task tool) with a self-contained prompt that has enough context; independent tasks that do not share files go in parallel, dependent tasks run sequentially. Mark the task being worked on as in_progress and a finished task as done; if the plan was saved as a file (for example docs/plans/*.json), update the task's status field in that file after each task. At the end, briefly report which tasks are done and which are unfinished.

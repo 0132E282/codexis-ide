@@ -264,6 +264,27 @@ impl TauriTurnObserver {
         }
     }
 
+    /// Keeps the pictures a tool returned (screenshots the AI took, for one) with the project's documents. A failure is reported as the `chat-image-store-failed` event and never breaks the turn.
+    fn keep_images(&self, value: &serde_json::Value) {
+        let Some(store) = self.app.try_state::<activity::ActivityStore>() else {
+            return;
+        };
+        let root = self.project.root.display().to_string();
+
+        for url in value["images"].as_array().into_iter().flatten() {
+            let Some(bytes) = url.as_str().and_then(activity::base64_data_url_bytes) else {
+                continue;
+            };
+
+            if let Err(error) = store.save_image(&root, None, "ai-image", &bytes) {
+                let _ = self.app.emit(
+                    super::activity::CHAT_IMAGE_STORE_FAILED,
+                    serde_json::json!({ "error": error.to_string() }),
+                );
+            }
+        }
+    }
+
     /// Keeps what the persisted data needs from `event`: the session id, plans and log lines.
     fn persist(&self, event: &agent::Event) {
         match event {
@@ -282,9 +303,19 @@ impl TauriTurnObserver {
 
                 self.track_edit(&value);
             }
-            // * Parsed only while an edit call waits for its result: most results are not edits, and their output can be 2000 characters.
-            agent::Event::ToolResult(json) if self.has_pending_edits() => {
-                self.finish_edit(&serde_json::from_str(json).unwrap_or_default());
+            // * Parsed only while an edit call waits for its result or when it carries pictures: most results are neither, and their output can be 2000 characters.
+            agent::Event::ToolResult(json) => {
+                let has_images = json.contains("\"images\":[");
+
+                if has_images || self.has_pending_edits() {
+                    let value = serde_json::from_str(json).unwrap_or_default();
+
+                    self.finish_edit(&value);
+
+                    if has_images {
+                        self.keep_images(&value);
+                    }
+                }
             }
             agent::Event::Error(message) => self.log(&LogEntry::Error(message)),
             agent::Event::Done(_) => self.log(&LogEntry::End),

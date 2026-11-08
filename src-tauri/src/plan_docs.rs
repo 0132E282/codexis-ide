@@ -11,7 +11,9 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter};
 
 /// Folder of the plans, relative to the project root.
 const PLANS_FOLDER: &str = "docs/plans";
@@ -879,6 +881,99 @@ fn markdown_blocks(text: &str) -> Vec<MarkdownBlock> {
     }
 
     blocks
+}
+
+/// Event sent when the files of `docs/plans/` of a project changed; its payload is a [`PlansChanged`].
+pub const PLANS_CHANGED_EVENT: &str = "plans-changed";
+
+/// How often the plans folder is looked at.
+const WATCH_INTERVAL: Duration = Duration::from_secs(1);
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlansChanged {
+    /// Project folder, as in `PlanDocsList::root`.
+    pub root: String,
+}
+
+/// One plan file as the watcher sees it: name, modified time (milliseconds) and size.
+pub type FileStamp = (String, u128, u64);
+
+/// Name, modified time and size of every `*.json` / `*.md` file in `folder`, sorted by name; an absent folder gives an empty list.
+pub fn fingerprint(folder: &Path) -> Vec<FileStamp> {
+    let Ok(entries) = fs::read_dir(folder) else {
+        return Vec::new();
+    };
+    let mut stamps: Vec<FileStamp> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            format_of(&name)?;
+            let metadata = entry
+                .metadata()
+                .ok()
+                .filter(|metadata| metadata.is_file())?;
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map_or(0, |elapsed| elapsed.as_millis());
+
+            Some((name, modified, metadata.len()))
+        })
+        .collect();
+
+    stamps.sort();
+    stamps
+}
+
+/// Roots that already have a watcher thread: one per project.
+fn watched_roots() -> &'static Mutex<HashSet<PathBuf>> {
+    static ROOTS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+
+    ROOTS.get_or_init(Mutex::default)
+}
+
+/// Starts (once per project) a background thread that emits `plans-changed` when the plan files change.
+/// The thread is detached: it ends with the app.
+pub fn watch(app: AppHandle, workspace: &Workspace) {
+    let root = workspace.root().to_path_buf();
+    let is_new = watched_roots()
+        .lock()
+        .map(|mut roots| roots.insert(root.clone()))
+        .unwrap_or(false);
+
+    if !is_new {
+        return;
+    }
+
+    let folder = root.join(PLANS_FOLDER);
+    let payload = PlansChanged {
+        root: root.display().to_string(),
+    };
+    let spawned = std::thread::Builder::new()
+        .name("plans-watcher".into())
+        .spawn(move || {
+            let mut last = fingerprint(&folder);
+
+            loop {
+                std::thread::sleep(WATCH_INTERVAL);
+
+                let current = fingerprint(&folder);
+
+                if current != last {
+                    last = current;
+                    // * A closed window is no reason to stop looking.
+                    let _ = app.emit(PLANS_CHANGED_EVENT, payload.clone());
+                }
+            }
+        });
+
+    if spawned.is_err() {
+        if let Ok(mut roots) = watched_roots().lock() {
+            roots.remove(&root);
+        }
+    }
 }
 
 #[cfg(test)]

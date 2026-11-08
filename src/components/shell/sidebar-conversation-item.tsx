@@ -44,6 +44,8 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
     onDeleteConversation: (id: number) => void;
     onToggleGrid: (root: string, conversation: number, group: number) => void;
 }) {
+    const runningSubagents = subagents.filter((agent) => !agent.done);
+
     return (
         <li className="group/chat relative">
             <button
@@ -147,12 +149,12 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
             >
                 <Trash2 aria-hidden="true" />
             </Button>
-            {isCurrent && subagents.length > 0 && (
+            {isCurrent && runningSubagents.length > 0 && (
                 <ul
                     aria-label={t('sidebar.agent_is_working')}
                     className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
                 >
-                    {subagents.map((agent) => (
+                    {runningSubagents.map((agent) => (
                         <li key={agent.id}>
                             <button
                                 type="button"
@@ -162,12 +164,7 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
                             >
                                 <span
                                     aria-hidden="true"
-                                    className={cn(
-                                        'size-1.5 shrink-0 rounded-full',
-                                        agent.done
-                                            ? 'bg-muted-foreground/50'
-                                            : 'animate-pulse bg-primary',
-                                    )}
+                                    className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary"
                                 />
                                 <span className="truncate">{agent.label}</span>
                             </button>

@@ -391,7 +391,7 @@
     {
       "id": "TASK-P05",
       "title": "plan-pane.tsx: ngăn Plan trong dock phải",
-      "status": "PARTIAL",
+      "status": "CHO_KIEM_TRA",
       "priority": "P1",
       "priorityReason": "Phần người dùng nhìn thấy theo ảnh mẫu",
       "requirements": ["REQ-P1", "REQ-P3", "REQ-P4", "REQ-P8"],
@@ -431,7 +431,7 @@
     {
       "id": "TASK-P06",
       "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
-      "status": "TODO",
+      "status": "PARTIAL",
       "priority": "P1",
       "priorityReason": "Đóng AC có bằng chứng chạy thật",
       "requirements": [

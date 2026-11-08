@@ -31,10 +31,14 @@ pub fn plan_load(
 /// The plan documents of `docs/plans/` of the project at `root` (JSON preferred over Markdown), read only; an absent folder gives an empty list.
 #[tauri::command]
 pub async fn plan_docs_list(
+    app: AppHandle,
     state: State<'_, AppState>,
     root: Option<String>,
 ) -> Result<PlanDocsList, String> {
     let workspace = state.workspace_for(root.as_deref())?;
+
+    // * Looking at the list also starts watching the folder, so the pane is told when a plan changes.
+    plan_docs::watch(app, &workspace);
 
     super::blocking("plan_docs.list_failed", move || {
         Ok(plan_docs::list(&workspace))

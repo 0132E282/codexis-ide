@@ -24,7 +24,7 @@ export const shellMainEnglish: Record<string, string> = {
     'plans.do_tasks': 'Do tasks',
     'plans.continue': 'Continue',
     'plans.continue_prompt':
-        'Do the unfinished tasks of the plan {path}: {tasks}. Read the plan file, hand each task to a subagent and let it work right away (independent tasks in parallel, dependent ones in sequence), update the task status in the file after each task and report which tasks are done and which are left.',
+        'Read {path} and do the unfinished tasks: {tasks}.',
     'plans.detail_loading': 'Loading the plan…',
     'plans.section_requirements': 'Requirements',
     'plans.section_tasks': 'Tasks',
@@ -130,7 +130,7 @@ export const shellMainEnglish: Record<string, string> = {
         'No voice is installed for {language}, so the default voice reads it.',
     'data_pane.title': 'Data',
     'data_pane.events': 'File edit log',
-    'data_pane.images': 'Chat pictures',
+    'data_pane.images': 'Documents',
     'data_pane.plans': 'Plan records',
     'data_pane.filter_path': 'Filter by path',
     'data_pane.action': 'Action',
@@ -317,6 +317,7 @@ export const shellMainEnglish: Record<string, string> = {
     'changed_files.applied': 'applied',
     'changed_files.reverted': 'reverted',
     'changed_files.review': 'Review changes',
+    'changed_files.open_changes': 'Open file changes',
     'changed_files.discard_all':
         'Discard the changes to {count} files? This cannot be undone.',
     'changed_files.discarded': 'Changes discarded',

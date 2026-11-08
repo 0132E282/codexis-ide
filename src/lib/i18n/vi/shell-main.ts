@@ -31,7 +31,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'plans.do_tasks': 'Làm task',
     'plans.continue': 'Tiếp tục',
     'plans.continue_prompt':
-        'Làm các task chưa xong của kế hoạch {path}: {tasks}. Đọc tệp kế hoạch, giao từng task cho subagent làm luôn (task độc lập chạy song song, task phụ thuộc chạy tuần tự), cập nhật status của task trong tệp sau mỗi task và báo task nào xong, task nào còn dở.',
+        'Read {path} and do the unfinished tasks: {tasks}.',
     'plans.detail_loading': 'Đang tải kế hoạch…',
     'plans.section_requirements': 'Yêu cầu',
     'plans.section_tasks': 'Việc cần làm',
@@ -130,7 +130,7 @@ export const shellMainVietnamese: Record<string, string> = {
         'Máy chưa có giọng đọc cho ngôn ngữ {language}, đang dùng giọng mặc định.',
     'data_pane.title': 'Dữ liệu',
     'data_pane.events': 'Nhật ký sửa tệp',
-    'data_pane.images': 'Ảnh chat',
+    'data_pane.images': 'Tài liệu',
     'data_pane.plans': 'Bản ghi plan',
     'data_pane.filter_path': 'Lọc theo đường dẫn',
     'data_pane.action': 'Hành động',
@@ -314,6 +314,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'changed_files.applied': 'đã áp dụng',
     'changed_files.reverted': 'đã hoàn tác',
     'changed_files.review': 'Xem lại thay đổi',
+    'changed_files.open_changes': 'Mở màn thay đổi tệp',
     'changed_files.discard_all':
         'Hoàn tác thay đổi của {count} tệp? Không thể khôi phục lại.',
     'changed_files.discarded': 'Đã hoàn tác thay đổi',

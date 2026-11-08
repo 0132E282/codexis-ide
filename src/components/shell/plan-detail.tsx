@@ -9,7 +9,7 @@ import {
 } from '@/components/shell/plan-status';
 import { Button } from '@/components/ui/button';
 import { t } from '@/lib/i18n';
-import { ide } from '@/lib/ide';
+import { ide, onPlansChanged } from '@/lib/ide';
 import type { MarkdownBlock, PlanDocDetail, PlanItem } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
@@ -125,6 +125,28 @@ export function PlanDetail({
     onSendPrompt: (text: string) => void;
 }) {
     const [load, setLoad] = useState<Load>({ state: 'loading' });
+    // * Bumped when a plan file changed, to read the plan again without a loading state.
+    const [reload, setReload] = useState(0);
+
+    useEffect(() => {
+        let isActive = true;
+        let stop: (() => void) | undefined;
+
+        void onPlansChanged(() => setReload((count) => count + 1)).then(
+            (unlisten) => {
+                if (isActive) {
+                    stop = unlisten;
+                } else {
+                    unlisten();
+                }
+            },
+        );
+
+        return () => {
+            isActive = false;
+            stop?.();
+        };
+    }, []);
 
     useEffect(() => {
         let isCurrent = true;
@@ -150,7 +172,7 @@ export function PlanDetail({
         return () => {
             isCurrent = false;
         };
-    }, [root, path]);
+    }, [root, path, reload]);
 
     const plan = load.state === 'done' ? load.plan : null;
     // * The tasks that are not done (any status but done): what "Làm task / Tiếp tục" hands to the AI.

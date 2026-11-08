@@ -380,6 +380,20 @@ fn base64_matches_the_standard_vectors() {
 }
 
 #[test]
+fn data_url_bytes_round_trip_and_refuse_other_text() {
+    for sample in [&b""[..], b"f", b"fo", b"foo", b"foobar", &png(7, 41)] {
+        let url = format!("data:image/png;base64,{}", base64_encode(sample));
+
+        assert_eq!(base64_data_url_bytes(&url).as_deref(), Some(sample));
+    }
+
+    assert_eq!(base64_data_url_bytes("data:image/png,abcd"), None);
+    assert_eq!(base64_data_url_bytes("data:image/png;base64,a*b"), None);
+    assert_eq!(base64_data_url_bytes("data:image/png;base64,Z"), None);
+    assert_eq!(base64_data_url_bytes("https://x"), None);
+}
+
+#[test]
 fn only_pictures_are_kept_and_the_same_content_once() {
     let store = store();
     let first = store

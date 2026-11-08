@@ -115,7 +115,7 @@ fn args(
 #[test]
 fn the_language_rule_goes_in_front_of_the_prompt() {
     assert_eq!(with_language("Xin chào", ""), "Xin chào");
-    assert!(with_language("hello", "vi").starts_with("[Luôn trả lời bằng tiếng Việt"));
+    assert!(with_language("hello", "vi").starts_with("[Always answer in Vietnamese"));
     assert!(with_language("hello", "vi").ends_with("\n\nhello"));
     assert!(with_language("xin chào", "en").starts_with("[Always answer in English"));
 }

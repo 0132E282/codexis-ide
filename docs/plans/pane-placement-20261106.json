@@ -257,7 +257,7 @@
     {
       "id": "TASK-L06",
       "title": "Kiểm chứng cuối: viewport hẹp, a11y, ảnh chứng, cập nhật tài liệu",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "priorityReason": "Theo ảnh mẫu người dùng gửi",
       "requirements": ["REQ-L6"],
@@ -274,7 +274,8 @@
       ],
       "approach": "Theo thiết kế; tái dùng useResizableWidth và dropdown Radix có sẵn",
       "test": "Có ảnh chứng .agents/storage/evidence/pane-placement/, lint và typecheck không thêm lỗi",
-      "doneWhen": "Có ảnh chứng .agents/storage/evidence/pane-placement/, lint và typecheck không thêm lỗi"
+      "doneWhen": "Có ảnh chứng .agents/storage/evidence/pane-placement/, lint và typecheck không thêm lỗi",
+      "result": "2026-11-08: typecheck 0 lỗi, lint 0 lỗi; Playwright trên vite (giả lập Tauri) Pass: không cuộn ngang 390/768/1280/1800, Trái/Phải ẩn ở 390px, bàn phím + aria-checked, localStorage ide.placement và ide.placement-default; ảnh ở .agents/storage/evidence/pane-placement/L06/. Chưa kiểm: Terminal (xterm không nạp trên vite), lệnh Tauri thật, thoát fill sau khi tải lại. format:check còn Fail ở tree.ts và local-changes.tsx (không thuộc task). Docs pane-placement.md đã cập nhật."
     }
   ],
   "risks": ["Làm sau SIDE TASK-S03 (dock) và BG TASK-B05 để không đè app.tsx"],
