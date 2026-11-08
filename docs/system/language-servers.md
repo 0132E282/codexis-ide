@@ -1152,6 +1152,8 @@ Môi trường tiến trình con: thừa hưởng môi trường app, `PATH` = `
 
 ## 12. G-download (giai đoạn sau, phác thảo, chặn tới khi giai đoạn 1 xong)
 
+> **Đã làm một phần (2026-11-08): cài bằng npm thay cho tải bản đóng gói.** `language_server_install.rs` chạy `npm install --prefix <app data>/language-servers/installed/<id> --ignore-scripts <package>@<phiên bản ghim>` (Intelephense 1.18.5, `@tailwindcss/language-server` 0.16.0; cần Node và npm cạnh Node). Lệnh `language_server_install(id)` / `language_server_uninstall(id)` trả `LanguageServerInfo`; ứng viên có `origin = download`, chọn sau extension và PATH; `canDownload` = không có ứng viên dùng được + server có gói npm + có Node. Intelephense không có bản đóng gói tự chứa nên không theo phác thảo tải/giải nén bên dưới; phác thảo chỉ còn là tham khảo.
+
 Chỉ phác thảo để giữ chỗ trong hợp đồng; TASK-014 phải cập nhật mục này trước khi code. Q2 = A (công cụ hệ thống), Q13 mặc định (phiên bản + SHA-256 ghim trong mã, đổi theo bản phát hành app).
 
 - Điều kiện hiện nút (`canDownload = true`): không có ứng viên VS Code-family hợp lệ **và** không có ứng viên PATH hợp lệ **và** danh mục có nguồn tải cho nền tảng máy (Intelephense: thêm điều kiện có Node).

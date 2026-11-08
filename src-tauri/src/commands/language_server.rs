@@ -83,7 +83,7 @@ pub struct LanguageServerInfo {
     pub last_error: Option<&'static str>,
     /// Set when nothing usable was found: what to install.
     pub install_hint: Option<InstallHint>,
-    /// Always false for now: downloading a server is not offered.
+    /// True when nothing usable was found and the app can install the server itself (it has an `npm` package and Node is there).
     pub can_download: bool,
 }
 
@@ -108,10 +108,9 @@ pub fn listing(
     } else {
         (ServerState::Missing, None)
     });
-    let install_hint = candidates
-        .iter()
-        .all(|candidate| !candidate.is_usable())
-        .then(|| catalog::install_hint(spec));
+    let nothing_usable = candidates.iter().all(|candidate| !candidate.is_usable());
+    let install_hint = nothing_usable.then(|| catalog::install_hint(spec));
+    let can_download = nothing_usable && spec.install.is_some() && locator.node().is_some();
 
     LanguageServerInfo {
         id: spec.id,
@@ -126,7 +125,7 @@ pub fn listing(
         state,
         last_error,
         install_hint,
-        can_download: false,
+        can_download,
     }
 }
 
@@ -169,13 +168,25 @@ fn storage_folder(app: &AppHandle, spec: &ServerSpec, root: &Path) -> Option<std
     Some(folder)
 }
 
+/// This machine's locator that also finds the servers the app installed into its data folder.
+fn system_locator(app: &AppHandle) -> Option<Locator> {
+    let locator = Locator::system()?;
+
+    Some(match app.path().app_data_dir() {
+        Ok(directory) => {
+            locator.with_installed_dir(directory.join("language-servers").join("installed"))
+        }
+        Err(_) => locator,
+    })
+}
+
 fn plan_for(
     app: &AppHandle,
     spec: &'static ServerSpec,
     setting: &ServerSetting,
     root: &Path,
 ) -> Result<LaunchPlan, String> {
-    let locator = Locator::system().ok_or(UNAVAILABLE)?;
+    let locator = system_locator(app).ok_or(UNAVAILABLE)?;
     let storage = storage_folder(app, spec, root).unwrap_or_default();
 
     launch_plan(spec, setting, &locator, &storage).ok_or_else(|| NOT_INSTALLED.to_string())
@@ -210,6 +221,7 @@ fn info_for(
 /// The servers with what was found for each and their state in the project at `root` (the open project when absent). Runs `--version` of programs found in `PATH`, so it is on the blocking pool.
 #[tauri::command]
 pub async fn language_server_list(
+    app: AppHandle,
     state: State<'_, AppState>,
     servers: State<'_, LanguageServers>,
     config: State<'_, LanguageServerConfigStore>,
@@ -220,7 +232,7 @@ pub async fn language_server_list(
     let settings = config.get();
 
     blocking(UNAVAILABLE, move || {
-        let locator = Locator::system().ok_or(UNAVAILABLE)?;
+        let locator = system_locator(&app).ok_or(UNAVAILABLE)?;
 
         Ok(catalog::SERVERS
             .iter()
@@ -269,7 +281,7 @@ pub async fn language_server_configure(
             restart_open_slots(&app, &servers, spec, &after);
         }
 
-        let locator = Locator::system().ok_or(UNAVAILABLE)?;
+        let locator = system_locator(&app).ok_or(UNAVAILABLE)?;
         let info = info_for(&servers, open_root.as_deref(), spec, &after, &locator);
 
         if enabled_changed {
@@ -292,6 +304,78 @@ pub async fn language_server_configure(
         }
 
         Ok(info)
+    })
+    .await
+}
+
+/// Installs the server with `npm` into the app's data folder, then switches it to that source when nothing else is usable. Takes a while with a slow network, so it is on the blocking pool.
+#[tauri::command]
+pub async fn language_server_install(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    servers: State<'_, LanguageServers>,
+    config: State<'_, LanguageServerConfigStore>,
+    id: String,
+) -> Result<LanguageServerInfo, String> {
+    let spec = known(&id)?;
+    let setting = config
+        .setting(&id)
+        .ok_or_else(|| UNKNOWN_SERVER.to_string())?;
+    let open_root = state
+        .workspace_for(None)
+        .ok()
+        .map(|workspace| workspace.root().to_path_buf());
+    let servers = servers.inner().clone();
+
+    blocking(UNAVAILABLE, move || {
+        let locator = system_locator(&app).ok_or(UNAVAILABLE)?;
+
+        crate::language_server_install::install(spec, &locator).map_err(str::to_string)?;
+        restart_open_slots(&app, &servers, spec, &setting);
+
+        Ok(info_for(
+            &servers,
+            open_root.as_deref(),
+            spec,
+            &setting,
+            &locator,
+        ))
+    })
+    .await
+}
+
+/// Removes the server the app installed; the servers of VS Code and `PATH` are never touched.
+#[tauri::command]
+pub async fn language_server_uninstall(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    servers: State<'_, LanguageServers>,
+    config: State<'_, LanguageServerConfigStore>,
+    id: String,
+) -> Result<LanguageServerInfo, String> {
+    let spec = known(&id)?;
+    let setting = config
+        .setting(&id)
+        .ok_or_else(|| UNKNOWN_SERVER.to_string())?;
+    let open_root = state
+        .workspace_for(None)
+        .ok()
+        .map(|workspace| workspace.root().to_path_buf());
+    let servers = servers.inner().clone();
+
+    blocking(UNAVAILABLE, move || {
+        let locator = system_locator(&app).ok_or(UNAVAILABLE)?;
+
+        servers.stop_id(spec.id);
+        crate::language_server_install::uninstall(spec, &locator).map_err(str::to_string)?;
+
+        Ok(info_for(
+            &servers,
+            open_root.as_deref(),
+            spec,
+            &setting,
+            &locator,
+        ))
     })
     .await
 }

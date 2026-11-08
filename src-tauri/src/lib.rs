@@ -17,6 +17,7 @@ pub mod language_server;
 pub mod language_server_catalog;
 pub mod language_server_config;
 pub mod language_server_convert;
+pub mod language_server_install;
 pub mod language_server_protocol;
 pub mod linter;
 pub mod migrations;
@@ -132,6 +133,8 @@ pub fn run() {
             commands::inline_ask::inline_ask,
             commands::language_server::language_server_list,
             commands::language_server::language_server_configure,
+            commands::language_server::language_server_install,
+            commands::language_server::language_server_uninstall,
             commands::language_server::language_server_restart,
             commands::language_server::language_server_stop,
             commands::language_server::language_server_log,

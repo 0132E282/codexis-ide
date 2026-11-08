@@ -10,6 +10,7 @@ fn locator(home: &Path) -> Locator {
         path_dirs: Vec::new(),
         fixed_dirs: Vec::new(),
         extensions: Default::default(),
+        installed_dir: None,
     }
 }
 
@@ -507,7 +508,7 @@ fn other_programs_in_path_are_never_candidates() {
 
 #[test]
 fn the_catalog_describes_every_server() {
-    assert_eq!(SERVERS.len(), 3);
+    assert_eq!(SERVERS.len(), 4);
     assert_eq!(rust_spec().language_ids(), vec!["rust"]);
     assert_eq!(spec("nope").map(|spec| spec.id), None);
 
@@ -545,4 +546,94 @@ fn choices_parse_from_the_names_the_front_end_sends() {
     }
 
     assert!(serde_json::from_str::<SourceChoice>("\"custom\"").is_err());
+}
+
+/// A fake Node and an install of Intelephense where the app puts it.
+fn installed_intelephense(home: &TempDir) -> Locator {
+    let bin = home.path().join("bin");
+
+    script(&bin.join("node"), "#!/bin/sh\n", true);
+
+    let mut place = locator(home.path());
+
+    place.path_dirs = vec![bin];
+    place.installed_dir = Some(home.path().join("installed"));
+    script(
+        &home
+            .path()
+            .join("installed/intelephense/node_modules/intelephense/lib/intelephense.js"),
+        "",
+        false,
+    );
+
+    place
+}
+
+#[test]
+fn a_server_the_app_installed_is_found_and_taken_last() {
+    let home = TempDir::new().unwrap();
+    let place = installed_intelephense(&home);
+    let spec = spec("intelephense").unwrap();
+    let found = candidates(spec, &place, false);
+
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].origin, CandidateOrigin::Download);
+    assert_eq!(found[0].version.as_deref(), Some("1.18.5"));
+    assert!(found[0].is_usable());
+
+    let launch = found[0].launch.as_ref().unwrap();
+
+    assert!(launch.program.ends_with("node"));
+    assert!(launch
+        .arguments
+        .last()
+        .is_some_and(|argument| argument == "--stdio"));
+    assert_eq!(select(&found, SourceChoice::Auto, None), Some(0));
+    assert_eq!(select(&found, SourceChoice::Download, None), Some(0));
+    assert_eq!(select(&found, SourceChoice::Path, None), None);
+}
+
+#[test]
+fn an_install_without_node_says_so() {
+    let home = TempDir::new().unwrap();
+    let mut place = installed_intelephense(&home);
+
+    place.path_dirs = Vec::new();
+
+    let found = candidates(spec("intelephense").unwrap(), &place, false);
+
+    assert_eq!(found[0].problem, Some(PROBLEM_NODE_MISSING));
+    assert_eq!(select(&found, SourceChoice::Auto, None), None);
+}
+
+#[test]
+fn only_servers_with_a_package_have_an_install_folder() {
+    let home = TempDir::new().unwrap();
+    let place = installed_intelephense(&home);
+
+    assert!(place
+        .install_folder(spec("intelephense").unwrap())
+        .is_some());
+    assert!(place.install_folder(spec("tailwindcss").unwrap()).is_some());
+    assert!(place.install_folder(rust_spec()).is_none());
+    assert!(locator(home.path())
+        .install_folder(spec("tailwindcss").unwrap())
+        .is_none());
+}
+
+#[test]
+fn tailwind_handles_its_files_but_not_php() {
+    assert_eq!(
+        spec_for_path("src/app.tsx").map(|found| found.0.id),
+        Some("tailwindcss")
+    );
+    assert_eq!(
+        spec_for_path("index.html").map(|found| found.1),
+        Some("html")
+    );
+    assert_eq!(spec_for_path("a.css").map(|found| found.1), Some("css"));
+    assert_eq!(
+        spec_for_path("a.php").map(|found| found.0.id),
+        Some("intelephense")
+    );
 }

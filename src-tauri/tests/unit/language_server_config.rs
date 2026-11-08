@@ -134,7 +134,7 @@ fn unknown_servers_sources_and_roots_are_dropped_and_the_rest_is_kept() {
 
     let settings = store.get();
 
-    assert_eq!(settings.len(), 3);
+    assert_eq!(settings.len(), catalog::SERVERS.len());
     assert_eq!(
         find(&settings, "rust-analyzer"),
         &ServerSetting {

@@ -10,6 +10,7 @@ fn locator(home: &Path) -> Locator {
         path_dirs: Vec::new(),
         fixed_dirs: Vec::new(),
         extensions: Default::default(),
+        installed_dir: None,
     }
 }
 

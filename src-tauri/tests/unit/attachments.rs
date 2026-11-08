@@ -125,7 +125,7 @@ fn a_picture_is_read_only_inside_the_allowed_roots() {
 #[test]
 fn files_of_a_hash_are_removed_and_others_stay() {
     use sha2::{Digest, Sha256};
-    
+
     let dir = tempfile::tempdir().unwrap();
     let gone = save(dir.path(), "a.png", b"gone").unwrap();
     let kept = save(dir.path(), "b.png", b"kept").unwrap();

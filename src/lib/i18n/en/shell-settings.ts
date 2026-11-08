@@ -180,12 +180,17 @@ export const shellSettingsEnglish: Record<string, string> = {
     'extensions_tab.origin_cursor': 'Cursor',
     'extensions_tab.origin_vscodium': 'VSCodium',
     'extensions_tab.origin_path': 'PATH',
-    'extensions_tab.origin_download': 'Download',
+    'extensions_tab.origin_download': 'Installed in the IDE',
     'extensions_tab.source_setting': 'Source',
     'extensions_tab.source_auto': 'Automatic',
     'extensions_tab.source_vscode': 'VS Code extension',
     'extensions_tab.source_path': 'PATH',
-    'extensions_tab.source_download': 'Download',
+    'extensions_tab.source_download': 'Installed in the IDE',
+    'extensions_tab.install': 'Install in the IDE',
+    'extensions_tab.uninstall': 'Remove installed copy',
+    'extensions_tab.installing': 'Installing…',
+    'extensions_tab.install_hint':
+        'Or press “Install in the IDE” to download {name} into the IDE own folder (needs Node.js and npm).',
     'extensions_tab.extension_root': 'Editor',
     'extensions_tab.root_any': 'Any',
     'extensions_tab.restart': 'Restart',
@@ -235,6 +240,13 @@ export const shellSettingsEnglish: Record<string, string> = {
         'No usable server was found to run.',
     'errors.language_server.node_missing':
         'Node.js was not found (Intelephense needs it).',
+    'errors.language_server.not_installable':
+        'The IDE cannot install this server.',
+    'errors.language_server.npm_missing': 'npm was not found next to Node.js.',
+    'errors.language_server.install_failed':
+        'Install failed. Check the network and try again.',
+    'errors.language_server.install_timeout':
+        'The install took too long and was stopped.',
     'errors.language_server.start_failed': 'The server could not be started.',
     'errors.language_server.too_many':
         'The limit of 8 servers running at once is reached.',

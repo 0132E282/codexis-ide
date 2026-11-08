@@ -19,8 +19,7 @@ import { cn } from '@/lib/utils';
 const SELECT_CLASS =
     'h-8 rounded-sm border border-input bg-card px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-// * The download source (`download`) is not offered: the app never downloads a server in this version.
-const SOURCES: ServerSourceSetting[] = ['auto', 'vscode', 'path'];
+const SOURCES: ServerSourceSetting[] = ['auto', 'vscode', 'path', 'download'];
 const EXTENSION_ROOTS: ExtensionRoot[] = [
     'vscode',
     'insiders',
@@ -74,6 +73,8 @@ function ServerDetail({
     onConfigure,
     onRestart,
     onStop,
+    onInstall,
+    onUninstall,
 }: {
     info: LanguageServerInfo;
     busy: boolean;
@@ -83,6 +84,8 @@ function ServerDetail({
     ) => void;
     onRestart: () => void;
     onStop: () => void;
+    onInstall: () => void;
+    onUninstall: () => void;
 }) {
     const [log, setLog] = useState<string[] | null>(null);
     const [logError, setLogError] = useState<string | null>(null);
@@ -155,6 +158,31 @@ function ServerDetail({
                     </Field>
                 )}
                 <span className="ml-auto flex items-center gap-2">
+                    {info.canDownload && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={busy}
+                            onClick={onInstall}
+                        >
+                            {busy
+                                ? t('extensions_tab.installing')
+                                : t('extensions_tab.install')}
+                        </Button>
+                    )}
+                    {info.candidates.some(
+                        (candidate) => candidate.origin === 'download',
+                    ) && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={onUninstall}
+                        >
+                            {t('extensions_tab.uninstall')}
+                        </Button>
+                    )}
                     <Button
                         type="button"
                         variant="outline"
@@ -193,6 +221,11 @@ function ServerDetail({
                 </p>
             )}
             <InstallHintText info={info} />
+            {info.canDownload && (
+                <p className="text-xs text-muted-foreground">
+                    {t('extensions_tab.install_hint', { name: info.name })}
+                </p>
+            )}
             <div>
                 <h4 className="mb-1 text-xs font-medium text-muted-foreground">
                     {t('extensions_tab.found')}
@@ -510,6 +543,20 @@ export function ExtensionsTab() {
                                                         void run(info, () =>
                                                             ideLanguageServer.restart(
                                                                 null,
+                                                                info.id,
+                                                            ),
+                                                        )
+                                                    }
+                                                    onInstall={() =>
+                                                        void run(info, () =>
+                                                            ideLanguageServer.install(
+                                                                info.id,
+                                                            ),
+                                                        )
+                                                    }
+                                                    onUninstall={() =>
+                                                        void run(info, () =>
+                                                            ideLanguageServer.uninstall(
                                                                 info.id,
                                                             ),
                                                         )

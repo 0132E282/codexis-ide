@@ -22,7 +22,7 @@ pub const PROBLEM_NOT_EXECUTABLE: &str = "language_server.not_executable";
 pub const PROBLEM_NAME_REJECTED: &str = "language_server.path_name_rejected";
 pub const PROBLEM_VERSION_CHECK_FAILED: &str = "language_server.version_check_failed";
 
-/// Where a server was found: an editor's extension folder, a program in `PATH`, or (later) a download.
+/// Where a server was found: an editor's extension folder, a program in `PATH`, or the app's own `npm` install.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CandidateOrigin {
@@ -64,7 +64,7 @@ pub enum SourceChoice {
     Auto,
     Vscode,
     Path,
-    /// Reserved for the later download feature; nothing resolves to it yet.
+    /// The server the app installed itself with `npm`.
     Download,
 }
 
@@ -88,6 +88,16 @@ struct ExtensionServer {
     arguments: &'static [&'static str],
 }
 
+/// A server the app can install itself with `npm`, into its own folder, pinned to one version.
+#[derive(Debug)]
+pub struct NpmInstall {
+    pub package: &'static str,
+    pub version: &'static str,
+    /// Path of the server's JavaScript file inside the install folder.
+    file: &'static str,
+    arguments: &'static [&'static str],
+}
+
 #[derive(Debug)]
 pub struct ServerSpec {
     pub id: &'static str,
@@ -100,6 +110,8 @@ pub struct ServerSpec {
     path_arguments: &'static [&'static str],
     /// Arguments that print the version, to tell a working program from a broken proxy; `None` = not asked.
     version_arguments: Option<&'static [&'static str]>,
+    /// How the app installs it itself; `None` = it cannot.
+    pub install: Option<NpmInstall>,
 }
 
 impl ServerSpec {
@@ -125,7 +137,7 @@ impl ServerSpec {
     }
 }
 
-pub const SERVERS: [ServerSpec; 3] = [
+pub const SERVERS: [ServerSpec; 4] = [
     ServerSpec {
         id: "rust-analyzer",
         name: "rust-analyzer",
@@ -140,6 +152,7 @@ pub const SERVERS: [ServerSpec; 3] = [
         path_programs: &["rust-analyzer"],
         path_arguments: &[],
         version_arguments: Some(&["--version"]),
+        install: None,
     },
     ServerSpec {
         id: "intelephense",
@@ -155,6 +168,38 @@ pub const SERVERS: [ServerSpec; 3] = [
         path_programs: &["intelephense"],
         path_arguments: &["--stdio"],
         version_arguments: None,
+        install: Some(NpmInstall {
+            package: "intelephense",
+            version: "1.18.5",
+            file: "node_modules/intelephense/lib/intelephense.js",
+            arguments: &["--stdio"],
+        }),
+    },
+    ServerSpec {
+        id: "tailwindcss",
+        name: "Tailwind CSS",
+        languages: &[
+            ("html", "html"),
+            ("css", "css"),
+            ("jsx", "javascriptreact"),
+            ("tsx", "typescriptreact"),
+        ],
+        extension: Some(ExtensionServer {
+            extension_id: "bradlc.vscode-tailwindcss",
+            extension_name: "Tailwind CSS IntelliSense",
+            file: "dist/tailwindServer.js",
+            kind: FileKind::NodeScript,
+            arguments: &["--stdio"],
+        }),
+        path_programs: &["tailwindcss-language-server"],
+        path_arguments: &["--stdio"],
+        version_arguments: None,
+        install: Some(NpmInstall {
+            package: "@tailwindcss/language-server",
+            version: "0.16.0",
+            file: "node_modules/@tailwindcss/language-server/bin/tailwindcss-language-server",
+            arguments: &["--stdio"],
+        }),
     },
     ServerSpec {
         id: "csharp-ls",
@@ -164,6 +209,7 @@ pub const SERVERS: [ServerSpec; 3] = [
         path_programs: &["csharp-ls"],
         path_arguments: &[],
         version_arguments: Some(&["--version"]),
+        install: None,
     },
 ];
 
@@ -227,6 +273,8 @@ pub struct Locator {
     pub fixed_dirs: Vec<PathBuf>,
     /// What was read from the editors' extension folders; shared by the servers listed with this locator, so a listing reads them once.
     pub extensions: vscode_extensions::ExtensionScan,
+    /// Folder the app installs servers into (one folder per server id); `None` = the app installs none.
+    pub installed_dir: Option<PathBuf>,
 }
 
 impl Locator {
@@ -244,7 +292,23 @@ impl Locator {
                 PathBuf::from("/usr/local/bin"),
             ],
             extensions: vscode_extensions::ExtensionScan::default(),
+            installed_dir: None,
         })
+    }
+
+    /// The same locator that also finds the servers the app installed itself into `directory`.
+    #[must_use]
+    pub fn with_installed_dir(mut self, directory: PathBuf) -> Self {
+        self.installed_dir = Some(directory);
+
+        self
+    }
+
+    /// The folder `spec` is installed into by the app.
+    pub fn install_folder(&self, spec: &ServerSpec) -> Option<PathBuf> {
+        spec.install.as_ref()?;
+
+        Some(self.installed_dir.as_ref()?.join(spec.id))
     }
 
     /// Folders searched for a server program, in order.
@@ -406,8 +470,55 @@ pub fn candidates(spec: &ServerSpec, locator: &Locator, probe: bool) -> Vec<Cand
     }
 
     found.extend(path_candidate(spec, locator, probe));
+    found.extend(installed_candidate(spec, locator));
 
     found
+}
+
+/// The server the app installed itself with `npm`, when it is there.
+fn installed_candidate(spec: &ServerSpec, locator: &Locator) -> Option<Candidate> {
+    let install = spec.install.as_ref()?;
+    let folder = locator.install_folder(spec)?;
+    let file = folder.join(install.file);
+
+    if !file.is_file() {
+        return None;
+    }
+
+    let base = Candidate {
+        origin: CandidateOrigin::Download,
+        label: install.package.to_string(),
+        extension_id: None,
+        version: Some(install.version.to_string()),
+        path: file.display().to_string(),
+        problem: None,
+        launch: None,
+    };
+    let Ok(canonical) = fs::canonicalize(&file) else {
+        return Some(base.rejected(PROBLEM_EXTENSION_CHANGED));
+    };
+
+    // * Same rule as for an extension: the file must still be inside the install folder after links are followed.
+    if !fs::canonicalize(&folder).is_ok_and(|root| canonical.starts_with(root)) {
+        return Some(base.rejected(PROBLEM_SYMLINK_OUTSIDE));
+    }
+
+    let Some(node) = locator.node() else {
+        return Some(base.rejected(PROBLEM_NODE_MISSING));
+    };
+    let mut arguments = vec![canonical.display().to_string()];
+
+    arguments.extend(owned(install.arguments));
+
+    Some(Candidate {
+        launch: Some(LaunchPlan {
+            extra_path: locator.child_path_dirs(&node),
+            program: node,
+            arguments,
+            initialization_options: Value::Null,
+        }),
+        ..base
+    })
 }
 
 /// The server file of an extension folder, resolved and checked.
@@ -638,14 +749,15 @@ pub fn select(
             .is_some_and(|editor| extension_root.is_none_or(|root| root == editor))
     };
     let path = |origin: CandidateOrigin| origin == CandidateOrigin::Path;
+    let installed = |origin: CandidateOrigin| origin == CandidateOrigin::Download;
 
     match choice {
-        SourceChoice::Auto => {
-            first(&|origin| origin.extension().is_some()).or_else(|| first(&path))
-        }
+        SourceChoice::Auto => first(&|origin| origin.extension().is_some())
+            .or_else(|| first(&path))
+            .or_else(|| first(&installed)),
         SourceChoice::Vscode => first(&extension),
         SourceChoice::Path => first(&path),
-        SourceChoice::Download => None,
+        SourceChoice::Download => first(&installed),
     }
 }
 

@@ -176,12 +176,17 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'extensions_tab.origin_cursor': 'Cursor',
     'extensions_tab.origin_vscodium': 'VSCodium',
     'extensions_tab.origin_path': 'PATH',
-    'extensions_tab.origin_download': 'Tải về',
+    'extensions_tab.origin_download': 'Cài trong IDE',
     'extensions_tab.source_setting': 'Nguồn',
     'extensions_tab.source_auto': 'Tự chọn',
     'extensions_tab.source_vscode': 'Extension VS Code',
     'extensions_tab.source_path': 'PATH',
-    'extensions_tab.source_download': 'Tải về',
+    'extensions_tab.source_download': 'Cài trong IDE',
+    'extensions_tab.install': 'Cài vào IDE',
+    'extensions_tab.uninstall': 'Gỡ bản đã cài',
+    'extensions_tab.installing': 'Đang cài…',
+    'extensions_tab.install_hint':
+        'Hoặc bấm “Cài vào IDE” để tải {name} về thư mục riêng của IDE (cần Node.js và npm).',
     'extensions_tab.extension_root': 'Trình soạn',
     'extensions_tab.root_any': 'Bất kỳ',
     'extensions_tab.restart': 'Khởi động lại',
@@ -229,6 +234,12 @@ export const shellSettingsVietnamese: Record<string, string> = {
         'Không tìm thấy server hợp lệ để chạy.',
     'errors.language_server.node_missing':
         'Không tìm thấy Node.js (cần cho Intelephense).',
+    'errors.language_server.not_installable':
+        'Server này không cài được từ IDE.',
+    'errors.language_server.npm_missing': 'Không tìm thấy npm cạnh Node.js.',
+    'errors.language_server.install_failed':
+        'Cài đặt thất bại. Kiểm tra mạng rồi thử lại.',
+    'errors.language_server.install_timeout': 'Cài đặt quá lâu nên đã bị dừng.',
     'errors.language_server.start_failed': 'Không khởi động được server.',
     'errors.language_server.too_many': 'Đã chạy tối đa 8 server cùng lúc.',
     'errors.language_server.not_running': 'Server không chạy.',

@@ -1,7 +1,8 @@
 import { invoke } from '@/lib/invoke';
 import { listen } from '@tauri-apps/api/event';
 
-export type LanguageServerId = 'rust-analyzer' | 'intelephense' | 'csharp-ls';
+export type LanguageServerId =
+    'rust-analyzer' | 'intelephense' | 'csharp-ls' | 'tailwindcss';
 /** What the person chose; `auto` takes the first usable extension, then PATH. */
 export type ServerSourceSetting = 'auto' | 'vscode' | 'path' | 'download';
 /** Editor whose extension folder is read (read-only). */
@@ -216,6 +217,12 @@ export const ideLanguageServer = {
             source,
             extensionRoot,
         }),
+    /** Installs the server with npm into the app's folder (pinned version). */
+    install: (id: LanguageServerId) =>
+        invoke<LanguageServerInfo>('language_server_install', { id }),
+    /** Removes the server the app installed; VS Code and PATH servers are untouched. */
+    uninstall: (id: LanguageServerId) =>
+        invoke<LanguageServerInfo>('language_server_uninstall', { id }),
     restart: (root: string | null, id: LanguageServerId) =>
         invoke<void>('language_server_restart', { root, id }),
     stop: (root: string | null, id: LanguageServerId) =>
