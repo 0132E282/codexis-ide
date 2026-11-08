@@ -1,4 +1,4 @@
-import { Eye, FileDiff, HardDrive, Undo2 } from 'lucide-react';
+import { FileDiff, HardDrive, Undo2 } from 'lucide-react';
 import { useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { FileIcon } from '@/components/ai-chat/file-icon';
@@ -92,12 +92,19 @@ export function ChangedFilesCard({
     steps: Step[];
     projectName: string;
 }) {
-    const [reviewing, setReviewing] = useState(false);
+    const [reviewingPaths, setReviewingPaths] = useState<string[]>([]);
     const [reverted, setReverted] = useState(false);
     const [busy, setBusy] = useState(false);
     const { confirm, dialog } = useConfirm();
     const changesViewer = useContext(ChangesViewerContext);
     const changes = changesByPath(steps);
+
+    const toggleReview = (filePath: string) =>
+        setReviewingPaths((current) =>
+            current.includes(filePath)
+                ? current.filter((candidate) => candidate !== filePath)
+                : [...current, filePath],
+        );
 
     // * Puts every file back as git `HEAD` has it (a new file is removed); asks first, since the edits are lost.
     const undo = async () => {
@@ -136,18 +143,47 @@ export function ChangedFilesCard({
 
     return (
         <div className="min-w-0 space-y-3 rounded-xl border bg-card p-3">
-            <p className="flex items-center gap-2 text-sm font-medium">
-                <HardDrive
-                    aria-hidden="true"
-                    className="size-4 shrink-0 text-muted-foreground"
-                />
-                <span className="min-w-0 truncate">
-                    {t('changed_files.title', {
-                        count: files.length,
-                        project: projectName,
-                    })}
-                </span>
-            </p>
+            <div className="flex items-center gap-2">
+                <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                    <HardDrive
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 truncate">
+                        {t('changed_files.title', {
+                            count: files.length,
+                            project: projectName,
+                        })}
+                    </span>
+                </p>
+                {changesViewer !== null && (
+                    <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="shrink-0"
+                        aria-label={t('changed_files.open_changes')}
+                        title={t('changed_files.open_changes')}
+                        onClick={changesViewer.open}
+                    >
+                        <FileDiff aria-hidden="true" />
+                    </Button>
+                )}
+                {!reverted && (
+                    <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="shrink-0"
+                        disabled={busy}
+                        aria-label={t('local_changes.discard')}
+                        title={t('local_changes.discard')}
+                        onClick={() => void undo()}
+                    >
+                        <Undo2 aria-hidden="true" />
+                    </Button>
+                )}
+            </div>
             <ul className="space-y-1.5">
                 {files.map((file) => {
                     const path = file.path.replace(WORKTREE_PREFIX, '');
@@ -156,12 +192,20 @@ export function ChangedFilesCard({
                         STATUS_KEY[file.status as keyof typeof STATUS_KEY] ??
                         STATUS_KEY.M;
 
+                    const isReviewing = reviewingPaths.includes(file.path);
+
                     return (
                         <li
                             key={file.path}
                             className="min-w-0 overflow-hidden rounded-md border bg-background"
                         >
-                            <div className="flex items-center gap-2 px-3 py-2">
+                            <button
+                                type="button"
+                                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                                aria-expanded={isReviewing}
+                                aria-label={`${t('changed_files.review')}: ${path}`}
+                                onClick={() => toggleReview(file.path)}
+                            >
                                 <FileIcon
                                     name={path.split('/').pop() ?? path}
                                     className="size-4 shrink-0"
@@ -175,8 +219,8 @@ export function ChangedFilesCard({
                                         ? t('changed_files.reverted')
                                         : t('changed_files.applied')}
                                 </span>
-                            </div>
-                            {reviewing && (
+                            </button>
+                            {isReviewing && (
                                 <div className="max-h-72 overflow-auto border-t">
                                     {change !== undefined ? (
                                         <UnifiedDiff
@@ -192,41 +236,6 @@ export function ChangedFilesCard({
                     );
                 })}
             </ul>
-            <div className="flex flex-wrap gap-2">
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-pressed={reviewing}
-                    onClick={() => setReviewing(!reviewing)}
-                >
-                    <Eye aria-hidden="true" />
-                    {t('changed_files.review')}
-                </Button>
-                {changesViewer !== null && (
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={changesViewer.open}
-                    >
-                        <FileDiff aria-hidden="true" />
-                        {t('changed_files.open_changes')}
-                    </Button>
-                )}
-                {!reverted && (
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => void undo()}
-                    >
-                        <Undo2 aria-hidden="true" />
-                        {t('local_changes.discard')}
-                    </Button>
-                )}
-            </div>
             {dialog}
         </div>
     );

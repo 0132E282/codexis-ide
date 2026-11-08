@@ -75,7 +75,6 @@ export const codeViewerEnglish: Record<string, string> = {
     'tree_panel.search': 'Go to the filter',
     'tree_panel.collapse_all': 'Collapse all folders',
     'tree_panel.toggle_view': 'Switch between Files and Changes',
-    'tree_panel.more': 'More',
     'tree_panel.maximize': 'Maximize the file tree',
     'tree_panel.restore': 'Restore the file tree size',
     'tree_panel.close': 'Close the file tree',

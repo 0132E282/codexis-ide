@@ -73,7 +73,6 @@ export const codeViewerVietnamese: Record<string, string> = {
     'tree_panel.search': 'Đến ô lọc',
     'tree_panel.collapse_all': 'Thu gọn tất cả thư mục',
     'tree_panel.toggle_view': 'Chuyển giữa Tệp và Thay đổi',
-    'tree_panel.more': 'Thêm',
     'tree_panel.maximize': 'Phóng to cây thư mục',
     'tree_panel.restore': 'Thu nhỏ cây thư mục',
     'tree_panel.close': 'Đóng cây thư mục',

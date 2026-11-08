@@ -307,7 +307,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'sidebar.statistics': 'Thống kê',
     'sidebar_toggle.collapse_sidebar': 'Thu gọn thanh bên',
     'sidebar_toggle.open_sidebar': 'Mở thanh bên',
-    'changed_files.title': 'Đã sửa {count} tệp trên máy local ({project})',
+    'changed_files.title': 'Đã sửa {count} tệp',
     'changed_files.modified': 'Sửa',
     'changed_files.created': 'Tạo',
     'changed_files.deleted': 'Xóa',

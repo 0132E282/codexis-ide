@@ -24,6 +24,7 @@ export function EditorOptionsMenu({
     options,
     onOptionChange,
     onQuickOpen,
+    onCreate,
     treeClosed,
     onTreeClosedChange,
     treePlacement,
@@ -36,6 +37,8 @@ export function EditorOptionsMenu({
         value: EditorOptions[Name],
     ) => void;
     onQuickOpen: () => void;
+    /** * Starts a new file or folder at the project root; only given for local projects. */
+    onCreate?: (isFolder: boolean) => void;
     /** * Whether the host holds the tree's closed state (without it the tree item is not shown). */
     treeClosed?: boolean;
     onTreeClosedChange?: (closed: boolean) => void;
@@ -75,6 +78,16 @@ export function EditorOptionsMenu({
                     {t('editor_options.go_to_file')}
                     <DropdownMenuShortcut>⌘P</DropdownMenuShortcut>
                 </DropdownMenuItem>
+                {onCreate !== undefined && (
+                    <>
+                        <DropdownMenuItem onSelect={() => onCreate(false)}>
+                            {t('common.new_file')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onCreate(true)}>
+                            {t('common.new_folder')}
+                        </DropdownMenuItem>
+                    </>
+                )}
                 <DropdownMenuSeparator />
                 {onTreeClosedChange !== undefined && (
                     <DropdownMenuCheckboxItem

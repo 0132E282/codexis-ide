@@ -310,7 +310,7 @@ export const shellMainEnglish: Record<string, string> = {
     'sidebar.statistics': 'Statistics',
     'sidebar_toggle.collapse_sidebar': 'Collapse sidebar',
     'sidebar_toggle.open_sidebar': 'Open sidebar',
-    'changed_files.title': 'Edited {count} files on this machine ({project})',
+    'changed_files.title': 'Edited {count} files',
     'changed_files.modified': 'Edited',
     'changed_files.created': 'Created',
     'changed_files.deleted': 'Deleted',

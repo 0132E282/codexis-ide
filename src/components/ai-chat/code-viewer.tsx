@@ -262,6 +262,15 @@ export function CodeViewer({
         }
     }
 
+    // * The options menu asks the tree to name a new file or folder at the root (a new object per request).
+    const [createRequest, setCreateRequest] = useState<{
+        isFolder: boolean;
+    } | null>(null);
+    const requestCreate = (isFolder: boolean) => {
+        setView('files');
+        setCreateRequest({ isFolder });
+    };
+
     const showChanges = localRoot !== null && view === 'changes';
     const editorVisible = selected !== null || showChanges;
     // * The chat is folded away: the open file or change list takes its room, so no empty gap is left.
@@ -407,6 +416,7 @@ export function CodeViewer({
             placement={treePlacement}
             closed={treeClosed}
             onClosedChange={onTreeClosedChange}
+            createRequest={createRequest}
             sourceName={sourceName}
             treeWidth={treeWidth}
             repo={repo}
@@ -547,6 +557,11 @@ export function CodeViewer({
                                         options={editorOptions}
                                         onOptionChange={setEditorOption}
                                         onQuickOpen={openQuickOpen}
+                                        onCreate={
+                                            localRoot !== null
+                                                ? requestCreate
+                                                : undefined
+                                        }
                                         treeClosed={treeClosed}
                                         onTreeClosedChange={onTreeClosedChange}
                                         treePlacement={treePlacement}

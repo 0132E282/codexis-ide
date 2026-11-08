@@ -15,7 +15,6 @@ import {
     ChevronsDownUp,
     FileSearch,
     List,
-    MoreHorizontal,
     PanelRightOpen,
     X,
 } from 'lucide-react';
@@ -79,10 +78,13 @@ export function TreePanel({
     actions,
     closed,
     onClosedChange,
+    createRequest,
 }: {
     /** The host holds the closed state and draws the button that opens the tree again (the chat grid puts it in its header): closed, the tree draws nothing. */
     closed?: boolean;
     onClosedChange?: (closed: boolean) => void;
+    /** * A new object each time the editor options menu asks for a new file or folder at the project root (local projects). */
+    createRequest?: { isFolder: boolean } | null;
     sourceName: string;
     treeWidth: ReturnType<typeof useResizableWidth>;
     /** Left or right of the editor (the Move menu); Fill is the maximize below. */
@@ -176,6 +178,18 @@ export function TreePanel({
             onToggle(folder);
         }
     };
+
+    // * A new request (not the first value) starts naming an entry at the root; a closed tree opens so the name row shows.
+    const [seenCreateRequest, setSeenCreateRequest] = useState(createRequest);
+
+    if (createRequest !== seenCreateRequest) {
+        setSeenCreateRequest(createRequest);
+
+        if (createRequest != null && isLocal) {
+            startCreate('', createRequest.isFolder);
+            setIsClosed(false);
+        }
+    }
 
     const submitCreate = async () => {
         const name = newName.trim();
@@ -384,37 +398,6 @@ export function TreePanel({
                             </span>
                         )}
                     </Button>
-                )}
-                {isLocal && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={t('tree_panel.more')}
-                                title={t('tree_panel.more')}
-                                className="text-muted-foreground"
-                            >
-                                <MoreHorizontal aria-hidden="true" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="start"
-                            onCloseAutoFocus={(event) => event.preventDefault()}
-                        >
-                            <DropdownMenuItem
-                                onSelect={() => startCreate('', false)}
-                            >
-                                {t('common.new_file')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={() => startCreate('', true)}
-                            >
-                                {t('common.new_folder')}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                 )}
                 <span className="ml-auto flex items-center gap-0.5">
                     <PanelMenu
