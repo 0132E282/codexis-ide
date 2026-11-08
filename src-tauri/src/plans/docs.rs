@@ -1047,6 +1047,53 @@ pub fn watch(app: AppHandle, workspace: &Workspace) {
     }
 }
 
+/// Deletes a finished plan of `docs/plans/` with what belongs to it: a plan folder `<name>/` goes with its evidence and tests, a loose `<name>.json` / `<name>.md` goes with the file of the other format. Only a plan whose status is `done` is deleted.
+pub fn delete(workspace: &Workspace, path: &str) -> Result<(), &'static str> {
+    let detail = read(workspace, path)?;
+
+    if detail.summary.status != PlanStatus::Done {
+        return Err("plan_docs.not_done");
+    }
+
+    let name = path
+        .strip_prefix(&format!("{PLANS_FOLDER}/"))
+        .ok_or("plan_docs.bad_path")?;
+    let (sandbox, folder) = plans_folder(workspace).ok_or("plan_docs.not_found")?;
+    let resolve = |relative: &str| sandbox.resolve(&folder.join(relative));
+    let failed = |_| "plan_docs.delete_failed";
+
+    match name.split_once('/') {
+        // * The folder itself, never a link: `resolve` follows links, so a folder that is one is refused by the name check below.
+        Some((directory, _)) => {
+            let target = resolve(directory).ok_or("plan_docs.not_found")?;
+
+            if target.parent() != Some(folder.as_path())
+                || !target.is_dir()
+                || target.file_name().and_then(|value| value.to_str()) != Some(directory)
+            {
+                return Err("plan_docs.bad_path");
+            }
+
+            std::fs::remove_dir_all(&target).map_err(failed)
+        }
+        None => {
+            let key = key_of(name);
+
+            for candidate in [name.to_string(), format!("{key}.json"), format!("{key}.md")] {
+                let Some(target) = resolve(&candidate) else {
+                    continue;
+                };
+
+                if target.parent() == Some(folder.as_path()) && target.is_file() {
+                    std::fs::remove_file(&target).map_err(failed)?;
+                }
+            }
+
+            Ok(())
+        }
+    }
+}
+
 /// The statuses a card can be dropped on, with the word written in the file (each maps back through `PlanStatus::from_word`).
 fn status_word(status: &str) -> Option<&'static str> {
     match status {

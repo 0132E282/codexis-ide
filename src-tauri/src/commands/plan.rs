@@ -76,3 +76,18 @@ pub async fn plan_doc_set_status(
     })
     .await
 }
+
+/// Deletes a finished plan of `docs/plans/` of the project at `root` (`path` is the `path` of a card) with its evidence folder; a plan that is not `done` is refused.
+#[tauri::command]
+pub async fn plan_doc_delete(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<(), String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("plan_docs.delete_failed", move || {
+        plan_docs::delete(&workspace, &path).map_err(str::to_string)
+    })
+    .await
+}

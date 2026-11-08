@@ -403,6 +403,9 @@ export const ide = {
     /** Sets the status of one plan (`path` is the `path` of its card; `status` is `draft`, `in_progress`, `review` or `done`): the status word of the file is rewritten. */
     planDocSetStatus: (path: string, status: string, root?: string) =>
         invoke<void>('plan_doc_set_status', { path, status, root }),
+    /** Deletes a finished plan (`path` is the `path` of its card) with its evidence folder; a plan that is not `done` is refused. */
+    planDocDelete: (path: string, root?: string) =>
+        invoke<void>('plan_doc_delete', { path, root }),
     chatList: (root?: string) =>
         invoke<ChatConversation[]>('chat_list', { root }),
     /** Starts a new conversation (the previous ones stay in the list) and resolves to its id. */

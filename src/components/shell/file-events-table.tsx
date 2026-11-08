@@ -247,22 +247,22 @@ export function FileEventsTable({ root }: { root: string | undefined }) {
                                         }
                                     />
                                 </th>
-                                <th className="px-2 py-1.5 font-medium">
+                                <th className="px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.time')}
                                 </th>
-                                <th className="px-2 py-1.5 font-medium">
+                                <th className="px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.action')}
                                 </th>
-                                <th className="px-2 py-1.5 font-medium">
+                                <th className="px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.source')}
                                 </th>
-                                <th className="w-full px-2 py-1.5 font-medium">
+                                <th className="w-full px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.path')}
                                 </th>
-                                <th className="px-2 py-1.5 font-medium">
+                                <th className="px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.lines')}
                                 </th>
-                                <th className="px-2 py-1.5 font-medium">
+                                <th className="px-2 py-1.5 font-medium whitespace-nowrap">
                                     {t('data_pane.size')}
                                 </th>
                             </tr>

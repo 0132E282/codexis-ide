@@ -1,7 +1,12 @@
 import { Children, isValidElement, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import ReactMarkdown, {
+    defaultUrlTransform,
+    type Options,
+} from 'react-markdown';
 import type { Components, ExtraProps } from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { LocalImage, isLocalImagePath } from '@/components/ai-chat/chat-image';
 import { ChoiceCard } from '@/components/ai-chat/choice-card';
@@ -293,12 +298,38 @@ function buildComponents(choiceHandlers?: ChoiceHandlers): Components {
     };
 }
 
-/** * Renders assistant text as GFM markdown. Raw HTML is not parsed (no rehype-raw), so it stays inert text. */
+// * HTML of a README (centred headings, badges): the default allow list plus `align` and the sizes of an image; scripts, handlers and styles stay out.
+const HTML_SCHEMA = {
+    ...defaultSchema,
+    attributes: {
+        ...defaultSchema.attributes,
+        '*': [...(defaultSchema.attributes?.['*'] ?? []), 'align'],
+        img: [
+            ...(defaultSchema.attributes?.img ?? []),
+            'width',
+            'height',
+            'align',
+        ],
+    },
+};
+
+// * One shared empty list: a new `[]` on every render would hand the markdown pipeline different plugins each time.
+const NO_PLUGINS: NonNullable<Options['rehypePlugins']> = [];
+
+const HTML_PLUGINS: NonNullable<Options['rehypePlugins']> = [
+    rehypeRaw,
+    [rehypeSanitize, HTML_SCHEMA],
+];
+
+/** * Renders assistant text as GFM markdown. Raw HTML stays inert text unless `html` is set (a file preview): then it is parsed and sanitized. */
 export function MarkdownContent({
     content,
     choices,
+    html = false,
 }: {
     content: string;
+    /** Renders the HTML inside the markdown (sanitized); for opened files, never for chat text. */
+    html?: boolean;
     /** Enables ```choices cards; without it such a block is a normal code block. */
     choices?: ChoiceHandlers;
 }) {
@@ -312,6 +343,7 @@ export function MarkdownContent({
         <div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={html ? HTML_PLUGINS : NO_PLUGINS}
                 urlTransform={transformUrl}
                 components={components}
             >

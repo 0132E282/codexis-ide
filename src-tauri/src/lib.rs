@@ -164,6 +164,7 @@ pub fn run() {
             commands::plan::plan_docs_list,
             commands::plan::plan_doc_read,
             commands::plan::plan_doc_set_status,
+            commands::plan::plan_doc_delete,
             commands::activity::file_events_list,
             commands::activity::file_events_delete,
             commands::activity::file_events_clear,

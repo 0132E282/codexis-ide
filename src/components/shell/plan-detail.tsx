@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, FileText, Play } from 'lucide-react';
+import { ArrowLeft, Check, FileText, Play, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import {
 } from '@/components/shell/plan-evidence-images';
 import { PlanTaskDialog } from '@/components/shell/plan-task-dialog';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/hooks/use-confirm';
 import { t, translateError } from '@/lib/i18n';
 import { errorText, ide, onPlansChanged } from '@/lib/ide';
 import type {
@@ -187,6 +188,7 @@ export function PlanDetail({
     const [reload, setReload] = useState(0);
     // * The task whose slide-in panel is open.
     const [openTask, setOpenTask] = useState<PlanTask | null>(null);
+    const { confirm, dialog } = useConfirm();
 
     useEffect(() => {
         let isActive = true;
@@ -246,6 +248,26 @@ export function PlanDetail({
             .catch((error: unknown) =>
                 toast.error(translateError(errorText(error))),
             );
+    // * Deleting takes the plan folder with its evidence images, so it asks first.
+    const removePlan = async () => {
+        if (
+            plan === null ||
+            !(await confirm({
+                title: t('plans.delete_title', { title: plan.title }),
+                description: t('plans.delete_description'),
+                action: t('plans.delete'),
+            }))
+        ) {
+            return;
+        }
+
+        try {
+            await ide.planDocDelete(path, root);
+            onBack();
+        } catch (error: unknown) {
+            toast.error(translateError(errorText(error)));
+        }
+    };
     const percent =
         plan !== null && plan.tasksTotal > 0
             ? Math.round((plan.tasksDone / plan.tasksTotal) * 100)
@@ -260,6 +282,7 @@ export function PlanDetail({
 
     return (
         <div className="flex h-full min-h-0 flex-col" data-testid="plan-detail">
+            {dialog}
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
                 <Button
                     type="button"
@@ -271,21 +294,34 @@ export function PlanDetail({
                     <ArrowLeft aria-hidden="true" />
                     {t('plans.back')}
                 </Button>
-                <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    disabled={prompt === null}
-                    onClick={continuePlan}
-                    className="ml-auto"
-                >
-                    <Play aria-hidden="true" />
-                    {t(
-                        plan !== null && plan.tasksDone > 0
-                            ? 'plans.continue'
-                            : 'plans.do_tasks',
-                    )}
-                </Button>
+                {plan !== null && plan.status === 'done' ? (
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => void removePlan()}
+                        className="ml-auto"
+                    >
+                        <Trash2 aria-hidden="true" />
+                        {t('plans.delete')}
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        disabled={prompt === null}
+                        onClick={continuePlan}
+                        className="ml-auto"
+                    >
+                        <Play aria-hidden="true" />
+                        {t(
+                            plan !== null && plan.tasksDone > 0
+                                ? 'plans.continue'
+                                : 'plans.do_tasks',
+                        )}
+                    </Button>
+                )}
                 {plan !== null && plan.status !== 'done' && (
                     <Button
                         type="button"

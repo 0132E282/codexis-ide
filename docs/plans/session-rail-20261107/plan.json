@@ -11,7 +11,7 @@
     "frontend"
   ],
   "createdAt": "2026-11-07",
-  "status": "IN_PROGRESS",
+  "status": "DONE",
   "design": {
     "source": "docs/system/session-rail.md",
     "related": ["docs/system/context-panel.md", "docs/system/pane-placement.md"]

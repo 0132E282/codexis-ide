@@ -3,7 +3,7 @@
   "description": "Thêm chế độ bypassPermissions (có xác nhận mỗi lần chọn), sắp xếp menu Mode theo ảnh mẫu (Auto khuyên dùng, Manual, Accept edits, Plan, Bypass), mô tả từng chế độ và phím số 1–5.",
   "tags": ["permission", "mode", "composer", "rust", "frontend"],
   "createdAt": "2026-11-06",
-  "status": "DA_TRIEN_KHAI_CHUA_KIEM_UI",
+  "status": "CHO_KIEM_TRA",
   "requirements": [
     {
       "id": "REQ-M1",
@@ -78,7 +78,7 @@
     {
       "id": "TASK-M3",
       "title": "Kiểm UI bằng Playwright và chạy thật chế độ Bypass",
-      "status": "PARTIAL_UI_DAT_CHO_KIEM_TRA_CHUA_CHAY_APP_THAT",
+      "status": "CHO_KIEM_TRA",
       "priority": "P1",
       "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
       "requirements": ["REQ-M1"],
@@ -96,7 +96,8 @@
       "approach": "Theo kế hoạch đã duyệt",
       "test": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
       "doneWhen": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
-      "note": "2026-11-08. Đạt: backend nhận bypassPermissions (cargo test agent 53 đạt); lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo hello.txt (qua CLI, không qua app Tauri). Đã sửa project-row.tsx: menu Cài đặt (compact) và menu Mode dùng chung modeItems; Playwright (mock Tauri, Chrome) đạt: 5 mục có mô tả, Khuyên dùng cho Auto, phím 1–5 chọn mục, ✓ mục đang chọn, hộp thoại Bypass (Hủy giữ chế độ, xác nhận mới đổi). Chưa kiểm: lượt Bypass qua app Tauri thật (không có GUI) và người dùng chưa duyệt. Ảnh: .agents/storage/evidence/permission-modes-m3/ (04–07)."
+      "note": "2026-11-08. Đạt: backend nhận bypassPermissions (cargo test agent 53 đạt); lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo hello.txt (qua CLI, không qua app Tauri). Đã sửa project-row.tsx: menu Cài đặt (compact) và menu Mode dùng chung modeItems; Playwright (mock Tauri, Chrome) đạt: 5 mục có mô tả, Khuyên dùng cho Auto, phím 1–5 chọn mục, ✓ mục đang chọn, hộp thoại Bypass (Hủy giữ chế độ, xác nhận mới đổi). Chưa kiểm: lượt Bypass qua app Tauri thật (không có GUI) và người dùng chưa duyệt. Ảnh: .agents/storage/evidence/permission-modes-m3/ (04–07).",
+      "result": "2026-11-08: backend nhận bypassPermissions (cargo test agent 53 đạt). project-row.tsx: menu Cài đặt (compact) và menu Mode dùng chung modeItems. Playwright (mock Tauri, Chrome, vite) đạt: menu 5 mục có mô tả, Khuyên dùng cho Auto, phím 1–5 chọn mục, ✓ mục đang chọn, hộp thoại Bypass (Hủy giữ chế độ, xác nhận mới đổi). Một lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo được hello.txt (chạy CLI trực tiếp, không qua app). Ảnh: docs/plans/permission-modes-20261106/evidence/TASK-M3-after.png (menu 5 mục) và TASK-M3-after-bypass.png (Bypass đã xác nhận, ✓); các ảnh 01–07 ở .agents/storage/evidence/permission-modes-m3/. Không có ảnh TASK-M3-before: ảnh menu cũ chưa được lưu lại trước khi sửa. Chưa kiểm: lượt Bypass qua app Tauri thật (môi trường này không có GUI); người dùng chưa duyệt."
     }
   ],
   "risks": [

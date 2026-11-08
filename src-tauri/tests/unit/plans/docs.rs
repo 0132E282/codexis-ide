@@ -577,3 +577,41 @@ fn a_plan_folder_is_read_like_a_plan_file() {
         "plan_docs.bad_path"
     );
 }
+
+#[test]
+fn delete_removes_only_a_finished_plan_with_its_folder() {
+    let (dir, workspace) = project();
+
+    put(&dir, "done-a/plan.json", r#"{"title":"A","status":"DONE"}"#);
+    put(&dir, "done-a/evidence/shot.png", "png");
+    put(
+        &dir,
+        "open-b/plan.json",
+        r#"{"title":"B","status":"IN_PROGRESS"}"#,
+    );
+    put(&dir, "loose.json", r#"{"title":"L","status":"DONE"}"#);
+    put(&dir, "loose.md", "# L");
+
+    assert_eq!(
+        delete(&workspace, "docs/plans/open-b/plan.json"),
+        Err("plan_docs.not_done")
+    );
+    assert!(dir.path().join("docs/plans/open-b/plan.json").exists());
+
+    assert_eq!(delete(&workspace, "docs/plans/done-a/plan.json"), Ok(()));
+    assert!(!dir.path().join("docs/plans/done-a").exists());
+    assert!(dir.path().join("docs/plans/open-b").exists());
+
+    assert_eq!(delete(&workspace, "docs/plans/loose.json"), Ok(()));
+    assert!(!dir.path().join("docs/plans/loose.json").exists());
+    assert!(!dir.path().join("docs/plans/loose.md").exists());
+
+    assert_eq!(
+        delete(&workspace, "docs/plans/../../secret.json"),
+        Err("plan_docs.bad_path")
+    );
+    assert_eq!(
+        delete(&workspace, "docs/plans/gone.json"),
+        Err("plan_docs.not_found")
+    );
+}

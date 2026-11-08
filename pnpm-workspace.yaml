@@ -1,0 +1,3 @@
+overrides:
+  # * hast-util-raw 9.2.0 needs parse5 8.1.1, newer than the minimumReleaseAge of pnpm: stay on the last version that uses parse5 7.
+  hast-util-raw: 9.1.0

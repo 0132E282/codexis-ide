@@ -3,7 +3,7 @@
   "description": "Kế hoạch sửa lỗi cột Thay đổi/Tệp bị chữ của khung khác đè lên trong chế độ group và khi kéo cột rộng; cột co theo chỗ trống, kẹp bề rộng đã lưu, giữ bề rộng tối thiểu cho ô chat, kiểm chứng bằng ảnh.",
   "tags": ["group", "chat-grid", "layout", "code-viewer", "frontend"],
   "createdAt": "2026-11-08",
-  "status": "CHO_KIEM_TRA",
+  "status": "DONE",
   "design": {
     "source": "docs/system/group-layout.md",
     "related": ["docs/system/pane-placement.md"]

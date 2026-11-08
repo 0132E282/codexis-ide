@@ -119,7 +119,10 @@ export function EditorBody({
                             : undefined
                     }
                 >
-                    <MarkdownContent content={withFrontMatterAsCode(content)} />
+                    <MarkdownContent
+                        html
+                        content={withFrontMatterAsCode(content)}
+                    />
                 </div>
             ) : (
                 <div className="relative min-h-0 flex-1">
