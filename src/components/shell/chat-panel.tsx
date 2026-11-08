@@ -7,6 +7,7 @@ import {
     useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import { ChoiceCard } from '@/components/ai-chat/choice-card';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { ProjectRow } from '@/components/shell/chat/project-row';
 import { MessageList } from '@/components/shell/chat/message-list';
@@ -26,6 +27,7 @@ import { Composer } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { markChatActive } from '@/hooks/use-voice-preferences';
+import { findChoices } from '@/lib/choices-parser';
 import { pickFiles } from '@/lib/ide';
 import type { AgentCli, Subagent } from '@/lib/ide';
 import { t } from '@/lib/i18n';
@@ -335,6 +337,29 @@ export function ChatPanel({
         [waiting],
     );
 
+    // * The choices the last, finished turn waits for an answer to: a popup above the message box (closed by the card itself), not part of the thread.
+    const lastTurn = turns[turns.length - 1];
+    const pendingChoices = useMemo(
+        () =>
+            lastTurn === undefined || lastTurn.running
+                ? null
+                : findChoices(lastTurn.answer),
+        [lastTurn],
+    );
+    const choicesPopup =
+        pendingChoices !== null && viewSubagent === null ? (
+            <div className="absolute inset-x-0 bottom-full z-30 mb-2">
+                <ChoiceCard
+                    key={lastTurn.id}
+                    floating
+                    choices={pendingChoices}
+                    interactive
+                    answer={null}
+                    onChoose={choose}
+                />
+            </div>
+        ) : null;
+
     const projectName =
         projects.find((project) => project.root === root)?.name ??
         root.split('/').pop() ??
@@ -407,6 +432,7 @@ export function ChatPanel({
                 viewSubagent={viewSubagent}
                 onLeaveSubagent={onLeaveSubagent}
                 onChoose={choose}
+                choicesInPopup
                 onSwitchAccount={switchAccount}
                 onPermission={answerPermission}
                 projectName={projectName}
@@ -434,7 +460,7 @@ export function ChatPanel({
                 onRemoveAttachment={attachmentState.removeAttachment}
                 lastAnswer={lastAnswer}
                 freshAnswer={freshAnswer}
-                popup={popup}
+                popup={popup ?? choicesPopup}
             />
         </section>
     );

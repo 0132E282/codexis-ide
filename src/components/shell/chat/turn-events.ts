@@ -65,6 +65,20 @@ export function parsePayload<Payload>(payload: string): Payload | null {
     }
 }
 
+/** All waiting messages as one prompt, in order, a blank line apart; the AI is the one chosen last. Null when nothing waits. */
+export function mergeWaiting(
+    waiting: { prompt: string; cli: AgentCli }[],
+): { prompt: string; cli: AgentCli } | null {
+    if (waiting.length === 0) {
+        return null;
+    }
+
+    return {
+        prompt: waiting.map((item) => item.prompt).join('\n\n'),
+        cli: waiting[waiting.length - 1].cli,
+    };
+}
+
 /** In a relayed turn another AI speaks from now on: its steps follow a label with its name. */
 export function withSpeaker(turn: Turn, cli: AgentCli): Turn {
     return {

@@ -302,3 +302,7 @@ Chạy nhắm riêng `-- plan project_data run_log relay remote ...`: 103 test q
 - Tệp `plans/<session>.json` và `logs/<ngày>.log` sinh từ lượt thật trong dữ liệu app; `git status` của dự án thử sạch.
 - Điện thoại bỏ qua kind `plan` (Q3); sub-agent gọi `ExitPlanMode`.
 - Todo (P2) hoãn, không thuộc đợt này.
+
+### 7.4. Dựng lại 2026-11-08
+
+Ngăn Plan từng bị gỡ (chưa commit) rồi được dựng lại đúng như ở HEAD: `plan-pane.tsx`, khoá `plan_pane.*`, nối trong `workspace-pane.tsx`, `panels-menu.tsx` (chấm `plan-unseen`), `chat-panel.tsx`, `chat-grid.tsx`, `use-chat-session.ts`, `use-agent-turns.ts`, `turn-events.ts`. Kiểm: `cargo fmt --check`, `clippy -D warnings`, `cargo test` (561 pass), `pnpm typecheck` (0 lỗi), eslint (0 lỗi, 1 cảnh báo `exhaustive-deps` `setPlan` có sẵn ở HEAD), prettier các tệp `src` đã sửa. Chưa chụp ảnh lại, chưa chạy app Tauri. Todo (P2/TASK-P10) vẫn hoãn: điều kiện mở lại chưa thoả (cần người dùng duyệt `--tools` đầy đủ hoặc `CLAUDE_CODE_ENABLE_TASKS`).

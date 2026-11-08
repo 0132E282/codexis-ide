@@ -50,6 +50,7 @@ export const TurnView = memo(function TurnView({
     interactive,
     followUp,
     onChoose,
+    choicesInPopup = false,
     onSwitchAccount,
     onPermission,
     projectName,
@@ -68,11 +69,18 @@ export const TurnView = memo(function TurnView({
     /** The message the user sent after this turn, which marks the option picked. */
     followUp: string | null;
     onChoose: (text: string) => void;
+    /** The pending choice card is shown in a popup above the message box, not in the thread. */
+    choicesInPopup?: boolean;
     projectName: string;
 }) {
     const choices: ChoiceHandlers = useMemo(
-        () => ({ interactive, answer: followUp, onChoose }),
-        [interactive, followUp, onChoose],
+        () => ({
+            interactive,
+            answer: followUp,
+            onChoose,
+            inPopup: choicesInPopup,
+        }),
+        [interactive, followUp, onChoose, choicesInPopup],
     );
     const typed = useTypewriter(turn.answer, turn.restored !== true);
     const { text, files } = splitPrompt(turn.prompt);

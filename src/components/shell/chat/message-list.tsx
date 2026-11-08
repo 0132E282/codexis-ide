@@ -1,6 +1,8 @@
 import { forwardRef } from 'react';
 import logo from '@/assets/logo.png';
 import { SubagentView } from '@/components/shell/chat/subagent-view';
+import { AttachmentView } from '@/components/shell/chat/attachment-view';
+import { splitPrompt } from '@/components/shell/chat/turn';
 import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import { TurnView } from '@/components/shell/chat/turn-view';
 import { t } from '@/lib/i18n';
@@ -14,6 +16,8 @@ export const MessageList = forwardRef<
         onLeaveSubagent: () => void;
         /** Stable between renders: the memoised turns depend on it. */
         onChoose: (text: string) => void;
+        /** The pending choice card is shown in a popup above the message box, not in the thread. */
+        choicesInPopup?: boolean;
         /** Stable between renders: sends a turn that hit a limit again under another account. */
         onSwitchAccount: (turn: Turn) => void;
         /** Stable between renders: answers a question of the AI (allow or deny). */
@@ -33,6 +37,7 @@ export const MessageList = forwardRef<
         viewSubagent,
         onLeaveSubagent,
         onChoose,
+        choicesInPopup = false,
         onSwitchAccount,
         onPermission,
         projectName,
@@ -73,24 +78,43 @@ export const MessageList = forwardRef<
                                 }
                                 followUp={turns[index + 1]?.prompt ?? null}
                                 onChoose={onChoose}
+                                choicesInPopup={choicesInPopup}
                                 onSwitchAccount={onSwitchAccount}
                                 onPermission={onPermission}
                                 projectName={projectName}
                             />
                         ))}
-                        {waiting.map((prompt, index) => (
-                            <div
-                                key={`${index}-${prompt}`}
-                                className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-1"
-                            >
-                                <p className="max-h-80 max-w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap opacity-70 [overflow-wrap:anywhere]">
-                                    {prompt}
-                                </p>
-                                <span className="text-xs text-muted-foreground">
-                                    {t('message_list.waiting')}
-                                </span>
-                            </div>
-                        ))}
+                        {waiting.map((prompt, index) => {
+                            const { text, files } = splitPrompt(prompt);
+
+                            return (
+                                <div
+                                    key={`${index}-${prompt}`}
+                                    className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-1"
+                                >
+                                    {files.length > 0 && (
+                                        <ul className="flex flex-wrap justify-end gap-2 opacity-70">
+                                            {files.map((file) => (
+                                                <li key={file.path}>
+                                                    <AttachmentView
+                                                        path={file.path}
+                                                        name={file.name}
+                                                    />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {text !== '' && (
+                                        <p className="max-h-80 max-w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap opacity-70 [overflow-wrap:anywhere]">
+                                            {text}
+                                        </p>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                        {t('message_list.waiting')}
+                                    </span>
+                                </div>
+                            );
+                        })}
                     </>
                 )}
                 <div ref={bottom} />

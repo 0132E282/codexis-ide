@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import {
+    mergeWaiting,
     parsePayload,
     withDelta,
     withPlan,
@@ -523,29 +524,20 @@ export function useAgentTurns({
         startTurn(prompt, cli, [], fromComposer);
     };
 
-    // * Sends the waiting messages as one: when the chat is free or a sub-agent starts.
+    // * Sends all the waiting messages as one turn: when the chat is free or a sub-agent starts.
     const flush = () => {
         if (
             queued.current.length > 0 &&
             (runs.current.size === 0 || working.current.size > 0)
         ) {
-            // * One AI per message: the first messages that share an AI go together, the rest wait for the next flush.
-            const [first] = queued.current;
-            const other = queued.current.findIndex(
-                (item) => item.cli !== first.cli,
-            );
-            const group = queued.current.slice(
-                0,
-                other === -1 ? undefined : other,
-            );
+            // * Everything that waits goes in this one turn; messages that arrive afterwards wait for the next flush.
+            const merged = mergeWaiting(queued.current);
 
-            keepQueue(queued.current.slice(group.length));
-            startTurn(
-                group.map((item) => item.prompt).join('\n\n'),
-                first.cli,
-                [],
-                true,
-            );
+            keepQueue([]);
+
+            if (merged !== null) {
+                startTurn(merged.prompt, merged.cli, [], true);
+            }
         }
     };
 

@@ -69,3 +69,16 @@ export function parseChoices(source: string): Choices | null {
 
     return { question: data.question.trim(), options };
 }
+
+const CHOICES_FENCE = /```choices[ \t]*\r?\n([\s\S]*?)\r?\n?```/g;
+
+/** The last valid ```choices block of an answer, or null: the one that waits for a pick in the popup above the message box. */
+export function findChoices(markdown: string): Choices | null {
+    let found: Choices | null = null;
+
+    for (const match of markdown.matchAll(CHOICES_FENCE)) {
+        found = parseChoices(match[1]) ?? found;
+    }
+
+    return found;
+}

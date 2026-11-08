@@ -425,7 +425,7 @@
       "approach": "1. Tái dùng component theo components.md. 2. Vẽ đúng ảnh mẫu. 3. Dùng dữ liệu giả trong Playwright. Làm sau TASK-S04 của plan Side chat.",
       "test": "Playwright: rỗng đủ ba phần; Markdown; phóng to, đóng; chấm mới; vi/en; viewport hẹp không cuộn ngang",
       "doneWhen": "Có ảnh chứng Playwright, lint và typecheck không thêm lỗi",
-      "progressNote": "2026-11-07 (nối): thêm plan-dock.tsx (cột phải, phóng to, đóng) và nút Plan có chấm mới trong workspace-pane.tsx; ChatPanel nhận onPlan. Chưa chụp ảnh Playwright, chưa chạy UI. 2026-11-07: đã tạo src/components/shell/plan-pane.tsx (PlanPane, props plan/expanded/onToggleExpanded/onClose; kiểu PlanData) và khoá i18n plan_pane.* vi/en. CHƯA nối: workspace-pane.tsx (tab dock), chat-panel.tsx (nút mở, chấm mới), use-agent-turns.ts; chưa chụp ảnh Playwright.",
+      "progressNote": "2026-11-08: dựng lại ngăn Plan sau khi bị gỡ (khôi phục plan-pane.tsx từ HEAD, khoá plan_pane.*, nối workspace-pane/panels-menu/chat-panel/chat-grid/use-chat-session/use-agent-turns/turn-events). cargo fmt/clippy/test (561 pass), pnpm typecheck 0 lỗi, eslint 0 lỗi, prettier src sạch. Chưa chụp ảnh Playwright, chưa chạy app thật. 2026-11-07 (nối): thêm plan-dock.tsx (cột phải, phóng to, đóng) và nút Plan có chấm mới trong workspace-pane.tsx; ChatPanel nhận onPlan. Chưa chụp ảnh Playwright, chưa chạy UI. 2026-11-07: đã tạo src/components/shell/plan-pane.tsx (PlanPane, props plan/expanded/onToggleExpanded/onClose; kiểu PlanData) và khoá i18n plan_pane.* vi/en. CHƯA nối: workspace-pane.tsx (tab dock), chat-panel.tsx (nút mở, chấm mới), use-agent-turns.ts; chưa chụp ảnh Playwright.",
       "revisionNote": "2026-11-07: TodoList và khoá plan_pane.status_* đã viết trong plan-pane.tsx giữ nguyên (không xoá khi chưa được yêu cầu); dữ liệu todo luôn rỗng tới khi mở lại REQ-P2 nên Playwright không cần kiểm ba trạng thái todo đợt này. Status PARTIAL giữ nguyên."
     },
     {
@@ -474,7 +474,8 @@
       "approach": "1. Chạy kiểm chứng. 2. Chạy app. 3. Cập nhật tài liệu.",
       "test": "Markdown khớp input.plan của lượt thật; tệp plan và log đúng chỗ; dự án thử sạch khi deny",
       "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã",
-      "revisionNote": "2026-11-07: bỏ kiểm todo (hoãn)."
+      "revisionNote": "2026-11-07: bỏ kiểm todo (hoãn).",
+      "progressNote": "2026-11-08: dựng lại ngăn Plan sau khi bị gỡ (khôi phục plan-pane.tsx từ HEAD, khoá plan_pane.*, nối workspace-pane/panels-menu/chat-panel/chat-grid/use-chat-session/use-agent-turns/turn-events). cargo fmt/clippy/test (561 pass), pnpm typecheck 0 lỗi, eslint 0 lỗi, prettier src sạch. Chưa chụp ảnh Playwright, chưa chạy app thật. Phần cần CLI claude thật trong pnpm start vẫn chưa kiểm."
     },
     {
       "id": "TASK-P10",
@@ -493,7 +494,8 @@
       "test": "Xác định khi mở lại",
       "doneWhen": "Không áp dụng đợt này",
       "deferredReason": "Xem REQ-P2.deferredReason",
-      "reopenWhen": "Xem REQ-P2.reopenWhen"
+      "reopenWhen": "Xem REQ-P2.reopenWhen",
+      "progressNote": "2026-11-08: giữ DEFERRED, chưa làm: điều kiện reopenWhen của REQ-P2 chưa thoả; (b) cần người dùng duyệt --tools đầy đủ hoặc CLAUDE_CODE_ENABLE_TASKS. TodoList và nhánh TodoWrite trong plan.rs đã có sẵn."
     }
   ],
   "risks": [

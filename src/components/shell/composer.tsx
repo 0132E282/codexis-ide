@@ -19,6 +19,7 @@ import { SuggestionList } from '@/components/shell/chat/suggestion-list';
 import { useCommandSuggestions } from '@/components/shell/chat/use-command-suggestions';
 import { Button } from '@/components/ui/button';
 import { referenceForPaste } from '@/lib/editor-copy';
+import { splitPrompt } from '@/components/shell/chat/turn';
 import type { AgentCli } from '@/lib/ide';
 import type { ToolEntry } from '@/lib/ide-tools';
 import { t } from '@/lib/i18n';
@@ -263,7 +264,19 @@ export const Composer = memo(function Composer({
                         <span className="min-w-0 flex-1 truncate">
                             {t('composer.waiting', {
                                 count: waiting.length,
-                                text: waiting.join(' / '),
+                                text: waiting
+                                    .map((prompt) => {
+                                        const { text, files } =
+                                            splitPrompt(prompt);
+
+                                        return [
+                                            text,
+                                            ...files.map((file) => file.name),
+                                        ]
+                                            .filter((part) => part !== '')
+                                            .join(' ');
+                                    })
+                                    .join(' / '),
                             })}
                         </span>
                         <button

@@ -1,5 +1,5 @@
 import { Check, Pencil, X } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import Field from '@/components/form/field';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ export type ChoiceHandlers = {
     /** The user message that followed this card, when there is one (marks the picked option). */
     answer: string | null;
     onChoose: (text: string) => void;
+    /** The pending card is shown in a popup above the message box: in the thread it is left out until it is answered. */
+    inPopup?: boolean;
 };
 
 /** * One-question choice card: numbered options, a free-text "Something else" row, "Skip" and a close button (no "n of m" pager: the choices format carries a single question). Read-only once answered or superseded. */
@@ -21,14 +23,47 @@ export function ChoiceCard({
     interactive,
     answer,
     onChoose,
-}: { choices: Choices } & ChoiceHandlers) {
+    inPopup = false,
+    floating = false,
+    onClose,
+}: {
+    choices: Choices;
+    /** Laid out as the popup anchored above the message box (the caller positions it). */
+    floating?: boolean;
+    /** Called when the card is closed or skipped. */
+    onClose?: () => void;
+} & ChoiceHandlers) {
     const questionId = useId();
+    const group = useRef<HTMLDivElement>(null);
     const [other, setOther] = useState('');
     const [dismissed, setDismissed] = useState(false);
 
-    if (dismissed) {
+    // * The popup takes the keyboard focus when it opens, unless the person is in the middle of typing a message.
+    useEffect(() => {
+        if (!floating) {
+            return;
+        }
+
+        const active = document.activeElement;
+        const isTyping =
+            (active instanceof HTMLTextAreaElement ||
+                active instanceof HTMLInputElement) &&
+            active.value !== '';
+
+        if (!isTyping) {
+            group.current?.focus();
+        }
+    }, [floating]);
+
+    // * Pending in the thread: the popup above the message box shows it instead.
+    if (dismissed || (inPopup && interactive && !floating)) {
         return null;
     }
+
+    const dismiss = () => {
+        setDismissed(true);
+        onClose?.();
+    };
 
     const choose = (text: string) => {
         if (interactive && text.trim() !== '') {
@@ -37,6 +72,13 @@ export function ChoiceCard({
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (floating && event.key === 'Escape') {
+            event.stopPropagation();
+            dismiss();
+
+            return;
+        }
+
         // * Number shortcuts must not hijack typing in the "Khác…" field.
         if (
             !interactive ||
@@ -60,10 +102,17 @@ export function ChoiceCard({
 
     return (
         <div
+            ref={group}
             role="group"
             aria-labelledby={questionId}
+            tabIndex={floating ? -1 : undefined}
             onKeyDown={handleKeyDown}
-            className="my-3 overflow-hidden rounded-xl border border-ring bg-background px-4 py-3"
+            className={cn(
+                'overflow-hidden rounded-xl border border-ring bg-background px-4 py-3',
+                floating
+                    ? 'max-h-[50vh] overflow-y-auto shadow-xl outline-none'
+                    : 'my-3',
+            )}
         >
             <div className="flex items-start justify-between gap-3 pb-3">
                 <p id={questionId} className="text-sm">
@@ -73,7 +122,7 @@ export function ChoiceCard({
                     <button
                         type="button"
                         aria-label={t('choice_card.close')}
-                        onClick={() => setDismissed(true)}
+                        onClick={dismiss}
                         className="shrink-0 rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none"
                     >
                         <X aria-hidden="true" className="size-4" />
@@ -98,6 +147,7 @@ export function ChoiceCard({
                             !interactive &&
                                 answer !== null &&
                                 !picked &&
+                                matched &&
                                 'opacity-50',
                         )}
                     >
@@ -157,20 +207,12 @@ export function ChoiceCard({
                         variant="secondary"
                         size="sm"
                         className="h-7"
-                        onClick={() => setDismissed(true)}
+                        onClick={dismiss}
                     >
                         {t('choice_card.skip')}
                     </Button>
                 </div>
-            ) : (
-                answer !== null &&
-                !matched && (
-                    <p className="flex items-center gap-2 border-t border-border pt-2 text-sm">
-                        <Check aria-hidden="true" className="size-4 shrink-0" />
-                        <span className="min-w-0 break-words">{answer}</span>
-                    </p>
-                )
-            )}
+            ) : null}
         </div>
     );
 }
