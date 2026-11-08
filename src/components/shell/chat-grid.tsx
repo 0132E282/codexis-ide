@@ -16,6 +16,9 @@ import { cn } from '@/lib/utils';
 
 // * The grid's chats report nothing to a pane: each one only talks to its own conversation.
 const ignore = () => undefined;
+// * The narrowest a chat may get: the files give way before the chats are squeezed below it.
+const CHAT_CELL_MIN_WIDTH = 288;
+const FILES_MIN_WIDTH = 320;
 
 // * The viewer's "Hỏi AI về đoạn này" box: the Claude CLI answers about the picked lines, run in the project's folder.
 const askAssistant =
@@ -152,6 +155,13 @@ export function ChatGrid({
         members[0];
     // * One project: its chats sit side by side. Several: one column (or cell) per project, its chats stacked.
     const single = groups.length === 1;
+    // * Chats side by side in the widest row, and the room the files may take while each keeps its minimum width.
+    const chatColumns = single && members.length === 1 ? 1 : 2;
+    const filesRoom = Math.max(
+        FILES_MIN_WIDTH,
+        areaWidth - chatColumns * CHAT_CELL_MIN_WIDTH,
+    );
+    const shownFilesWidth = Math.min(filesWidth.width, filesRoom);
 
     const openTreeButton = (Icon: typeof PanelRightOpen, inBar = true) => (
         <Button
@@ -179,8 +189,17 @@ export function ChatGrid({
                 ref={gridArea}
                 className="relative flex min-h-0 min-w-0 flex-1"
             >
-                {/* * The chats keep the whole width: a file open lays its viewer over them instead of squeezing them. */}
-                <div className="relative flex min-h-0 min-w-0 max-w-full flex-1">
+                {/* * A file open takes its side of the area and the chats share the rest, so the viewer never covers a chat. */}
+                <div
+                    style={
+                        editorVisible
+                            ? filesOnLeft
+                                ? { paddingLeft: shownFilesWidth }
+                                : { paddingRight: shownFilesWidth }
+                            : undefined
+                    }
+                    className="relative flex min-h-0 min-w-0 max-w-full flex-1"
+                >
                     <div
                         className={cn(
                             'grid min-h-0 min-w-0 flex-1 auto-rows-fr gap-px overflow-hidden bg-border',
@@ -293,7 +312,6 @@ export function ChatGrid({
                                                     onChanged(member.workspace)
                                                 }
                                                 onSubagents={ignore}
-                                                onPlan={ignore}
                                             />
                                         </div>
                                     ))}
@@ -303,7 +321,7 @@ export function ChatGrid({
                     </div>
                 </div>
                 {picked !== undefined && (
-                    // * The files sit on the side the person put the file tree on (left or right), as in a single chat. With a file open, the file and the tree float over the chats, from the very top, so the header of the files is the one header of that side, at a width the person drags.
+                    // * The files sit on the side the person put the file tree on (left or right), as in a single chat. With a file open, the file and the tree take that side from the very top, so the header of the files is the one header of that side, at a width the person drags.
                     <div
                         role={editorVisible ? 'complementary' : undefined}
                         aria-label={
@@ -311,7 +329,7 @@ export function ChatGrid({
                         }
                         style={
                             editorVisible
-                                ? { width: filesWidth.width }
+                                ? { width: shownFilesWidth }
                                 : undefined
                         }
                         className={cn(
@@ -335,9 +353,7 @@ export function ChatGrid({
                                         : undefined
                                 }
                                 {...filesWidth.handleProps}
-                                aria-valuenow={Math.round(
-                                    Math.min(filesWidth.width, areaWidth),
-                                )}
+                                aria-valuenow={Math.round(shownFilesWidth)}
                             />
                         )}
                         {/* * The file tree is closed and the files cover the bar that holds its button: the button sits here, on the tree's side of the files. */}

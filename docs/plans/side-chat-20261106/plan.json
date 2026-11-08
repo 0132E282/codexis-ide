@@ -1,0 +1,435 @@
+{
+  "title": "Side chat: ngăn phụ nhiều tab, đứng một mình, sống chung với Terminal",
+  "description": "Kế hoạch triển khai docs/system/side-chat.md: side chat dùng lại agent_send với runId side-, nhiều tab, dock cột phải (phóng to, đóng, chiếm cả vùng khi đứng một mình), cùng quy ước dock với Terminal; chỉ đọc, không lưu DB, chặn rò sang điện thoại.",
+  "tags": [
+    "side-chat",
+    "dock",
+    "terminal",
+    "chat",
+    "frontend",
+    "rust",
+    "remote"
+  ],
+  "createdAt": "2026-11-06",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/side-chat.md",
+    "related": [
+      "docs/system/architecture.md",
+      "docs/system/context-panel.md",
+      "docs/design/DESIGN.md",
+      "docs/design/components.md"
+    ],
+    "note": "Chỉ đọc đã chốt ở TASK-S01: Claude --permission-mode plan (ngoại lệ ghi tệp kế hoạch vào ~/.claude/plans/), Codex -s read-only (lượt mới) và -c sandbox_mode=\"read-only\" (resume, chưa kiểm với model). Review 2026-11-07: use-side-chat.ts chỉ kết thúc lượt khi kind=done, bỏ qua kind lạ (context); close() dùng updater; side-chat-dock.tsx thêm tablist/tabpanel a11y và phím mũi tên; permission có thể treo lượt, ghi ở side-chat.md 3.9, không đổi hành vi."
+  },
+  "hardConstraints": [
+    "Không thêm lệnh Tauri mới; chỉ dùng agent_send, agent_stop và agent-event sẵn có",
+    "Không đổi DB, không gọi chat_save_turn cho side chat",
+    "Không thêm dependency; dùng Radix và Field có sẵn; chữ qua i18n vi/en",
+    "Thay đổi Rust duy nhất: remote.rs lọc runId tiền tố side-",
+    "Không git commit/push khi người dùng chưa yêu cầu"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-S1",
+      "source": "side-chat.md S1",
+      "text": "Mở/đóng side chat bằng nút và phím tắt"
+    },
+    {
+      "id": "REQ-S2",
+      "source": "side-chat.md S2",
+      "text": "Hỏi nhanh khi chat chính đang chạy, hai lượt song song"
+    },
+    {
+      "id": "REQ-S3",
+      "source": "side-chat.md S3",
+      "text": "Tách khỏi chat chính: không danh sách, không lưu DB"
+    },
+    {
+      "id": "REQ-S4",
+      "source": "side-chat.md S4",
+      "text": "Chỉ đọc"
+    },
+    {
+      "id": "REQ-S5",
+      "source": "side-chat.md S5",
+      "text": "Giữ ngữ cảnh nhiều lượt trong side chat"
+    },
+    {
+      "id": "REQ-S6",
+      "source": "side-chat.md S6",
+      "text": "Không đổi contract Tauri, DB, thư viện"
+    },
+    {
+      "id": "REQ-S7",
+      "source": "side-chat.md S7",
+      "text": "Sự kiện side chat không tới điện thoại"
+    },
+    {
+      "id": "REQ-S8",
+      "source": "side-chat.md S8",
+      "text": "Đa ngữ vi/en, dùng component có sẵn"
+    },
+    {
+      "id": "REQ-S9",
+      "source": "side-chat.md S9",
+      "text": "Nhiều side chat dạng tab"
+    },
+    {
+      "id": "REQ-S10",
+      "source": "side-chat.md S10",
+      "text": "Ngăn phụ bên phải: kéo rộng, phóng to, đóng"
+    },
+    {
+      "id": "REQ-S11",
+      "source": "side-chat.md S11",
+      "text": "Đứng một mình thì chiếm cả vùng"
+    },
+    {
+      "id": "REQ-S12",
+      "source": "side-chat.md S12",
+      "text": "Sống chung với Terminal ở ngăn dưới"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-S1",
+      "requirement": "REQ-S1",
+      "text": "Nút và phím tắt mở/đóng; Esc đóng; nội dung giữ trong phiên"
+    },
+    {
+      "id": "AC-S2",
+      "requirement": "REQ-S2",
+      "text": "Gửi ở side chat khi chat chính đang stream: cả hai chạy, không chen nội dung"
+    },
+    {
+      "id": "AC-S3",
+      "requirement": "REQ-S3",
+      "text": "Danh sách cuộc chat không có mục mới; chat_save_turn không được gọi cho run side-*"
+    },
+    {
+      "id": "AC-S4",
+      "requirement": "REQ-S4",
+      "text": "Yêu cầu sửa tệp trong side chat không làm đổi tệp (đã thử bằng lượt thật)"
+    },
+    {
+      "id": "AC-S5",
+      "requirement": "REQ-S5",
+      "text": "Lượt hai truyền session id của lượt một"
+    },
+    {
+      "id": "AC-S6",
+      "requirement": "REQ-S6",
+      "text": "generate_handler, Cargo.toml, db.rs không đổi"
+    },
+    {
+      "id": "AC-S7",
+      "requirement": "REQ-S7",
+      "text": "event_message trả None cho runId side-*; test pass"
+    },
+    {
+      "id": "AC-S8",
+      "requirement": "REQ-S8",
+      "text": "Khoá i18n có đủ vi và en; typecheck không thêm lỗi so với 22 lỗi có sẵn"
+    },
+    {
+      "id": "AC-S9",
+      "requirement": "REQ-S9",
+      "text": "Nút + thêm tab Side chat <n>; mỗi tab session riêng; đóng tab dừng lượt của tab đó"
+    },
+    {
+      "id": "AC-S10",
+      "requirement": "REQ-S10",
+      "text": "Cột phải kéo rộng được, phóng to chiếm cả vùng và thu lại không mất tab, đóng ẩn cả cột"
+    },
+    {
+      "id": "AC-S11",
+      "requirement": "REQ-S11",
+      "text": "editorVisible=false và chatCollapsed=true thì dock chiếm cả vùng; panel khác hiện lại thì về cột phải"
+    },
+    {
+      "id": "AC-S12",
+      "requirement": "REQ-S12",
+      "text": "Mở/đóng side chat không đóng terminal và ngược lại; terminal giữ chiều cao riêng"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal",
+    "pnpm typecheck",
+    "pnpm lint"
+  ],
+  "codingGroups": [
+    {
+      "id": "SG1",
+      "name": "side chat backend",
+      "tasks": ["TASK-S02"],
+      "dependsOnGroups": [],
+      "parallel": true
+    },
+    {
+      "id": "SG2",
+      "name": "side chat frontend",
+      "tasks": ["TASK-S03", "TASK-S04", "TASK-S06"],
+      "dependsOnGroups": [],
+      "parallel": true
+    },
+    {
+      "id": "SG3",
+      "name": "kiểm chứng và tài liệu",
+      "tasks": ["TASK-S05"],
+      "dependsOnGroups": ["SG1", "SG2"],
+      "parallel": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-S01",
+      "title": "Thử cờ chỉ đọc của Claude và chốt cách chỉ đọc cho Codex",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Yêu cầu chỉ đọc là an toàn dữ liệu; thiết kế đang dựa vào cờ chưa kiểm",
+      "requirements": ["REQ-S4"],
+      "acceptanceCriteria": ["AC-S4"],
+      "design": "side-chat.md 3.6, câu hỏi Q1, Q6",
+      "inScope": "Chạy lượt thử ở thư mục tạm với --permission-mode plan, yêu cầu tạo tệp, xác nhận tệp không được tạo; xem Codex có cờ chỉ đọc (vd sandbox read-only) không",
+      "outOfScope": "Sửa mã sản phẩm",
+      "dependencies": [],
+      "filesToChange": [],
+      "approach": "1. Chạy claude -p với cờ trên ở thư mục tạm. 2. Tra cờ sandbox của codex exec. 3. Ghi kết quả vào side-chat.md mục 3.6 và 5.",
+      "test": "Tệp thử không được tạo với Claude; ghi rõ Codex hỗ trợ hay không",
+      "doneWhen": "Cách chỉ đọc cho từng CLI được chốt trong thiết kế",
+      "result": "Chốt: Claude dùng --permission-mode plan (không ghi được tệp trong dự án; ngoại lệ ghi tệp kế hoạch vào ~/.claude/plans/). Codex dùng -s read-only cho lượt mới và -c sandbox_mode=\"read-only\" cho resume (kiểm OS-level bằng codex sandbox, chưa kiểm với model). Đã ghi vào side-chat.md 3.6 và 5."
+    },
+    {
+      "id": "TASK-S02",
+      "title": "remote.rs: không phát sự kiện của run side-* cho điện thoại",
+      "status": "CHO_KIEM_TRA",
+      "priority": "P1",
+      "priorityReason": "Tránh lộ nội dung side chat sang điện thoại",
+      "requirements": ["REQ-S7"],
+      "acceptanceCriteria": ["AC-S7"],
+      "design": "side-chat.md 3.3, 3.6",
+      "inScope": "event_message trả None khi runId bắt đầu bằng side-; test",
+      "outOfScope": "Đổi giao thức WebSocket, token, giới hạn máy",
+      "dependencies": [],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/remote.rs",
+          "changes": "Lọc runId side- trong event_message"
+        }
+      ],
+      "approach": "1. Đọc event_message. 2. Thêm điều kiện. 3. Test với payload có và không có runId side-. Nếu plan OOP nhóm G (TASK-010) đang sửa remote.rs thì làm sau hoặc gộp.",
+      "test": "side-1 trả None; run-1 trả Some như cũ; payload không phải object vẫn trả None",
+      "doneWhen": "Test remote qua, clippy sạch"
+    },
+    {
+      "id": "TASK-S03",
+      "title": "use-side-chat.ts: nhiều tab side chat, không lưu DB",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Lõi của tính năng: gửi, stream, giữ session, dừng",
+      "requirements": [
+        "REQ-S2",
+        "REQ-S3",
+        "REQ-S4",
+        "REQ-S5",
+        "REQ-S6",
+        "REQ-S9"
+      ],
+      "acceptanceCriteria": [
+        "AC-S2",
+        "AC-S3",
+        "AC-S4",
+        "AC-S5",
+        "AC-S6",
+        "AC-S9"
+      ],
+      "design": "side-chat.md 3.3, 3.4, 3.5, 3.6",
+      "inScope": "Hook giữ danh sách tab {id,title,messages,sessionId,running} và tab đang chọn; thêm/đóng/xoá tab (đóng tab gọi agent_stop nếu đang chạy); mỗi tab runId side-<uuid> riêng; gọi agent_send với mode chỉ đọc, worktree null, không extraRoots; lọc agent-event theo runId của các tab; không gọi chat_save_turn, chat_new",
+      "outOfScope": "Sửa use-agent-turns.ts của chat chính; lưu lịch sử; nhiều side chat",
+      "dependencies": ["TASK-S01"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/chat/use-side-chat.ts",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/components/shell/chat/turn-events.ts",
+          "changes": "Tái dùng hàm áp sự kiện vào turn; chỉ export thêm nếu cần"
+        }
+      ],
+      "approach": "1. Đọc use-agent-turns.ts phần gửi, nhận sự kiện, kết thúc. 2. Tái dùng hàm thuần ở turn-events.ts. 3. Không chạm trạng thái chat chính.",
+      "test": "Playwright hoặc test hook: hai lượt liên tiếp truyền session id; sự kiện run khác bị bỏ qua; chat_save_turn không được gọi",
+      "doneWhen": "Typecheck không thêm lỗi so với 22 lỗi có sẵn, chat chính không đổi hành vi"
+    },
+    {
+      "id": "TASK-S04",
+      "title": "side-chat-dock.tsx: cột phải, tab, ô hỏi nhanh, phóng to, đóng",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Phần người dùng nhìn thấy theo ảnh mẫu",
+      "requirements": ["REQ-S1", "REQ-S8", "REQ-S10"],
+      "acceptanceCriteria": ["AC-S1", "AC-S8", "AC-S10"],
+      "design": "side-chat.md 1, 3.2, 3.3; docs/design/DESIGN.md, components.md",
+      "inScope": "Nút ở thanh công cụ chat-panel + phím tắt Cmd/Ctrl+; ; Esc đóng; SideChatDock: thanh tab (tên, +, phóng to, đóng), MessageList, ô Hỏi nhanh bằng Field, trạng thái Empty; cột phải kéo rộng bằng useResizableWidth và ResizeHandle; khoá i18n vi và en",
+      "outOfScope": "Chế độ đứng một mình (TASK-S06), đính kèm tệp, sub-agent, hỏi quyền",
+      "dependencies": ["TASK-S03"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/side-chat-dock.tsx",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/components/shell/workspace-pane.tsx",
+          "changes": "Gắn dock vào bố cục của pane"
+        },
+        {
+          "path": "src/components/shell/chat-panel.tsx",
+          "changes": "Nút mở side chat"
+        },
+        {
+          "path": "src/lib/i18n/en/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/lib/i18n/vi/shell-chat.ts",
+          "changes": "Khoá mới"
+        }
+      ],
+      "approach": "1. Đọc components.md để tái dùng Popover, MessageList, Field. 2. Vẽ theo ảnh mẫu. 3. Kiểm xung đột phím với Monaco và xterm.",
+      "test": "Playwright: phím tắt mở/đóng; Esc đóng; + thêm tab; đóng tab; kéo rộng cột; phóng to rồi thu lại không mất tab; vi/en đổi chữ; viewport hẹp không cuộn ngang",
+      "doneWhen": "Có ảnh chứng Playwright, lint và typecheck không thêm lỗi"
+    },
+    {
+      "id": "TASK-S06",
+      "title": "Chế độ đứng một mình và sống chung với Terminal",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Yêu cầu theo ảnh mẫu: side chat đứng một mình thì chiếm cả vùng; không phá Terminal hiện có",
+      "requirements": ["REQ-S11", "REQ-S12"],
+      "acceptanceCriteria": ["AC-S11", "AC-S12"],
+      "design": "side-chat.md 3.7 (bố cục dock), 3.8; app.tsx (terminalOpen, terminalHeight)",
+      "inScope": "Suy ra chế độ Alone từ PaneState (editorVisible=false và chatCollapsed=true) để dock chiếm flex-1; trở về cột phải khi panel khác hiện lại; giữ Terminal ở đáy với chiều cao riêng; nhớ chế độ phóng to trong phiên",
+      "outOfScope": "Đổi ActivityTerminal, thêm trường mới vào PaneState nếu suy ra được; kéo thả tab giữa dock",
+      "dependencies": ["TASK-S04"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/workspace-pane.tsx",
+          "changes": "Chọn bố cục Alone / Docked / Maximized"
+        },
+        {
+          "path": "src/components/shell/side-chat-dock.tsx",
+          "changes": "Nhận chế độ bố cục"
+        },
+        {
+          "path": "src/app.tsx",
+          "changes": "Chỉ sửa nếu Terminal chồng lên dock sai (xác minh khi làm)"
+        }
+      ],
+      "approach": "1. Đọc use-pane-state.ts và workspace-pane.tsx để biết khi nào editor và chat chính ẩn. 2. Tính layout từ trạng thái có sẵn. 3. Kiểm hai ảnh mẫu bằng Playwright.",
+      "test": "Playwright: chỉ side chat thì chiếm cả vùng; mở file thì về cột phải; mở terminal thì terminal ở đáy, side chat không mất",
+      "doneWhen": "Hai bố cục khớp ảnh mẫu, typecheck và lint không thêm lỗi"
+    },
+    {
+      "id": "TASK-S05",
+      "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
+      "status": "PARTIAL",
+      "priority": "P1",
+      "priorityReason": "Đóng AC có bằng chứng chạy thật",
+      "requirements": [
+        "REQ-S1",
+        "REQ-S2",
+        "REQ-S3",
+        "REQ-S4",
+        "REQ-S5",
+        "REQ-S6",
+        "REQ-S7",
+        "REQ-S8",
+        "REQ-S9",
+        "REQ-S10",
+        "REQ-S11",
+        "REQ-S12"
+      ],
+      "acceptanceCriteria": [
+        "AC-S1",
+        "AC-S2",
+        "AC-S3",
+        "AC-S4",
+        "AC-S5",
+        "AC-S6",
+        "AC-S7",
+        "AC-S8",
+        "AC-S9",
+        "AC-S10",
+        "AC-S11",
+        "AC-S12"
+      ],
+      "design": "side-chat.md toàn bộ",
+      "inScope": "Chạy các lệnh kiểm chứng; trong pnpm start: hỏi ở side chat khi chat chính đang chạy, kiểm danh sách cuộc chat không có mục mới, kiểm tệp không bị sửa; cập nhật trạng thái tài liệu và architecture.md (luồng, ranh giới runId side-)",
+      "outOfScope": "Tính năng ở mục Ngoài phạm vi",
+      "dependencies": ["TASK-S02", "TASK-S06"],
+      "filesToChange": [
+        {
+          "path": "docs/system/side-chat.md",
+          "changes": "Cập nhật trạng thái"
+        },
+        {
+          "path": "docs/system/architecture.md",
+          "changes": "Thêm ranh giới runId side- và luồng side chat"
+        }
+      ],
+      "approach": "1. Chạy 5 lệnh kiểm chứng. 2. Chạy app và thử hai lượt song song. 3. Cập nhật tài liệu.",
+      "test": "Hai lượt chạy song song không chen nội dung; DB không có cuộc chat mới sau khi dùng side chat",
+      "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã",
+      "result": "Chưa đóng hẳn (2026-11-08): 5 lệnh kiểm chứng đạt (cargo fmt/clippy/test 556 pass, typecheck 0 lỗi, lint 0 lỗi); AC-S1, S5, S6, S7, S8, S9, S12 đạt (giả lập Tauri trên vite + đối chiếu mã); S10 đạt một phần; AC-S2, S3, S4 chưa kiểm thật (cần pnpm start với CLI và DB thật), S11 chưa kiểm UI. Đã cập nhật docs/system/side-chat.md (mục 6) và architecture.md (mục 8.2b). Ảnh chứng ở .agents/storage/evidence/side-chat/."
+    }
+  ],
+  "risks": [
+    "Cờ chỉ đọc không chặn ghi thật: TASK-S01 kiểm trước khi code",
+    "Codex không có chế độ chỉ đọc: side chat chỉ dùng Claude cho tới khi có cách (Q1)",
+    "Phím tắt xung đột Monaco hoặc xterm: kiểm ở TASK-S04",
+    "remote.rs cũng thuộc nhóm G của plan OOP: làm sau TASK-010 hoặc gộp",
+    "Hai tiến trình CLI song song tốn hạn mức tài khoản nhanh hơn",
+    "Bố cục dock trong workspace-pane.tsx và app.tsx đang có thay đổi chưa commit: chốt blocker TASK-000 của plan OOP trước, tránh đè"
+  ],
+  "rollback": "Tính năng chỉ thêm (trừ một điều kiện ở remote.rs); hoàn tác bằng git revert từng nhóm khi được phép commit. Không đổi DB nên không mất dữ liệu.",
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Chỉ đọc cho Codex chưa có chế độ quyền theo mã hiện tại: chỉ dùng Claude cho side chat?",
+      "default": "Chỉ Claude tới khi có cách"
+    },
+    {
+      "id": "Q2",
+      "question": "Đóng khung khi đang stream: dừng hay chạy nền?",
+      "default": "Chạy nền"
+    },
+    {
+      "id": "Q3",
+      "question": "Tính usage của side chat vào thống kê?",
+      "default": "Có"
+    },
+    {
+      "id": "Q4",
+      "question": "Phím tắt Cmd/Ctrl+; có xung đột với Monaco/xterm?",
+      "default": "Dùng, kiểm ở TASK-S04"
+    },
+    {
+      "id": "Q5",
+      "question": "Cửa sổ nổi hay ngăn dưới?",
+      "default": "Cửa sổ nổi neo cạnh nút"
+    },
+    {
+      "id": "Q6",
+      "question": "Chạy lượt thật để xác nhận cờ chỉ đọc trước khi code?",
+      "default": "Có (TASK-S01)"
+    },
+    {
+      "id": "Q7",
+      "question": "Terminal nằm dưới cả cột side chat hay chỉ dưới vùng chính?",
+      "default": "Dưới cả hai như app.tsx hiện tại"
+    }
+  ]
+}

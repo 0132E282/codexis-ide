@@ -139,8 +139,8 @@ impl Default for ChatSettings {
 impl ChatSettings {
     /// The folder plans are saved to: `plans_dir`, or `docs/plans` when it is empty.
     pub fn effective_plans_dir(&self) -> String {
-        crate::plan_project::checked_plans_dir(&self.plans_dir)
-            .unwrap_or_else(|| crate::plan_project::DEFAULT_PLANS_DIR.to_string())
+        crate::plans::project::checked_plans_dir(&self.plans_dir)
+            .unwrap_or_else(|| crate::plans::project::DEFAULT_PLANS_DIR.to_string())
     }
 
     /// The factor of the storage warning limits (at least 1).
@@ -149,7 +149,7 @@ impl ChatSettings {
     }
 
     fn plans_dir_valid(dir: &str) -> bool {
-        crate::plan_project::checked_plans_dir(dir).is_some()
+        crate::plans::project::checked_plans_dir(dir).is_some()
     }
 
     fn multiplier_valid(multiplier: u32) -> bool {

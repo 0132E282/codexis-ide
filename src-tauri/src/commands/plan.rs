@@ -1,6 +1,6 @@
 use super::state::AppState;
-use crate::plan_docs::{self, PlanDocDetail, PlanDocsList};
-use crate::plan_store::PlanStore;
+use crate::plans::docs::{self as plan_docs, PlanDocDetail, PlanDocsList};
+use crate::plans::store::PlanStore;
 use crate::project_data::ProjectData;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
@@ -57,6 +57,22 @@ pub async fn plan_doc_read(
 
     super::blocking("plan_docs.read_failed", move || {
         plan_docs::read(&workspace, &path).map_err(str::to_string)
+    })
+    .await
+}
+
+/// Sets the status of one plan of `docs/plans/` of the project at `root` (`path` is the `path` of a card; `status` is `draft`, `in_progress`, `review` or `done`): the status word of the file is rewritten, nothing else.
+#[tauri::command]
+pub async fn plan_doc_set_status(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+    status: String,
+) -> Result<(), String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("plan_docs.set_status_failed", move || {
+        plan_docs::set_status(&workspace, &path, &status).map_err(str::to_string)
     })
     .await
 }

@@ -205,3 +205,13 @@ fn restore_truncates_every_field_and_drops_overlong_ids() {
         MAX_OUTPUT_TAIL_CHARS
     );
 }
+
+#[test]
+fn remove_drops_one_task() {
+    let tasks = BackgroundTasks::new();
+    tasks.start("a", TaskKind::Subagent, "x");
+    tasks.start("b", TaskKind::Shell, "y");
+    assert!(tasks.remove("a"));
+    assert!(!tasks.remove("a"));
+    assert_eq!(tasks.snapshot().len(), 1);
+}

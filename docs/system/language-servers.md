@@ -1,6 +1,6 @@
 # Thiết kế: language server (LSP) dùng chung extension VS Code
 
-Trạng thái: **Thiết kế cho TASK-001, chờ người dùng duyệt (2026-11-07). Chưa có mã.** Plan nguồn: [`docs/plans/lsp-extensions-20261107.json`](../plans/lsp-extensions-20261107.json) (r3). Liên quan: [architecture.md](./architecture.md) mục 3 (cấu trúc mã), mục 6 (permission); [background-tasks.md](./background-tasks.md) (mẫu tài liệu, mẫu dừng tiến trình khi thoát app).
+Trạng thái: **Thiết kế cho TASK-001, chờ người dùng duyệt (2026-11-07). Chưa có mã.** Plan nguồn: [`docs/plans/lsp-extensions-20261107/plan.json`](../plans/lsp-extensions-20261107.json) (r3). Liên quan: [architecture.md](./architecture.md) mục 3 (cấu trúc mã), mục 6 (permission); [background-tasks.md](./background-tasks.md) (mẫu tài liệu, mẫu dừng tiến trình khi thoát app).
 
 Nhãn căn cứ: `[đã kiểm]` = đã đọc trong mã/đã khảo sát máy ngày 2026-11-07 (mục `machineSurvey` của plan); `[giả định]` = chọn để thiết kế, coder xác minh ở task ghi kèm; `[chưa kiểm]` = chưa có bằng chứng, không được coi là đúng.
 

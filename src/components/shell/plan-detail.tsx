@@ -1,16 +1,27 @@
-import { ArrowLeft, FileText, Play } from 'lucide-react';
+import { ArrowLeft, Check, FileText, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { toast } from 'sonner';
 import {
     BAR_STYLE,
     continuePrompt,
     STATUS_STYLE,
     STATUS_TEXT,
 } from '@/components/shell/plan-status';
+import {
+    imagePaths,
+    PlanEvidenceText,
+} from '@/components/shell/plan-evidence-images';
+import { PlanTaskDialog } from '@/components/shell/plan-task-dialog';
 import { Button } from '@/components/ui/button';
-import { t } from '@/lib/i18n';
-import { ide, onPlansChanged } from '@/lib/ide';
-import type { MarkdownBlock, PlanDocDetail, PlanItem } from '@/lib/ide';
+import { t, translateError } from '@/lib/i18n';
+import { errorText, ide, onPlansChanged } from '@/lib/ide';
+import type {
+    MarkdownBlock,
+    PlanDocDetail,
+    PlanItem,
+    PlanTask,
+} from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
 type Load =
@@ -29,7 +40,13 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
     );
 }
 
-function ItemList({ items }: { items: PlanItem[] }) {
+function ItemList({
+    items,
+    root,
+}: {
+    items: PlanItem[];
+    root: string | undefined;
+}) {
     return (
         <ul className="flex flex-col gap-1.5 text-sm">
             {items.map((item, index) => (
@@ -43,7 +60,10 @@ function ItemList({ items }: { items: PlanItem[] }) {
                         {item.text}
                         {item.note !== null && (
                             <span className="block text-xs text-muted-foreground">
-                                {item.note}
+                                <PlanEvidenceText
+                                    root={root}
+                                    text={item.note}
+                                />
                             </span>
                         )}
                     </span>
@@ -53,7 +73,28 @@ function ItemList({ items }: { items: PlanItem[] }) {
     );
 }
 
-function Blocks({ blocks }: { blocks: MarkdownBlock[] }) {
+/** A checklist line of a Markdown plan as a task, so it opens the same popup as a task of a JSON plan; a line that names pictures hands them over as its result. */
+function checklistTask(block: { text: string; checked: boolean }): PlanTask {
+    return {
+        id: null,
+        title: block.text,
+        status: block.checked ? 'done' : 'todo',
+        rawStatus: null,
+        priority: null,
+        files: [],
+        result: imagePaths(block.text).length > 0 ? block.text : null,
+    };
+}
+
+function Blocks({
+    blocks,
+    root,
+    onOpenTask,
+}: {
+    blocks: MarkdownBlock[];
+    root: string | undefined;
+    onOpenTask: (task: PlanTask) => void;
+}) {
     return (
         <div className="flex flex-col gap-2 text-sm">
             {blocks.map((block, index) => {
@@ -71,17 +112,34 @@ function Blocks({ blocks }: { blocks: MarkdownBlock[] }) {
                             </h4>
                         );
                     case 'paragraph':
-                        return <p key={index}>{block.text}</p>;
+                        return (
+                            <p key={index}>
+                                <PlanEvidenceText
+                                    root={root}
+                                    text={block.text}
+                                />
+                            </p>
+                        );
                     case 'bullet':
                         return (
                             <p key={index} className="flex gap-2">
                                 <span aria-hidden="true">•</span>
-                                {block.text}
+                                <span className="min-w-0">
+                                    <PlanEvidenceText
+                                        root={root}
+                                        text={block.text}
+                                    />
+                                </span>
                             </p>
                         );
                     case 'checklist':
                         return (
-                            <p key={index} className="flex gap-2">
+                            <button
+                                key={index}
+                                type="button"
+                                onClick={() => onOpenTask(checklistTask(block))}
+                                className="flex cursor-pointer gap-2 rounded text-left hover:bg-accent/40"
+                            >
                                 <input
                                     type="checkbox"
                                     checked={block.checked}
@@ -90,8 +148,8 @@ function Blocks({ blocks }: { blocks: MarkdownBlock[] }) {
                                     aria-label={block.text}
                                     className="mt-1"
                                 />
-                                {block.text}
-                            </p>
+                                <span className="min-w-0">{block.text}</span>
+                            </button>
                         );
                     case 'code':
                         return (
@@ -127,6 +185,8 @@ export function PlanDetail({
     const [load, setLoad] = useState<Load>({ state: 'loading' });
     // * Bumped when a plan file changed, to read the plan again without a loading state.
     const [reload, setReload] = useState(0);
+    // * The task whose slide-in panel is open.
+    const [openTask, setOpenTask] = useState<PlanTask | null>(null);
 
     useEffect(() => {
         let isActive = true;
@@ -178,6 +238,14 @@ export function PlanDetail({
     // * The tasks that are not done (any status but done): what "Làm task / Tiếp tục" hands to the AI.
     const prompt = plan === null ? null : continuePrompt(path, plan.tasks);
     const continuePlan = () => prompt !== null && onSendPrompt(prompt);
+    // * The folder watcher reports the change; the reload covers a watcher that is not running.
+    const markDone = () =>
+        void ide
+            .planDocSetStatus(path, 'done', root)
+            .then(() => setReload((count) => count + 1))
+            .catch((error: unknown) =>
+                toast.error(translateError(errorText(error))),
+            );
     const percent =
         plan !== null && plan.tasksTotal > 0
             ? Math.round((plan.tasksDone / plan.tasksTotal) * 100)
@@ -192,7 +260,7 @@ export function PlanDetail({
 
     return (
         <div className="flex h-full min-h-0 flex-col" data-testid="plan-detail">
-            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
                 <Button
                     type="button"
                     variant="ghost"
@@ -218,6 +286,17 @@ export function PlanDetail({
                             : 'plans.do_tasks',
                     )}
                 </Button>
+                {plan !== null && plan.status !== 'done' && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={markDone}
+                    >
+                        <Check aria-hidden="true" />
+                        {t('plans.mark_done')}
+                    </Button>
+                )}
                 <Button
                     type="button"
                     variant="outline"
@@ -304,7 +383,10 @@ export function PlanDetail({
                         </header>
                         {plan.requirements.length > 0 && (
                             <Section title={t('plans.section_requirements')}>
-                                <ItemList items={plan.requirements} />
+                                <ItemList
+                                    items={plan.requirements}
+                                    root={root}
+                                />
                             </Section>
                         )}
                         {plan.tasks.length > 0 && (
@@ -313,9 +395,31 @@ export function PlanDetail({
                                     {plan.tasks.map((task, index) => (
                                         <li
                                             key={`${task.id ?? ''}-${index}`}
-                                            className="rounded-md border p-2 text-sm"
+                                            // * The whole card opens the panel; a click on a button, a picture or the dialog drawn from inside it is that control's own.
+                                            onClick={(event) => {
+                                                const target =
+                                                    event.target as HTMLElement;
+
+                                                if (
+                                                    event.currentTarget.contains(
+                                                        target,
+                                                    ) &&
+                                                    !target.closest(
+                                                        'button, a, img, [role="dialog"]',
+                                                    )
+                                                ) {
+                                                    setOpenTask(task);
+                                                }
+                                            }}
+                                            className="cursor-pointer rounded-md border p-2 text-sm hover:bg-accent/40"
                                         >
-                                            <div className="flex items-start justify-between gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setOpenTask(task)
+                                                }
+                                                className="flex w-full cursor-pointer items-start justify-between gap-2 text-left"
+                                            >
                                                 <span className="min-w-0 break-words">
                                                     {task.id !== null && (
                                                         <span className="mr-2 font-mono text-xs text-muted-foreground">
@@ -346,14 +450,39 @@ export function PlanDetail({
                                                             )}
                                                     </span>
                                                 </span>
-                                            </div>
+                                            </button>
                                             {task.files.length > 0 && (
                                                 <div className="mt-1 text-xs text-muted-foreground">
                                                     {t('plans.files_to_change')}
                                                     :{' '}
-                                                    <span className="font-mono break-all">
-                                                        {task.files.join(', ')}
+                                                    <span className="inline-flex flex-wrap gap-x-2">
+                                                        {task.files.map(
+                                                            (file) => (
+                                                                <button
+                                                                    key={file}
+                                                                    type="button"
+                                                                    title={file}
+                                                                    onClick={() =>
+                                                                        onOpenFile(
+                                                                            file,
+                                                                        )
+                                                                    }
+                                                                    className="font-mono break-all text-left underline-offset-2 hover:text-foreground hover:underline"
+                                                                >
+                                                                    {file}
+                                                                </button>
+                                                            ),
+                                                        )}
                                                     </span>
+                                                </div>
+                                            )}
+                                            {task.result !== null && (
+                                                <div className="mt-1 text-xs whitespace-pre-wrap text-muted-foreground">
+                                                    {t('plans.task_result')}:{' '}
+                                                    <PlanEvidenceText
+                                                        root={root}
+                                                        text={task.result}
+                                                    />
                                                 </div>
                                             )}
                                         </li>
@@ -363,12 +492,16 @@ export function PlanDetail({
                         )}
                         {plan.acceptanceCriteria.length > 0 && (
                             <Section title={t('plans.section_criteria')}>
-                                <ItemList items={plan.acceptanceCriteria} />
+                                <ItemList
+                                    items={plan.acceptanceCriteria}
+                                    root={root}
+                                />
                             </Section>
                         )}
                         {plan.openQuestions.length > 0 && (
                             <Section title={t('plans.section_questions')}>
                                 <ItemList
+                                    root={root}
                                     items={plan.openQuestions.map((item) => ({
                                         ...item,
                                         note:
@@ -382,7 +515,11 @@ export function PlanDetail({
                             </Section>
                         )}
                         {plan.blocks.length > 0 && (
-                            <Blocks blocks={plan.blocks} />
+                            <Blocks
+                                blocks={plan.blocks}
+                                root={root}
+                                onOpenTask={setOpenTask}
+                            />
                         )}
                         {!hasSections && (
                             <p className="text-sm text-muted-foreground">
@@ -392,6 +529,14 @@ export function PlanDetail({
                     </div>
                 )}
             </div>
+            <PlanTaskDialog
+                root={root}
+                planPath={path}
+                task={openTask}
+                onClose={() => setOpenTask(null)}
+                onOpenFile={onOpenFile}
+                onSendPrompt={onSendPrompt}
+            />
         </div>
     );
 }

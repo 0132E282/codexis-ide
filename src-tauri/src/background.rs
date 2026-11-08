@@ -158,6 +158,16 @@ impl BackgroundTasks {
         })
     }
 
+    /// Bỏ một việc khỏi bảng (dùng khi sub-agent xong: chỉ kết quả cuối còn ở chat). `false` nếu không có.
+    pub fn remove(&self, id: &str) -> bool {
+        let mut tasks = self.lock();
+        let before = tasks.len();
+
+        tasks.retain(|task| task.id != id);
+
+        tasks.len() != before
+    }
+
     /// Kết thúc việc đang chạy với `state` khác Running. Việc đã kết thúc
     /// không đổi lại (trả `false`).
     pub fn finish(&self, id: &str, state: TaskState) -> bool {

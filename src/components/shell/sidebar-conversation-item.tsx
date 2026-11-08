@@ -8,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ChatConversation, Subagent } from '@/lib/ide';
+import type { ChatConversation } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
@@ -22,9 +22,7 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
     maxGrid,
     gridGroups,
     nextGroup,
-    subagents,
     onOpenConversation,
-    onOpenSubagent,
     onDeleteConversation,
     onToggleGrid,
 }: {
@@ -37,15 +35,10 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
     gridGroups: GridGroup[];
     /** Number of a group that does not exist yet. */
     nextGroup: number;
-    /** Sub-agents shown under the conversation; empty for any but the shown one. */
-    subagents: Subagent[];
     onOpenConversation: (id: number) => void;
-    onOpenSubagent: (id: string) => void;
     onDeleteConversation: (id: number) => void;
     onToggleGrid: (root: string, conversation: number, group: number) => void;
 }) {
-    const runningSubagents = subagents.filter((agent) => !agent.done);
-
     return (
         <li>
             <div className="group/chat relative">
@@ -151,29 +144,6 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
                     <Trash2 aria-hidden="true" />
                 </Button>
             </div>
-            {isCurrent && runningSubagents.length > 0 && (
-                <ul
-                    aria-label={t('sidebar.agent_is_working')}
-                    className="mt-0.5 mb-1 ml-4 flex flex-col gap-0.5 border-l pl-2"
-                >
-                    {runningSubagents.map((agent) => (
-                        <li key={agent.id}>
-                            <button
-                                type="button"
-                                title={agent.label}
-                                onClick={() => onOpenSubagent(agent.id)}
-                                className="flex w-full items-center gap-2 rounded-sm py-0.5 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                            >
-                                <span
-                                    aria-hidden="true"
-                                    className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary"
-                                />
-                                <span className="truncate">{agent.label}</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
         </li>
     );
 });

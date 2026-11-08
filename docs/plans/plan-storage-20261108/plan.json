@@ -1,0 +1,207 @@
+{
+  "title": "Plan, test và bằng chứng: lưu ở dữ liệu người dùng, chỉ bằng chứng vào dự án",
+  "description": "Thiết kế lại nơi lưu: plan và test Playwright mặc định ở dữ liệu app của người dùng, không ghi vào dự án; ảnh bằng chứng chỉ vào docs/plans/<plan>/evidence/ khi dự án đã có docs/plans; trang Kế hoạch đọc cả hai nguồn.",
+  "tags": ["plans", "storage", "playwright", "evidence", "backend", "frontend"],
+  "createdAt": "2026-11-08",
+  "status": "DRAFT",
+  "design": "docs/system/plan-storage.md",
+  "hardConstraints": [
+    "Không ghi vào thư mục dự án của người dùng khi chưa được bật",
+    "Giữ tên và shape lệnh Tauri hiện có; thêm trường location phải đổi Rust và src/lib/ide.ts cùng lúc",
+    "Không đổi hay xoá plan cũ trong docs/plans của dự án",
+    "Không commit, không thêm dependency"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-S1",
+      "source": "S1",
+      "text": "Plan và test mặc định ở dữ liệu app của người dùng"
+    },
+    {
+      "id": "REQ-S2",
+      "source": "S2",
+      "text": "Bằng chứng chỉ vào dự án khi dự án đã có docs/plans"
+    },
+    {
+      "id": "REQ-S3",
+      "source": "S3",
+      "text": "Trang Kế hoạch thấy plan và ảnh từ cả hai nguồn"
+    },
+    {
+      "id": "REQ-S4",
+      "source": "S4",
+      "text": "Plan cũ trong dự án không bị đổi"
+    },
+    {
+      "id": "REQ-S5",
+      "source": "S5",
+      "text": "Xoá plan thì xoá luôn thư mục bằng chứng (ảnh) của plan đó"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-S1",
+      "requirement": "REQ-S1",
+      "text": "Cài đặt mặc định: làm xong một plan có test thì git status của dự án không có tệp mới"
+    },
+    {
+      "id": "AC-S2",
+      "requirement": "REQ-S2",
+      "text": "Dự án có docs/plans thì ảnh ở docs/plans/<plan>/evidence/; không có thì ảnh ở dữ liệu app"
+    },
+    {
+      "id": "AC-S3",
+      "requirement": "REQ-S3",
+      "text": "Plan ở dữ liệu app và plan trong dự án cùng hiện; đổi trạng thái và xem ảnh đều chạy"
+    },
+    {
+      "id": "AC-S4",
+      "requirement": "REQ-S4",
+      "text": "Dự án có docs/plans/*.json thì vẫn đọc được và không bị ghi khi chưa bật"
+    },
+    {
+      "id": "AC-S5",
+      "requirement": "REQ-S5",
+      "text": "Xoá một plan (lệnh xoá hoặc dọn session_plans) thì plan.json và evidence/ của plan đó biến mất; ảnh của plan khác còn nguyên"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml",
+    "pnpm typecheck",
+    "pnpm lint"
+  ],
+  "tasks": [
+    {
+      "id": "TASK-S01",
+      "title": "Plan ghi vào dữ liệu app theo thư mục từng plan",
+      "status": "TODO",
+      "priority": "P1",
+      "requirements": ["REQ-S1"],
+      "acceptanceCriteria": ["AC-S1"],
+      "design": "plan-storage.md mục 5, ý 1",
+      "inScope": "PlanStore và plans/project.rs",
+      "outOfScope": "Giao diện",
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/plans/store.rs",
+          "changes": "Ghi plans/<tên-plan>/plan.json"
+        },
+        {
+          "path": "src-tauri/src/plans/project.rs",
+          "changes": "Chỉ chạy khi bật lưu vào dự án"
+        }
+      ]
+    },
+    {
+      "id": "TASK-S02",
+      "title": "Thư mục test của plan ở dữ liệu app",
+      "status": "TODO",
+      "priority": "P2",
+      "requirements": ["REQ-S1"],
+      "acceptanceCriteria": ["AC-S1"],
+      "design": "plan-storage.md mục 5, ý 2",
+      "inScope": "Đường dẫn ghi và chạy test Playwright của plan",
+      "outOfScope": "Đổi cách viết test",
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/plans/store.rs",
+          "changes": "Thư mục tests/<tên-plan>/"
+        }
+      ]
+    },
+    {
+      "id": "TASK-S03",
+      "title": "Đọc plan từ hai nguồn, trả thêm location",
+      "status": "TODO",
+      "priority": "P1",
+      "requirements": ["REQ-S3", "REQ-S4"],
+      "acceptanceCriteria": ["AC-S3", "AC-S4"],
+      "design": "plan-storage.md mục 5, ý 3",
+      "inScope": "docs.rs, commands/plan.rs, ide.ts",
+      "outOfScope": "Sửa plan trong dự án khi chưa bật",
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/plans/docs.rs",
+          "changes": "Đọc dữ liệu app và dự án, trường location"
+        },
+        {
+          "path": "src-tauri/src/commands/plan.rs",
+          "changes": "Truyền nguồn"
+        },
+        {
+          "path": "src/lib/ide.ts",
+          "changes": "Kiểu PlanDoc có location"
+        }
+      ]
+    },
+    {
+      "id": "TASK-S04",
+      "title": "Bằng chứng vào dự án chỉ khi dự án có docs/plans; đọc ảnh ở dữ liệu app",
+      "status": "TODO",
+      "priority": "P1",
+      "requirements": ["REQ-S2", "REQ-S3"],
+      "acceptanceCriteria": ["AC-S2", "AC-S3"],
+      "design": "plan-storage.md mục 4 và 5 ý 4",
+      "inScope": "Ghi ảnh và lệnh đọc ảnh",
+      "outOfScope": "Đồng bộ giữa các máy",
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/commands/files.rs",
+          "changes": "Đọc ảnh ở thư mục dữ liệu của dự án trong app"
+        },
+        {
+          "path": "src/components/shell/plan-evidence-images.tsx",
+          "changes": "Gọi đúng lệnh theo location"
+        }
+      ]
+    },
+    {
+      "id": "TASK-S05",
+      "title": "Sửa AGENTS.md và tài liệu cho khớp",
+      "status": "TODO",
+      "priority": "P3",
+      "requirements": ["REQ-S1"],
+      "acceptanceCriteria": ["AC-S1"],
+      "design": "plan-storage.md mục 6",
+      "inScope": "AGENTS.md, docs",
+      "outOfScope": "Mã",
+      "filesToChange": [
+        {
+          "path": "AGENTS.md",
+          "changes": "Dòng docs/plans và e2e theo thiết kế mới"
+        }
+      ]
+    },
+    {
+      "id": "TASK-S06",
+      "title": "Xoá plan kèm ảnh bằng chứng",
+      "status": "TODO",
+      "priority": "P2",
+      "requirements": ["REQ-S5"],
+      "acceptanceCriteria": ["AC-S5"],
+      "design": "plan-storage.md mục 3",
+      "inScope": "Lệnh xoá một plan ở dữ liệu app (xoá cả thư mục plans/<tên-plan>/ gồm evidence/); dọn session_plans trong storage.rs xoá cả thư mục con; chỉ xoá ảnh trong dữ liệu app, ảnh nằm trong dự án (docs/plans/<plan>/evidence) chỉ xoá khi người dùng xác nhận",
+      "outOfScope": "Xoá plan cũ có sẵn trong docs/plans của dự án khi chưa xác nhận",
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/plans/store.rs",
+          "changes": "Hàm xoá plan kèm thư mục evidence"
+        },
+        {
+          "path": "src-tauri/src/storage.rs",
+          "changes": "CleanupKind::SessionPlans xoá cả thư mục con"
+        },
+        {
+          "path": "src-tauri/src/commands/plan.rs",
+          "changes": "Lệnh plan_delete"
+        }
+      ]
+    }
+  ],
+  "risks": [
+    "Hai nguồn trùng tên plan: cần quy tắc ưu tiên",
+    "Câu hỏi mở ở docs/system/plan-storage.md mục 6"
+  ]
+}

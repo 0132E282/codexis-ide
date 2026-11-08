@@ -18,12 +18,7 @@ import { Button } from '@/components/ui/button';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import Field from '@/components/form/field';
 import { useAuthStatus } from '@/hooks/use-auth-status';
-import type {
-    ChatConversation,
-    Project,
-    Subagent,
-    GridMember,
-} from '@/lib/ide';
+import type { ChatConversation, Project, GridMember } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
@@ -33,8 +28,6 @@ const loadNewProjectDialog = () =>
         default: module.NewProjectDialog,
     }));
 const NewProjectDialog = lazy(loadNewProjectDialog);
-
-const NO_SUBAGENTS: Subagent[] = [];
 
 /** Lower case without accents, so "du an" finds "Dự án". */
 const plain = (text: string) =>
@@ -72,9 +65,7 @@ export function Sidebar({
     onRemove,
     conversations,
     currentConversation,
-    subagents,
     onOpenConversation,
-    onOpenSubagent,
     onDeleteConversation,
     activeRoot,
     grid,
@@ -107,11 +98,7 @@ export function Sidebar({
     conversations: ChatConversation[];
     /** The conversation shown in the chat; null until it is loaded. */
     currentConversation: number | null;
-    /** Sub-agents the AI has started in the shown conversation's running turn. */
-    subagents: Subagent[];
     onOpenConversation: (id: number) => void;
-    /** Shows what a sub-agent did: its call opens in the chat. */
-    onOpenSubagent: (id: string) => void;
     onDeleteConversation: (id: number) => void;
     /** Folder of the open project; null for the start-up folder, whose chats cannot join the grid. */
     activeRoot: string | null;
@@ -352,16 +339,9 @@ export function Sidebar({
                                             maxGrid={maxGrid}
                                             gridGroups={gridGroups}
                                             nextGroup={nextGroup}
-                                            subagents={
-                                                conversation.id ===
-                                                currentConversation
-                                                    ? subagents
-                                                    : NO_SUBAGENTS
-                                            }
                                             onOpenConversation={
                                                 onOpenConversation
                                             }
-                                            onOpenSubagent={onOpenSubagent}
                                             onDeleteConversation={
                                                 onDeleteConversation
                                             }

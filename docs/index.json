@@ -92,5 +92,17 @@
     "description": "Testcase thủ công cấp repo cho relay giữa các AI (chưa chạy).",
     "tags": ["repo", "testcase", "ai-relay"],
     "path": "docs/repo/ai-relay.md"
+  },
+  {
+    "title": "Thiết kế bố cục chế độ group",
+    "description": "Cột Thay đổi/Tệp co theo chỗ trống trong chat grid, không đè lên ô chat; bố cục hiện tại, hướng sửa theo đợt, rủi ro. Đọc khi sửa chat-grid hoặc cột của code-viewer.",
+    "tags": ["system", "group", "chat-grid", "layout"],
+    "path": "docs/system/group-layout.md"
+  },
+  {
+    "title": "Thiết kế nơi lưu plan, test và bằng chứng",
+    "description": "Plan và test Playwright mặc định ở dữ liệu app của người dùng; chỉ ảnh bằng chứng vào docs/plans/<plan>/evidence/ khi dự án đã có docs/plans; trang Kế hoạch đọc cả hai nguồn. Use case, cấu trúc thư mục, ERD, DFD, trình tự, activity, rủi ro. Đọc khi sửa plans/, lệnh plan_* hoặc nơi ghi test.",
+    "tags": ["system", "plans", "storage", "playwright", "evidence"],
+    "path": "docs/system/plan-storage.md"
   }
 ]

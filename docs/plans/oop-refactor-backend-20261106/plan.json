@@ -1,0 +1,577 @@
+{
+  "title": "Refactor backend Rust sang OOP (CliKind, AgentCli, AuthTool, permission)",
+  "description": "Kế hoạch triển khai thiết kế OOP ở docs/system/architecture.md mục 4–7: một nguồn danh tính CLI, đa hình thay match rải rác, lớp quyền thống nhất, chia nhóm A–G chạy song song sau Phase 0. Giữ nguyên contract Tauri, frontend, Cargo.toml và hành vi.",
+  "tags": ["backend", "rust", "oop", "refactor", "tauri", "permission"],
+  "createdAt": "2026-11-06",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/architecture.md",
+    "sections": {
+      "problem": "4.1",
+      "classDiagram": "4.2",
+      "signatures": "4.3",
+      "patterns": "5",
+      "permission": "6",
+      "groups": "7.2",
+      "invariants": "7.3",
+      "risks": "7.4",
+      "verification": "7.5",
+      "openQuestions": "7.6"
+    },
+    "related": ["docs/system/database.md"],
+    "note": "Thiết kế mục 4–7 là đề xuất chưa build/test; chữ ký Rust trong bảng là dự kiến, coder được chỉnh lifetime/kiểu nhỏ miễn giữ bất biến 7.3."
+  },
+  "hardConstraints": [
+    "Không đổi tên, tham số, kiểu trả về, key lỗi của #[tauri::command]; generate_handler! trong lib.rs giữ nguyên đường dẫn lệnh",
+    "Không đổi src/ (frontend); git diff -- src/ phải rỗng",
+    "Không thêm dependency; src-tauri/Cargo.toml không đổi bởi refactor",
+    "Không đổi hành vi: thứ tự tham số CLI, sự kiện agent-event, quy tắc quyền (mục 6.5), key lỗi i18n",
+    "Không sửa nội dung các enum lỗi *Error",
+    "Không git commit/push khi người dùng chưa yêu cầu"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "source": "architecture.md R1",
+      "text": "Một nguồn chuẩn cho danh tính CLI (cli::CliKind)"
+    },
+    {
+      "id": "REQ-002",
+      "source": "architecture.md R2",
+      "text": "Hành vi riêng từng CLI nằm trong impl Trait; match theo CLI chỉ còn ở factory và bảng dữ liệu"
+    },
+    {
+      "id": "REQ-003",
+      "source": "architecture.md R3",
+      "text": "Thêm CLI mới = 1 struct + impl + 1 nhánh, không sửa store"
+    },
+    {
+      "id": "REQ-004",
+      "source": "architecture.md R4",
+      "text": "Giữ contract Tauri và frontend"
+    },
+    {
+      "id": "REQ-005",
+      "source": "architecture.md R5",
+      "text": "Giữ hành vi: test như baseline, thứ tự tham số CLI và key lỗi giống hệt"
+    },
+    {
+      "id": "REQ-006",
+      "source": "architecture.md R6",
+      "text": "Không thêm dependency"
+    },
+    {
+      "id": "REQ-007",
+      "source": "architecture.md R7 + mục 6",
+      "text": "Nhóm file độc lập để coder làm song song; quyền đường dẫn dùng chung một Sandbox/PathPolicy"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-001",
+      "requirement": "REQ-001",
+      "text": "Không còn Provider::, agent::Cli, CLIS, CLI_NAMES, matches!(.. \"claude\" | \"codex\") ngoài cli.rs (grep rỗng)"
+    },
+    {
+      "id": "AC-002",
+      "requirement": "REQ-002",
+      "text": "Các match theo CLI nằm trong impl AgentCli/AuthTool hoặc factory CliKind::agent/auth"
+    },
+    {
+      "id": "AC-003",
+      "requirement": "REQ-003",
+      "text": "Store profiles, usage, settings, chats chỉ phụ thuộc CliKind, không literal tên CLI để rẽ nhánh"
+    },
+    {
+      "id": "AC-004",
+      "requirement": "REQ-004",
+      "text": "git diff -- src/ rỗng; chữ ký mọi #[tauri::command] không đổi"
+    },
+    {
+      "id": "AC-005",
+      "requirement": "REQ-005",
+      "text": "cargo test --lib (bỏ terminal::tests::a_shell_runs_in_a_pseudo_terminal) cùng tên test, cùng kết quả như baseline; turn_args đúng thứ tự mục 7.3"
+    },
+    {
+      "id": "AC-006",
+      "requirement": "REQ-006",
+      "text": "git diff -- src-tauri/Cargo.toml do refactor gây ra rỗng"
+    },
+    {
+      "id": "AC-007",
+      "requirement": "REQ-007",
+      "text": "Mỗi file chỉ thuộc một nhóm trong một pha; kiểm đường dẫn thật nằm trong thư mục chỉ còn ở Sandbox"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal",
+    "git diff --stat -- src/ src-tauri/Cargo.toml"
+  ],
+  "codingGroups": [
+    {
+      "id": "G0",
+      "name": "Nền chung",
+      "tasks": ["TASK-001", "TASK-002"],
+      "dependsOnGroups": [],
+      "parallel": false
+    },
+    {
+      "id": "GA",
+      "name": "agent",
+      "tasks": ["TASK-003"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GB",
+      "name": "auth",
+      "tasks": ["TASK-004"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GC",
+      "name": "store",
+      "tasks": ["TASK-005", "TASK-006"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GD",
+      "name": "git",
+      "tasks": ["TASK-007"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GE",
+      "name": "tools",
+      "tasks": ["TASK-008"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GF",
+      "name": "workspace",
+      "tasks": ["TASK-009"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "GG",
+      "name": "remote + attachments",
+      "tasks": ["TASK-010"],
+      "dependsOnGroups": ["G0"],
+      "parallel": true
+    },
+    {
+      "id": "G3",
+      "name": "dọn shim và tài liệu",
+      "tasks": ["TASK-011", "TASK-012"],
+      "dependsOnGroups": ["GA", "GB", "GC", "GD", "GE", "GF", "GG"],
+      "parallel": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-000",
+      "title": "Chốt blocker và chụp baseline test trên cây sạch",
+      "status": "BLOCKED",
+      "priority": "P0",
+      "priorityReason": "Refactor đụng đúng các file đang có thay đổi chưa commit (clippy, khoá lỗi i18n); phải có baseline để so sánh hành vi",
+      "requirements": ["REQ-005"],
+      "acceptanceCriteria": ["AC-005"],
+      "design": "architecture.md 7.1, 7.5",
+      "inScope": "Người dùng commit hoặc chốt thay đổi đang dở trong src-tauri/; chạy 4 lệnh kiểm chứng và lưu danh sách test qua/rớt làm baseline",
+      "outOfScope": "Sửa test đang rớt (workspace::tests::binary_files_are_read_as_bytes_but_not_as_text) và test terminal treo",
+      "dependencies": [],
+      "filesToChange": [],
+      "approach": "1. Người dùng quyết định commit (agent không tự commit). 2. Chạy cargo fmt --check, clippy -D warnings, cargo test --lib bỏ test terminal. 3. Ghi baseline vào ghi chú bàn giao.",
+      "test": "Baseline có số test qua/rớt cụ thể; fmt và clippy sạch hoặc ghi rõ lỗi có sẵn",
+      "doneWhen": "Có baseline và cây làm việc không còn thay đổi dở trong src-tauri/"
+    },
+    {
+      "id": "TASK-001",
+      "title": "Phase 0: tạo cli.rs với CliKind, Environment, locate, command",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Nền chung cho mọi nhóm A–G",
+      "requirements": ["REQ-001", "REQ-006"],
+      "acceptanceCriteria": ["AC-001", "AC-006"],
+      "design": "architecture.md 4.2, 4.3 (cli.rs), 5",
+      "inScope": "CliKind (Claude, Codex, Github) với name/program/config_variable/ALL/parse/parse_agent; Environment; locate chuyển từ agent.rs; command() dựng std::process::Command chung",
+      "outOfScope": "Biến thể CLI mới (gemini); đổi serde của cột cài đặt riêng theo CLI",
+      "dependencies": ["TASK-000"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/cli.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm pub mod cli;"
+        },
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Thân locate thành pub(crate) use crate::cli::locate;"
+        }
+      ],
+      "approach": "1. Đọc mục 4.3 cli.rs. 2. Viết CliKind và bảng dữ liệu, test thuần cho parse và thứ tự ALL. 3. Chuyển locate giữ nguyên hành vi.",
+      "test": "parse(\"claude\"/\"codex\"/\"github\") đúng; parse_agent từ chối github; thứ tự ALL Claude, Codex, Github",
+      "doneWhen": "cargo build và cargo test --lib pass, locate vẫn gọi được từ agent.rs, auth.rs, formatter.rs"
+    },
+    {
+      "id": "TASK-002",
+      "title": "Phase 0: tạo permission.rs với PathPolicy, Guarded, Unguarded, Sandbox",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Nhóm E, F, G dùng chung Sandbox thay ba bản kiểm đường dẫn",
+      "requirements": ["REQ-007", "REQ-005"],
+      "acceptanceCriteria": ["AC-007", "AC-005"],
+      "design": "architecture.md 6.1–6.5, 5 (Strategy PathPolicy)",
+      "inScope": "PathPolicy (Guarded dùng workspace::denied, Unguarded bỏ qua); Sandbox kiểm đường dẫn thật nằm trong thư mục, chặn symlink ra ngoài, key lỗi giữ nguyên",
+      "outOfScope": "Một trait Permission chung cho mọi quyền (thiết kế đã loại); sửa các điểm lạ ở 6.5",
+      "dependencies": ["TASK-000"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/permission.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm pub mod permission;"
+        }
+      ],
+      "approach": "1. Đọc workspace.rs, tools.rs, attachments.rs để lấy đúng thứ tự 5 bước kiểm. 2. Viết Sandbox giữ thứ tự và key lỗi. 3. Test trên thư mục tạm.",
+      "test": "Đường dẫn ra ngoài root, symlink ra ngoài, file trong danh sách cấm bị từ chối đúng key; chính sách Unguarded cho qua danh sách cấm",
+      "doneWhen": "Module build, test của Sandbox pass, chưa module nào khác phụ thuộc"
+    },
+    {
+      "id": "TASK-003",
+      "title": "Nhóm A: AgentCli, adapter Claude/Codex, TurnRequest, TurnRegistry",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Phần lớn rẽ nhánh theo CLI và hàm 12 tham số nằm ở đây",
+      "requirements": ["REQ-001", "REQ-002", "REQ-003", "REQ-005"],
+      "acceptanceCriteria": ["AC-001", "AC-002", "AC-005"],
+      "design": "architecture.md 4.3 (agent.rs + agent/claude.rs + agent/codex.rs, commands/agent.rs), 5 (Adapter, Factory, Observer, Proxy Responder), 7.3",
+      "inScope": "trait AgentCli; ClaudeAgent, CodexAgent; TurnOptions, TurnRequest, TurnObserver, EventFilter, Responder, Decision; TurnRegistry thay Approvals + Running; giữ agent::Cli, ask_once, split_message, shape Event làm shim đến Phase 3",
+      "outOfScope": "Đổi thứ tự cờ CLI, serde Event, tên lệnh agent_send/agent_permission/agent_stop",
+      "dependencies": ["TASK-001"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Tách theo trait, giữ shim"
+        },
+        {
+          "path": "src-tauri/src/agent/claude.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/agent/codex.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "Dùng TurnRegistry, TauriTurnObserver"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "manage(TurnRegistry) thay Approvals, Running"
+        }
+      ],
+      "approach": "1. Chép nguyên test args hiện có sang turn_args, giữ assert. 2. Tách parse_line theo adapter. 3. Gom registry. 4. Chạy test agent:: và commands::agent.",
+      "test": "turn_args Claude và Codex đúng thứ tự mục 7.3; resume_arguments_differ_per_cli, model_goes_to_the_flag_of_each_cli, extra_projects_become_add_dir_flags, permission_mode_is_a_claude_flag_only còn nguyên; Done luôn là sự kiện cuối; khoá poison trả agent.reply_failed / agent.stop_failed",
+      "doneWhen": "Test agent qua như baseline, clippy sạch, generate_handler không đổi"
+    },
+    {
+      "id": "TASK-004",
+      "title": "Nhóm B: AuthTool với ClaudeAuth, CodexAuth, GithubAuth",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Loại 6 match self và sáu lần lặp dựng Command",
+      "requirements": ["REQ-001", "REQ-002", "REQ-005"],
+      "acceptanceCriteria": ["AC-001", "AC-002", "AC-005"],
+      "design": "architecture.md 4.3 (auth.rs + auth/*), 5 (Template Method, Strategy)",
+      "inScope": "trait AuthTool (status khung + read_sign_in hook, start_login, logout); SignIn; status_all đọc song song bằng std::thread::scope; GithubAuth::profile giữ quy tắc ảnh (host avatars.githubusercontent.com, 200 000 byte); CliKind::auth",
+      "outOfScope": "Đổi key lỗi auth.*, đổi luồng đăng nhập, đổi lệnh auth_*",
+      "dependencies": ["TASK-001"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/auth.rs",
+          "changes": "Chuyển sang trait và factory"
+        },
+        {
+          "path": "src-tauri/src/auth/claude.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/auth/codex.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/auth/github.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/commands/auth.rs",
+          "changes": "parse_provider thành CliKind::parse(..).ok_or(\"auth.unsupported\")"
+        }
+      ],
+      "approach": "1. Giữ test parse hiện có của auth.rs, chuyển file đi cùng hàm. 2. Viết khung status và ba hook. 3. So thứ tự status_all Claude, Codex, Github.",
+      "test": "Test parse_limits, id_token_email, decode_base64_url còn nguyên; auth_status trả đúng thứ tự; key lỗi giữ hậu tố |<program>",
+      "doneWhen": "Test auth qua như baseline, không còn Provider:: trong crate"
+    },
+    {
+      "id": "TASK-005",
+      "title": "Nhóm C1: profiles và usage dùng CliKind",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Bỏ CLIS và CLI_NAMES",
+      "requirements": ["REQ-001", "REQ-003", "REQ-005"],
+      "acceptanceCriteria": ["AC-001", "AC-003", "AC-005"],
+      "design": "architecture.md 4.1 (bảng rẽ nhánh), 5 (store: chỉ thay bảng tên CLI)",
+      "inScope": "Thay const CLIS bằng CliKind::config_variable, CLI_NAMES và Cli::parse bằng CliKind; giữ ProfileStore::{environment, active_environment, active_id}",
+      "outOfScope": "Đổi schema bảng profiles, usage_events",
+      "dependencies": ["TASK-001"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/profiles.rs",
+          "changes": "Dùng CliKind"
+        },
+        {
+          "path": "src-tauri/src/usage.rs",
+          "changes": "Dùng CliKind::parse_agent"
+        }
+      ],
+      "approach": "1. Thay từng chỗ rẽ nhánh theo CLI. 2. Giữ thứ tự liệt kê Claude, Codex, Github (profiles), Claude, Codex (thống kê).",
+      "test": "Test profiles và usage hiện có qua; usage không nhận github",
+      "doneWhen": "Grep CLIS, CLI_NAMES rỗng ở hai file, test qua"
+    },
+    {
+      "id": "TASK-006",
+      "title": "Nhóm C2: settings và chats dùng CliKind",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Bỏ literal claude|codex trong validate và Cli::parse",
+      "requirements": ["REQ-001", "REQ-003", "REQ-005"],
+      "acceptanceCriteria": ["AC-001", "AC-003", "AC-005"],
+      "design": "architecture.md 4.1, 5",
+      "inScope": "validate() dùng CliKind::parse_agent; chats.rs thay agent::Cli::parse; giữ cột serde riêng theo CLI (claude_plan, claude_model...)",
+      "outOfScope": "Cột steps và di trú DB (đã sửa ở db.rs), đổi enum lỗi",
+      "dependencies": ["TASK-001"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/settings.rs",
+          "changes": "Dùng CliKind"
+        },
+        {
+          "path": "src-tauri/src/chats.rs",
+          "changes": "Dùng CliKind"
+        }
+      ],
+      "approach": "1. Thay hai chỗ validate và hai chỗ parse. 2. Giữ SettingsStore::get().",
+      "test": "Test settings (language, appearance, code_colors, plans) và chats:: (8 test) qua",
+      "doneWhen": "Test qua, grep literal rẽ nhánh rỗng ở hai file"
+    },
+    {
+      "id": "TASK-007",
+      "title": "Nhóm D: GitRepo gom thao tác git của một workspace",
+      "status": "DONE",
+      "priority": "P3",
+      "priorityReason": "Lợi ích vừa phải, ưu tiên thấp nhất (câu hỏi mở 4)",
+      "requirements": ["REQ-002", "REQ-005"],
+      "acceptanceCriteria": ["AC-002", "AC-005"],
+      "design": "architecture.md 5 (Facade GitRepo), 7.2 nhóm D",
+      "inScope": "struct GitRepo + impl cho nhóm hàm tự do; valid_worktree_name; giữ git::ensure_worktree(root, base, name)",
+      "outOfScope": "Đổi hành vi lệnh local_*; thay git CLI bằng thư viện",
+      "dependencies": ["TASK-001"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/git.rs",
+          "changes": "GitRepo + impl"
+        },
+        {
+          "path": "src-tauri/src/commands/git.rs",
+          "changes": "Gọi GitRepo"
+        }
+      ],
+      "approach": "1. Bọc hàm tự do thành method, hàm cũ giữ nếu nhóm khác dùng. 2. Giữ tên test.",
+      "test": "Test git hiện có qua; tên worktree chỉ chữ, số, gạch",
+      "doneWhen": "Test qua, chữ ký lệnh local_* không đổi"
+    },
+    {
+      "id": "TASK-008",
+      "title": "Nhóm E: ToolScanner dùng Sandbox",
+      "status": "DONE",
+      "priority": "P2",
+      "priorityReason": "Bỏ một trong ba bản kiểm đường dẫn",
+      "requirements": ["REQ-007", "REQ-005"],
+      "acceptanceCriteria": ["AC-007", "AC-005"],
+      "design": "architecture.md 5 (ToolScanner), 6.4, 7.2 nhóm E",
+      "inScope": "struct ToolScanner + impl; Base dùng Sandbox; giữ lệnh tools_*",
+      "outOfScope": "Đổi 5 loại danh sách, đổi cách đọc md/toml",
+      "dependencies": ["TASK-002"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/tools.rs",
+          "changes": "ToolScanner, Sandbox"
+        }
+      ],
+      "approach": "1. Thay hàm kiểm đường dẫn riêng bằng Sandbox. 2. Giữ test.",
+      "test": "Test tools hiện có qua; file ngoài thư mục base bị bỏ qua như cũ",
+      "doneWhen": "Test qua, clippy sạch"
+    },
+    {
+      "id": "TASK-009",
+      "title": "Nhóm F: Workspace dùng Sandbox và Access, giữ điểm lạ 6.5",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Rủi ro cao nhất về quyền: sai chính sách thì trình xem ghi được vào .git/",
+      "requirements": ["REQ-007", "REQ-005"],
+      "acceptanceCriteria": ["AC-007", "AC-005"],
+      "design": "architecture.md 6.2–6.5, 5 (Proxy Access), 7.4",
+      "inScope": "Workspace { sandbox }, Access; method cũ uỷ quyền; Access::current_hash gọi parent_directory với Guarded cố định; read_bytes và delete luôn Guarded; rename_for_viewer kiểm cha bằng Unguarded",
+      "outOfScope": "Sửa các điểm lạ ở 6.5; sửa test binary_files_are_read_as_bytes_but_not_as_text",
+      "dependencies": ["TASK-002"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/workspace.rs",
+          "changes": "Workspace { sandbox }, Access"
+        }
+      ],
+      "approach": "1. Đọc ma trận quyền 6.2. 2. Chuyển từng method giữ chính sách. 3. Giữ pub workspace::{denied, normalise, hash} và hằng MAX_*.",
+      "test": "Test workspace và commands/state hiện có qua; test mới đề xuất: trình xem ghi vào .git/ bị chặn (cần duyệt)",
+      "doneWhen": "Test qua như baseline, mọi method pub của Workspace còn nguyên chữ ký"
+    },
+    {
+      "id": "TASK-010",
+      "title": "Nhóm G: PhoneGate cho remote, attachments dùng Sandbox",
+      "status": "DONE",
+      "priority": "P2",
+      "priorityReason": "Gom cổng điện thoại và bỏ bản kiểm đường dẫn thứ ba",
+      "requirements": ["REQ-007", "REQ-005"],
+      "acceptanceCriteria": ["AC-007", "AC-005"],
+      "design": "architecture.md 5 (Proxy PhoneGate), 6.5, 7.2 nhóm G",
+      "inScope": "PhoneGate (token, tối đa 3 máy, chỉ nhận send); attachments::read dùng Sandbox; giữ remote::Remote::{start, stop}, attachments::{save, read}",
+      "outOfScope": "Sửa lỗi đếm quá 3 kết nối đang bắt tay; mã hoá ws://",
+      "dependencies": ["TASK-002"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/remote.rs",
+          "changes": "PhoneGate"
+        },
+        {
+          "path": "src-tauri/src/attachments.rs",
+          "changes": "Dùng Sandbox"
+        }
+      ],
+      "approach": "1. Rút logic xác thực vào PhoneGate giữ thứ tự kiểm. 2. Thay kiểm đường dẫn của attachments.",
+      "test": "Test remote và attachments hiện có qua; test mới đề xuất: PhoneGate::accepted_prompt (cần duyệt)",
+      "doneWhen": "Test qua, hành vi 6.5 về MAX_PHONES giữ nguyên"
+    },
+    {
+      "id": "TASK-011",
+      "title": "Phase 3: xoá agent::Cli và shim, thay literal claude",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Hoàn tất R1/R2 sau khi mọi nhóm xong",
+      "requirements": ["REQ-001", "REQ-002", "REQ-004"],
+      "acceptanceCriteria": ["AC-001", "AC-002", "AC-004"],
+      "design": "architecture.md 7.2 Phase 3",
+      "inScope": "Xoá agent::Cli, shim ask_once, re-export locate; formatter.rs dùng cli::locate; commands/git.rs và commands/inline_ask.rs dùng ClaudeAgent::ask_once và CliKind::Claude.name()",
+      "outOfScope": "Đổi hành vi local_commit_message (chỉ hồ sơ Claude, không khoá API) và inline_ask (thêm khoá API)",
+      "dependencies": [
+        "TASK-003",
+        "TASK-004",
+        "TASK-005",
+        "TASK-006",
+        "TASK-007",
+        "TASK-008",
+        "TASK-009",
+        "TASK-010"
+      ],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Xoá Cli, shim"
+        },
+        {
+          "path": "src-tauri/src/formatter.rs",
+          "changes": "cli::locate"
+        },
+        {
+          "path": "src-tauri/src/commands/git.rs",
+          "changes": "ClaudeAgent::ask_once, CliKind::Claude.name()"
+        },
+        {
+          "path": "src-tauri/src/commands/inline_ask.rs",
+          "changes": "ClaudeAgent::ask_once, CliKind::Claude.name()"
+        }
+      ],
+      "approach": "1. Grep mọi tham chiếu còn lại. 2. Xoá shim. 3. Chạy toàn bộ lệnh kiểm chứng.",
+      "test": "Grep Provider::, CLI_NAMES, CLIS, matches! literal ngoài cli.rs rỗng; test qua như baseline",
+      "doneWhen": "AC-001, AC-002, AC-004 thoả"
+    },
+    {
+      "id": "TASK-012",
+      "title": "Cập nhật tài liệu theo mã mới và kiểm chứng cuối",
+      "status": "DONE",
+      "priority": "P1",
+      "priorityReason": "Thiết kế phải khớp mã sau refactor",
+      "requirements": ["REQ-004", "REQ-005", "REQ-006"],
+      "acceptanceCriteria": ["AC-004", "AC-005", "AC-006"],
+      "design": "architecture.md 7.5; docs/system/architecture.md mục 3, 4–7",
+      "inScope": "Cập nhật mục 3 (cấu trúc mã) và chuyển mục 4–7 từ đề xuất sang đã triển khai; chạy đủ 4 lệnh kiểm chứng và so baseline",
+      "outOfScope": "Viết lại các mục luồng và sơ đồ không đổi",
+      "dependencies": ["TASK-011"],
+      "filesToChange": [
+        {
+          "path": "docs/system/architecture.md",
+          "changes": "Mục 3 và trạng thái mục 4–7"
+        }
+      ],
+      "approach": "1. Đối chiếu cây module thật. 2. Sửa sơ đồ và số lệnh. 3. Chạy kiểm chứng.",
+      "test": "fmt, clippy -D warnings, cargo test --lib pass như baseline; git diff --stat -- src/ src-tauri/Cargo.toml rỗng",
+      "doneWhen": "Tài liệu khớp mã, mọi AC có bằng chứng chạy thật"
+    }
+  ],
+  "risks": [
+    "Sai thứ tự tham số khi bỏ insert(...) của Codex: giữ nguyên 4 test args (7.4)",
+    "CliKind::parse nhận github ở chỗ trước chỉ nhận claude/codex: store dùng parse_agent",
+    "Đổi kiểu State<Approvals>/State<Running> làm lệnh panic: nhóm A sửa lib.rs cùng lượt",
+    "Access đổi chính sách ở current_hash: trình xem ghi được vào .git/ (xem 6.5)",
+    "Xung đột với thay đổi chưa commit trong src-tauri/: TASK-000",
+    "dyn Trait không Sync: bound Sync trên trait"
+  ],
+  "rollback": "Mỗi nhóm là một nhánh/commit riêng sau khi người dùng cho phép commit; hoàn tác bằng git revert từng nhóm. Phase 0 chỉ thêm file mới nên an toàn khi bỏ.",
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Khi nào hai việc clippy/i18n xong và được commit để bắt đầu Phase 0? (blocker)",
+      "default": "Chờ người dùng xác nhận"
+    },
+    {
+      "id": "Q2",
+      "question": "Đồng ý gộp Approvals + Running thành TurnRegistry (đổi lib.rs manage, không đổi lệnh)?",
+      "default": "Có"
+    },
+    {
+      "id": "Q3",
+      "question": "Các điểm lạ ở 6.5 giữ nguyên hay sửa ở việc riêng?",
+      "default": "Giữ"
+    },
+    {
+      "id": "Q4",
+      "question": "GitRepo lợi ích vừa phải: làm trong đợt này hay bỏ?",
+      "default": "Làm, ưu tiên thấp nhất"
+    },
+    {
+      "id": "Q5",
+      "question": "Thêm các test đề xuất ở 7.5 (Codex đủ cờ, ghi vào .git/ bị chặn, PhoneGate::accepted_prompt, TurnRegistry::pid)?",
+      "default": "Chờ duyệt"
+    }
+  ]
+}

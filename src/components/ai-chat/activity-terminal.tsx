@@ -2,9 +2,17 @@ import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Columns2, SquareTerminal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { TREE_PATH_MIME } from '@/components/ai-chat/code-viewer/constants';
 import { ide, onTerminalData, onTerminalExit } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t, translateError } from '@/lib/i18n';
+
+/** `path` as one shell word: left as is when it is plain, otherwise in single quotes. */
+function shellQuote(path: string): string {
+    return /^[\w@%+=:,./-]+$/.test(path)
+        ? path
+        : `'${path.replaceAll("'", "'\\''")}'`;
+}
 
 const THEME = {
     dark: { background: '#09090b', foreground: '#e4e4e7' },
@@ -111,7 +119,34 @@ function ShellTerminal({
 
             observer.observe(element);
 
+            // * A file or folder dragged from the file tree is typed at the cursor as a path (the shell starts in the project folder, so the relative path fits); it is not run.
+            const acceptsDrop = (event: DragEvent) =>
+                event.dataTransfer?.types.includes(TREE_PATH_MIME) === true;
+            const onDragOver = (event: DragEvent) => {
+                if (acceptsDrop(event)) {
+                    event.preventDefault();
+                }
+            };
+            const onDrop = (event: DragEvent) => {
+                const path = event.dataTransfer?.getData(TREE_PATH_MIME);
+
+                if (!acceptsDrop(event) || !path) {
+                    return;
+                }
+
+                event.preventDefault();
+                void ide
+                    .terminalWrite(sessionId, `${shellQuote(path)} `)
+                    .catch(() => undefined);
+                instance.focus();
+            };
+
+            element.addEventListener('dragover', onDragOver);
+            element.addEventListener('drop', onDrop);
+
             cleanup = () => {
+                element.removeEventListener('dragover', onDragOver);
+                element.removeEventListener('drop', onDrop);
                 observer.disconnect();
                 input.dispose();
                 stops.forEach((stop) => stop());

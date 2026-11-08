@@ -6,10 +6,10 @@ use crate::activity::{
     self, ActivityStore, ChatImage, FileAction, FileEvent, FileEventFilter, ImageData,
     NewFileEvent, NewPlanRecord, Page, PlanRecord,
 };
-use crate::plan::StoredPlan;
-use crate::plan_docs::{self, PlanDoc};
-use crate::plan_project::{self, SavedPlan};
-use crate::plan_store::PlanStore;
+use crate::plans::docs::{self as plan_docs, PlanDoc};
+use crate::plans::project::{self as plan_project, SavedPlan};
+use crate::plans::store::PlanStore;
+use crate::plans::types::StoredPlan;
 use crate::settings::SettingsStore;
 use crate::workspace::Workspace;
 use serde::Serialize;
@@ -238,7 +238,7 @@ fn save_session_plan(
         .map(PlanStore::new)
         .and_then(|store| store.load(session))
         .and_then(|json| StoredPlan::from_json(&json))
-        .ok_or_else(|| crate::plan_project::PlanSaveError::Empty.to_string())?;
+        .ok_or_else(|| crate::plans::project::PlanSaveError::Empty.to_string())?;
     let saved: SavedPlan =
         plan_project::save(workspace, plans_dir, &stored, activity::now_seconds())
             .map_err(|error| error.to_string())?;

@@ -7,7 +7,7 @@ import { FileContextMenu } from '@/components/ai-chat/file-context-menu';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import type { AiChatProposal } from '@/types';
 import { cn } from '@/lib/utils';
-import { CHANGE_BADGES } from './constants';
+import { CHANGE_BADGES, TREE_PATH_MIME } from './constants';
 import type { TreeNode } from './tree';
 
 function TreeItemsList({
@@ -84,6 +84,18 @@ function TreeItemsList({
                         >
                             <button
                                 type="button"
+                                draggable
+                                onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = 'copy';
+                                    event.dataTransfer.setData(
+                                        TREE_PATH_MIME,
+                                        node.path,
+                                    );
+                                    event.dataTransfer.setData(
+                                        'text/plain',
+                                        node.path,
+                                    );
+                                }}
                                 onDoubleClick={() =>
                                     isDir ? undefined : onAttach?.(node.path)
                                 }

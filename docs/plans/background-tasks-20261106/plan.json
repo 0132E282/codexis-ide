@@ -1,0 +1,518 @@
+{
+  "title": "Ngăn Background tasks: việc chạy nền của AI",
+  "description": "Kế hoạch triển khai docs/system/background-tasks.md: Rust dựng bảng việc nền từ sự kiện system của Claude CLI (background_tasks_changed, task_started, task_updated, task_notification) và sub-agent (sub-agent là một loại việc nền), Event::Background, 3 lệnh Tauri, dừng qua CLI (control_request nếu được, không thì TaskStop qua model), lưu tasks.json theo tên dự án trong dữ liệu app, ngăn Background tasks ở dock dưới cạnh Terminal.",
+  "tags": ["background-tasks", "dock", "terminal", "chat", "rust", "frontend"],
+  "createdAt": "2026-11-06",
+  "updatedAt": "2026-11-07",
+  "status": "DRAFT_CHO_DUYET",
+  "design": {
+    "source": "docs/system/background-tasks.md",
+    "related": [
+      "docs/system/plan-pane.md",
+      "docs/system/side-chat.md",
+      "docs/system/architecture.md"
+    ],
+    "note": "2026-11-07: TASK-B01 đã chụp CLI thật (claude 2.1.319). KHÔNG có BashOutput/KillShell; việc nền là Bash{run_in_background:true}, CLI cấp task_id (vd bg6iuh7hi), không có pid; dừng bằng tool TaskStop{task_id} (deferred); có 4 sự kiện system riêng. Bảng việc nền dựng từ sự kiện system, không đoán từ tool_use. Mẫu dòng thật ở background-tasks.md mục 2.1. Chưa kiểm: việc nền có sống sau khi lượt/CLI kết thúc; dừng bằng control_request; giá trị status khi lệnh nền tự xong/lỗi (TASK-B03 chụp bổ sung)."
+  },
+  "hardConstraints": [
+    "Tính năng viết ở backend Rust; frontend chỉ vẽ",
+    "Chỉ thêm 3 lệnh background_* và Event::Background ra frontend; không đổi DB, không thêm dependency",
+    "Dữ liệu lưu trong <app_data_dir>/projects/<khoá-dự-án>/, không ghi vào thư mục dự án người dùng",
+    "Chỉ theo dõi việc AI đã được quyền chạy; không tự chạy lệnh shell mới. Ngoại lệ có kiểm soát: khi dừng bằng TaskStop qua model, app chỉ gửi một tin yêu cầu dừng đúng task_id đã liệt kê",
+    "Bảng việc nền dựng từ sự kiện system của CLI; không suy ra từ tool_use Bash/TaskStop",
+    "Không git commit/push khi người dùng chưa yêu cầu"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-B1",
+      "source": "1",
+      "text": "Mở/đóng/phóng to ngăn trong dock dưới"
+    },
+    {
+      "id": "REQ-B2",
+      "source": "2",
+      "text": "Thấy việc nền AI khởi chạy theo thời gian thực"
+    },
+    {
+      "id": "REQ-B3",
+      "source": "3",
+      "text": "Dừng được việc nền đang chạy"
+    },
+    {
+      "id": "REQ-B4",
+      "source": "4",
+      "text": "Xoá việc đã kết thúc"
+    },
+    {
+      "id": "REQ-B5",
+      "source": "5",
+      "text": "Tính ở backend Rust"
+    },
+    {
+      "id": "REQ-B6",
+      "source": "6",
+      "text": "Lưu theo tên dự án trong dữ liệu app"
+    },
+    {
+      "id": "REQ-B7",
+      "source": "7",
+      "text": "Trạng thái rỗng, đa ngữ vi/en"
+    },
+    {
+      "id": "REQ-B8",
+      "source": "8",
+      "text": "Dọn tiến trình khi thoát app hoặc đóng dự án"
+    },
+    {
+      "id": "REQ-B9",
+      "source": "9",
+      "text": "Sub-agent xử lý như việc nền: cùng bảng, cùng vòng đời, cùng lưu"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-B1",
+      "requirement": "REQ-B1",
+      "text": "Mục Background tasks trong menu ... bật/tắt ngăn và hiện dấu ✓ khi mở; phóng to, đóng hoạt động; ngăn ở dock dưới cạnh Terminal"
+    },
+    {
+      "id": "AC-B2",
+      "requirement": "REQ-B2",
+      "text": "Khi CLI phát system task_started (is_backgrounded=true, task_type=local_bash) thì bảng có dòng kind=shell Running (id = tool_use_id, nhãn = description); khi CLI báo kết thúc (task_updated.patch.status / task_notification.status) thì dòng đổi trạng thái tương ứng; dòng tool_use Bash một mình không tạo việc"
+    },
+    {
+      "id": "AC-B3",
+      "requirement": "REQ-B3",
+      "text": "background_stop(root, id) với việc shell Running của đúng dự án gửi yêu cầu dừng task_id tới CLI theo cơ chế chốt ở TASK-B03 (control_request nếu CLI nhận; không thì tin yêu cầu model gọi TaskStop, ghi rõ tốn thêm lượt model); dòng chỉ thành Stopped khi CLI báo (task_updated killed hoặc task_notification stopped); id lạ trả background.not_found; việc không còn Running hoặc lượt đã đóng stdin trả background.stop_failed. Không dùng pid của lệnh nền"
+    },
+    {
+      "id": "AC-B4",
+      "requirement": "REQ-B4",
+      "text": "background_clear xoá việc đã kết thúc, giữ việc đang chạy"
+    },
+    {
+      "id": "AC-B5",
+      "requirement": "REQ-B5",
+      "text": "Frontend không tự tách việc nền từ Event::Tool (Bash run_in_background, TaskStop); danh sách chỉ đến từ Event::Background và background_list"
+    },
+    {
+      "id": "AC-B6",
+      "requirement": "REQ-B6",
+      "text": "projects/<khoá>/tasks.json có việc đã kết thúc (tối đa 50); thư mục dự án không đổi"
+    },
+    {
+      "id": "AC-B7",
+      "requirement": "REQ-B7",
+      "text": "Rỗng hiện đủ biểu tượng và chữ, vi/en"
+    },
+    {
+      "id": "AC-B8",
+      "requirement": "REQ-B8",
+      "text": "Thoát app hoặc đóng dự án: mọi lượt CLI còn chạy bị dừng qua TurnRegistry (pid của tiến trình CLI, đã có), việc Running trong bảng chuyển Stopped; kiểm bằng ps không còn tiến trình CLI của app và không còn tiến trình con của lệnh nền thử (vd sleep). Nếu B03 cho thấy lệnh nền sống sót sau khi CLI bị dừng thì AC này BLOCKED tới khi có cách dọn được duyệt"
+    },
+    {
+      "id": "AC-B9",
+      "requirement": "REQ-B9",
+      "text": "Sub-agent hiện dòng kind=subagent khi bắt đầu, Done khi xong; bấm mở khung xem sub-agent; xoá và tasks.json áp dụng cho cả hai loại; dừng dòng sub-agent dừng cả lượt và có ghi chú"
+    }
+  ],
+  "verificationCommands": [
+    "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+    "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "cargo test --manifest-path src-tauri/Cargo.toml --lib -- --skip terminal::tests::a_shell_runs_in_a_pseudo_terminal",
+    "pnpm typecheck",
+    "pnpm lint"
+  ],
+  "codingGroups": [
+    {
+      "id": "BG1",
+      "name": "background backend",
+      "tasks": ["TASK-B01", "TASK-B02", "TASK-B03", "TASK-B04"],
+      "dependsOnGroups": [],
+      "parallel": false
+    },
+    {
+      "id": "BG2",
+      "name": "background frontend",
+      "tasks": ["TASK-B05"],
+      "dependsOnGroups": ["BG1"],
+      "parallel": false
+    },
+    {
+      "id": "BG3",
+      "name": "kiểm chứng và tài liệu",
+      "tasks": ["TASK-B06"],
+      "dependsOnGroups": ["BG2"],
+      "parallel": false
+    }
+  ],
+  "executionOrder": [
+    "TASK-B01",
+    "TASK-B02",
+    "TASK-B03",
+    "TASK-B04",
+    "TASK-B05",
+    "TASK-B06"
+  ],
+  "tasks": [
+    {
+      "id": "TASK-B01",
+      "title": "Chụp việc nền thật của Claude: Bash chạy nền, sự kiện system, cách dừng",
+      "status": "DONE",
+      "statusNote": "Chụp thật 2026-11-07 với claude 2.1.319 trong thư mục tạm (b01.jsonl ở scratchpad phiên, sẽ mất; các dòng mẫu đã chép vào docs/system/background-tasks.md mục 2.1 để làm fixture). Kết luận: KHÔNG có BashOutput/KillShell. Khởi chạy: tool_use Bash{command, description, run_in_background:true}; tool_result có tool_use_result.backgroundTaskId (vd bg6iuh7hi), đầu ra ở tệp .../tasks/<task_id>.output (model đọc bằng Read). Dừng: tool TaskStop{task_id} (deferred, model tìm bằng ToolSearch). Sự kiện type=system: background_tasks_changed{tasks:[{task_id,run_id,task_type,description}]} (đến TRƯỚC task_started), task_started{task_id,run_id,tool_use_id,description,is_backgrounded,task_type}, task_updated{task_id,run_id,patch:{status:\"killed\",end_time}}, task_notification{task_id,run_id,tool_use_id,status:\"stopped\",output_file,summary}; summary = description, không phải đầu ra. Không có pid ở bất kỳ dòng nào => cách dừng (a) theo pid bị loại. Chưa kiểm, chuyển sang TASK-B03: việc nền có sống sau khi lượt/CLI kết thúc; dừng bằng control_request; giá trị status khi lệnh tự xong hoặc lỗi; sub-agent có phát task_* không.",
+      "priority": "P0",
+      "priorityReason": "Tên công cụ và trường là [chưa kiểm]; cách dừng việc nền chưa rõ (Q2)",
+      "requirements": ["REQ-B2", "REQ-B3"],
+      "acceptanceCriteria": ["AC-B2", "AC-B3"],
+      "design": "background-tasks.md mục 2, 2.1, Q2, Q3",
+      "inScope": "Chạy lượt thử yêu cầu chạy lệnh nền; chép dòng tool_use/tool_result/system làm fixture; xác nhận app có pid hay không",
+      "outOfScope": "Sửa mã sản phẩm",
+      "dependencies": [],
+      "filesToChange": [],
+      "approach": "1. Chạy claude -p stream-json ở thư mục tạm. 2. Ghi tên công cụ, trường, cách nhận định danh việc nền. 3. Chốt hướng dừng.",
+      "test": "Có fixture thật; kết luận cách dừng: (a) theo pid không khả thi; chọn control_request (thử ở B03), dự phòng TaskStop qua model",
+      "doneWhen": "Thiết kế được cập nhật theo kết quả (đã cập nhật 2026-11-07)"
+    },
+    {
+      "id": "TASK-B02",
+      "title": "background.rs: BackgroundTasks, Task, TaskState",
+      "status": "DONE",
+      "priority": "P0",
+      "priorityReason": "Nơi duy nhất giữ bảng việc nền và vòng đời",
+      "requirements": ["REQ-B2", "REQ-B4", "REQ-B5"],
+      "acceptanceCriteria": ["AC-B2", "AC-B4", "AC-B5"],
+      "design": "background-tasks.md 3.4, 3.5, 3.6",
+      "inScope": "start, attach, finish, stop, clear_finished, snapshot; giới hạn 50 việc, label 200 ký tự, outputTail 2 000 ký tự; test vòng đời",
+      "outOfScope": "Đọc dòng CLI (TASK-B03)",
+      "dependencies": ["TASK-B01"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/background.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "Thêm pub mod background (đã có); manage(BackgroundTasks) dời sang TASK-B04"
+        }
+      ],
+      "approach": "1. Dùng fixture B01. 2. serde camelCase. 3. Khoá Mutex như Running.",
+      "test": "Vòng đời Running→Done/Failed/Stopped; clear giữ việc đang chạy; vượt 50 thì bỏ việc xong cũ nhất",
+      "doneWhen": "cargo test module background pass, clippy sạch",
+      "notes": "Phần manage(BackgroundTasks) ở lib.rs chưa làm trong B02, dời sang TASK-B04 (nơi nối lệnh Tauri và state). Ghi chú 2026-11-07 theo B01 (không mở lại B02, chỉnh trong B03/B04): quy ước Task.id = tool_use_id (cùng không gian id với Event::Tool và sub-agent), Task.handle = task_id của CLI (vd bg6iuh7hi), không bao giờ là pid. Chỗ cần chỉnh trong background.rs: (1) chú thích của handle đang ghi 'shell id' -> 'task_id do CLI cấp'; dữ liệu test 'bash_1' -> dạng 'bg…' (thẩm mỹ). (2) stop() đánh dấu Stopped ngay: với kind=shell trạng thái Stopped phải chờ CLI báo rồi đi qua finish(id, Stopped); B04 cần hàm chỉ kiểm 'tồn tại + Running' và trả handle (vd stop_target(id) -> Result<Option<String>, &'static str>) không đổi trạng thái; stop() giữ cho dòng sub-agent/dừng cả lượt. (3) Cần biết việc thuộc lượt nào để gửi lệnh dừng qua đúng stdin: thêm run_id của app (serde skip) vào Task hoặc tham số start. (4) Đối chiếu background_tasks_changed cần đọc các handle đang Running (vd running_handles()). (5) Không có BashOutput: set_output chỉ dùng khi có đầu ra thật (Q7); summary của task_notification là mô tả, không ghi vào outputTail."
+    },
+    {
+      "id": "TASK-B03",
+      "title": "agent.rs/claude.rs: dựng bảng việc nền từ sự kiện system của CLI, gộp sub-agent, phát Event::Background; chụp bổ sung cách dừng và vòng đời",
+      "status": "PARTIAL",
+      "statusNote": "Mã xong 2026-11-07: background_change/TurnObserver::background, claude_background.rs, test pass. CHUA: chụp (i) (ii) (iii) (v) (bị chặn quyền chạy), chưa ghi design 2.1. (iv) đã đo: control_request stop_task chạy, không tốn lượt model.",
+      "priority": "P0",
+      "priorityReason": "Đưa danh sách việc tới frontend; chốt cơ chế dừng cho B04",
+      "requirements": ["REQ-B2", "REQ-B3", "REQ-B5", "REQ-B8", "REQ-B9"],
+      "acceptanceCriteria": ["AC-B2", "AC-B5", "AC-B9"],
+      "design": "background-tasks.md 2.1, 3.2, 3.3, 3.6",
+      "inScope": "A. Chụp bổ sung (claude -p stream-json, thư mục tạm, không đụng workspace thật), ghi kết quả vào background-tasks.md 2.1: (i) lệnh nền tự xong exit 0 và exit 1 -> giá trị status của task_updated/task_notification; (ii) lượt kết thúc khi lệnh nền (sleep 60) còn chạy: CLI có chờ không, có phát task_* không, sau khi CLI thoát và sau agent_stop (kill SIGTERM pid CLI) ps còn tiến trình sleep không; (iii) sub-agent có phát task_started (task_type khác local_bash) không; (iv) với --input-format stream-json: gửi control_request (subtype interrupt, và loại dừng riêng một task nếu CLI nhận) xem có task_updated killed mà không thêm lượt model; (v) dự phòng: gửi tin user yêu cầu gọi TaskStop{task_id} trên stdin đang mở, đo số lượt/usage tăng thêm. B. Mã: AgentCli thêm hàm mặc định background_change(&self, line) -> Option<BackgroundChange> (codex trả None); claude.rs đọc type=system: task_started (is_backgrounded=true, task_type=local_bash) -> Started{id: tool_use_id, handle: task_id, label: description}; task_updated patch.status và task_notification status -> Finished{handle, state} (killed/stopped -> Stopped; completed -> Done, failed -> Failed sau khi (i) xác nhận; giá trị lạ bỏ qua); background_tasks_changed -> Running{handles} để đối chiếu (đến trước task_started nên không dùng để tạo dòng). TurnObserver thêm hàm mặc định background(change); TurnRequest::stream gọi; TauriTurnObserver áp vào BackgroundTasks được cấp và phát Event::Background(snapshot_json) chỉ khi bảng đổi. Event::Subagent/SubagentDone tạo/đóng dòng kind=subagent, giữ nguyên hai sự kiện cũ. Khi lượt kết thúc (Event::Done): dòng shell Running của lượt xử lý theo kết quả (ii). Chỉnh nhỏ background.rs theo ghi chú B02 (1)(3)(4).",
+      "outOfScope": "Đổi serde biến thể cũ; đọc tool_use Bash/TaskStop để đoán việc nền; lệnh Tauri và manage state (TASK-B04). Làm tuần tự với Context, Plan và refactor OOP nhóm A",
+      "dependencies": ["TASK-B01", "TASK-B02"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Event::Background(String) cuối enum; AgentCli::background_change và TurnObserver::background có mặc định; stream() chuyển thay đổi việc nền cho observer"
+        },
+        {
+          "path": "src-tauri/src/agent/claude.rs",
+          "changes": "Đọc 4 subtype system thành BackgroundChange; test với dòng mẫu mục 2.1"
+        },
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "TauriTurnObserver áp thay đổi vào BackgroundTasks được cấp, phát Event::Background khi bảng đổi; dòng sub-agent"
+        },
+        {
+          "path": "src-tauri/src/background.rs",
+          "changes": "Chú thích handle = task_id; run_id của lượt; running_handles(); có thể đặt enum BackgroundChange ở đây"
+        },
+        {
+          "path": "docs/system/background-tasks.md",
+          "changes": "Ghi kết quả chụp bổ sung (i)-(v) vào mục 2.1 và chốt Q2"
+        }
+      ],
+      "approach": "1. Chụp bổ sung (A), cập nhật design và chốt cơ chế dừng. 2. Thêm biến thể cuối enum và hai hàm trait có mặc định. 3. Parse system trong claude.rs. 4. Áp vào bảng, phát khi đổi. 5. Test với dòng mẫu.",
+      "test": "Unit test claude.rs với dòng mẫu 2.1: task_started -> Started(id=toolu_…, handle=bg6iuh7hi); task_updated killed -> Finished Stopped; task_notification stopped -> Finished Stopped; background_tasks_changed -> Running; init/thinking_tokens/commands_changed -> None; dòng assistant tool_use Bash run_in_background một mình -> không có thay đổi việc nền. Test áp chuỗi changed -> started -> updated -> notification -> changed[]: đúng một dòng Running rồi Stopped, Event::Background phát đúng 2 lần (không phát khi không đổi). Sub-agent ra dòng kind=subagent Running rồi Done. Test agent hiện có pass như baseline. Có ghi chép (i)-(v) trong design.",
+      "doneWhen": "Test qua, clippy sạch; design 2.1 có kết quả (i)-(v) và Q2 đã chốt cơ chế dừng"
+    },
+    {
+      "id": "TASK-B04",
+      "title": "Lệnh Tauri background_list, background_stop, background_clear, manage state, dừng khi thoát và lưu tasks.json",
+      "status": "DONE",
+      "statusNote": "Mã xong 2026-11-07: commands/background.rs, BackgroundStore, tasks.json, stop qua control_request stop_task (chỉ khi stdin mở, chế độ manual), dừng lượt khi thoát app. CHƯA chạy app thật/ps. 2026-11-07: fmt, clippy --all-targets -D warnings sạch; cargo test --lib: 246 pass, 2 fail không thuộc task (git::file_named_star_does_not_pull_in_other_files, workspace::binary_files_are_read_as_bytes_but_not_as_text).",
+      "priority": "P1",
+      "priorityReason": "Điều khiển và lưu theo dự án",
+      "requirements": ["REQ-B3", "REQ-B4", "REQ-B6", "REQ-B8"],
+      "acceptanceCriteria": ["AC-B3", "AC-B4", "AC-B6", "AC-B8"],
+      "design": "background-tasks.md 3.6, 3.7; plan-pane.md 3.8",
+      "inScope": "manage state ở lib.rs: bảng việc nền theo dự án (khoá dự án như project_data.rs), cấp bảng cho TauriTurnObserver; commands/background.rs với workspace_for(root); background_stop theo cơ chế chốt ở B03: id lạ -> background.not_found, không Running -> background.stop_failed; shell: lấy handle (task_id) và run của việc, ưu tiên control_request trên stdin đang mở của lượt (Responder trong TurnRegistry); nếu B03 cho thấy không dùng được thì gửi tin user yêu cầu model gọi TaskStop{task_id} (tốn thêm lượt model, chỉ khi stdin còn mở ở chế độ --input-format stream-json); stdin đã đóng hoặc lượt đã hết -> background.stop_failed (không tự dừng cả lượt, xem Q8); trạng thái Stopped chỉ đặt khi CLI báo về qua B03; dòng sub-agent: dừng cả lượt bằng agent_stop như AC-B9. Ghi projects/<khoá>/tasks.json qua project_data.rs (việc đã kết thúc, tối đa 50). Khi thoát app/đóng dự án: dừng mọi lượt còn chạy qua TurnRegistry (pid CLI), đánh dấu việc Running là Stopped. src/lib/api.ts: đối chiếu backgroundApi đã có (B05) khớp tên và tham số lệnh.",
+      "outOfScope": "Chạy lệnh nền do người dùng gõ (đó là Terminal); giữ hoặc tìm pid của lệnh nền; đọc tệp .output (Q7)",
+      "dependencies": ["TASK-B03", "TASK-P07"],
+      "filesToChange": [
+        {
+          "path": "src-tauri/src/commands/background.rs",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src-tauri/src/commands/mod.rs",
+          "changes": "Khai báo module"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "changes": "manage(bảng việc nền theo dự án); thêm 3 lệnh vào generate_handler; dừng các lượt khi app thoát"
+        },
+        {
+          "path": "src-tauri/src/commands/agent.rs",
+          "changes": "TurnRegistry: gửi dòng điều khiển/tin dừng qua Responder của đúng run; dừng mọi lượt khi thoát"
+        },
+        {
+          "path": "src-tauri/src/agent.rs",
+          "changes": "Responder: hàm ghi một dòng control_request hoặc tin user (cạnh answer), nếu cơ chế chốt cần"
+        },
+        {
+          "path": "src-tauri/src/background.rs",
+          "changes": "stop_target(id) kiểm không đổi trạng thái (ghi chú B02 (2))"
+        },
+        {
+          "path": "src/lib/api.ts",
+          "changes": "Đối chiếu backgroundApi (list/stop/clear) với chữ ký Rust; chỉ sửa nếu lệch"
+        }
+      ],
+      "approach": "1. Cập nhật Rust và api.ts cùng lượt (quy ước contract). 2. Dừng theo cơ chế B03 chốt, không đặt Stopped trước khi CLI báo. 3. Ghi tệp nguyên tử. 4. Dừng lượt khi thoát.",
+      "test": "Dừng việc lạ trả background.not_found; việc đã xong trả background.stop_failed; stdin đã đóng trả background.stop_failed; với lượt thật (thư mục tạm) dừng một lệnh nền sleep 60 -> nhận task_updated killed và dòng thành Stopped, ghi rõ có tốn thêm lượt model không (num_turns/usage); clear giữ việc chạy; tasks.json đúng chỗ; thoát app: ps không còn CLI và tiến trình sleep thử",
+      "doneWhen": "Test qua, git status dự án thử nghiệm sạch"
+    },
+    {
+      "id": "TASK-B05",
+      "title": "Frontend: use-background-tasks.ts và background-tasks-pane.tsx trong dock dưới",
+      "status": "DONE",
+      "statusNote": "2026-11-07 (kiểm lại): đã NỐI xong: app.tsx (dock dưới cạnh Terminal, phóng to/đóng, onOpenSubagent -> viewSubagent), workspace-pane.tsx (nút bật/tắt aria-pressed), use-background-tasks.ts, background-tasks-pane.tsx, backgroundApi, i18n vi/en; pnpm typecheck sạch, eslint 0 lỗi trên các tệp này. CHƯA: Playwright/ảnh chứng, chạy app thật; mục menu ... dấu ✓ đang là nút ở thanh công cụ, chưa theo design (menu ...); lối tắt sidebar (Q5) chưa đổi nguồn. Ghi chú cũ: Đã tạo use-background-tasks.ts, background-tasks-pane.tsx, backgroundApi trong src/lib/api.ts, khoá i18n vi/en. CHUA NOI: app.tsx, chat-panel.tsx, turn-events.ts, sidebar.tsx, subagent-view; chua co backend (TASK-B04) nen background_* se loi; chua chay Playwright. Ghi chú 2026-11-07 (theo B01): không có BashOutput nên outputTail có thể rỗng; dòng shell cần hiển thị ổn khi không có đầu ra; nút dừng phải chờ Event::Background để đổi Stopped (có thể mất vài giây, có thể tốn một lượt model) và hiện lỗi background.stop_failed khi lượt đã kết thúc.",
+      "priority": "P1",
+      "priorityReason": "Phần người dùng nhìn thấy theo ảnh mẫu",
+      "requirements": ["REQ-B1", "REQ-B7", "REQ-B9"],
+      "acceptanceCriteria": ["AC-B1", "AC-B7", "AC-B9"],
+      "design": "background-tasks.md 1, 3.5; docs/design/DESIGN.md",
+      "inScope": "Hook nhận kind=background và nạp background_list; ngăn Background tasks: tiêu đề, nút xoá (thùng rác), phóng to, đóng; dòng việc (nhãn, trạng thái, thời gian, đầu ra mở rộng khi có, nút dừng); trạng thái rỗng; mục bật/tắt \"Background tasks\" có dấu ✓ trong menu ... của thanh công cụ (cùng menu với Side chat); dock dưới cạnh Terminal; khoá i18n vi và en; dòng sub-agent mở subagent-view.tsx; lối tắt ở thanh bên lấy nguồn từ bảng việc nền (xem Q5); không tự tách việc nền từ Event::Tool",
+      "outOfScope": "Lên lịch, thông báo hệ thống",
+      "dependencies": ["TASK-B04"],
+      "filesToChange": [
+        {
+          "path": "src/components/shell/chat/use-background-tasks.ts",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/components/shell/background-tasks-pane.tsx",
+          "changes": "Tạo mới"
+        },
+        {
+          "path": "src/components/shell/chat/turn-events.ts",
+          "changes": "Kiểu và nhánh background"
+        },
+        {
+          "path": "src/app.tsx",
+          "changes": "Gắn ngăn vào dock dưới (cùng terminalOpen)"
+        },
+        {
+          "path": "src/lib/i18n/en/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/lib/i18n/vi/shell-chat.ts",
+          "changes": "Khoá mới"
+        },
+        {
+          "path": "src/components/shell/chat-panel.tsx",
+          "changes": "Mục menu ... bật/tắt ngăn, dấu ✓ theo trạng thái"
+        },
+        {
+          "path": "src/components/shell/chat/subagent-view.tsx",
+          "changes": "Mở từ dòng của ngăn"
+        },
+        {
+          "path": "src/components/shell/sidebar.tsx",
+          "changes": "Lối tắt sub-agent lấy nguồn từ bảng việc nền (nếu giữ, Q5)"
+        }
+      ],
+      "approach": "1. Đọc app.tsx phần Terminal và ResizeHandle. 2. Vẽ đúng ảnh mẫu. 3. Dữ liệu giả trong Playwright.",
+      "test": "Playwright: mục menu bật/tắt và dấu ✓ đúng; rỗng; có việc Running, Done, Stopped; dòng shell không có đầu ra; dừng (chờ sự kiện, hiện lỗi stop_failed); thùng rác; phóng to, đóng; vi/en; viewport hẹp không cuộn ngang",
+      "doneWhen": "Có ảnh chứng Playwright, lint và typecheck không thêm lỗi"
+    },
+    {
+      "id": "TASK-B06",
+      "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
+      "status": "PARTIAL",
+      "priority": "P1",
+      "priorityReason": "Đóng AC có bằng chứng chạy thật",
+      "requirements": [
+        "REQ-B1",
+        "REQ-B2",
+        "REQ-B3",
+        "REQ-B4",
+        "REQ-B5",
+        "REQ-B6",
+        "REQ-B7",
+        "REQ-B8",
+        "REQ-B9"
+      ],
+      "acceptanceCriteria": [
+        "AC-B1",
+        "AC-B2",
+        "AC-B3",
+        "AC-B4",
+        "AC-B5",
+        "AC-B6",
+        "AC-B7",
+        "AC-B8",
+        "AC-B9"
+      ],
+      "design": "background-tasks.md toàn bộ",
+      "inScope": "Chạy 5 lệnh kiểm chứng; trong pnpm start (dự án thử, không phải workspace thật) yêu cầu AI chạy lệnh nền (vd sleep 60), xem dòng Running, dừng (ghi lại cơ chế và số lượt model phát sinh), xoá; để một lệnh nền tự xong để thấy Done; thoát app kiểm ps không còn CLI và tiến trình sleep; cập nhật tài liệu và architecture.md",
+      "outOfScope": "Mục Ngoài phạm vi",
+      "dependencies": ["TASK-B05"],
+      "filesToChange": [
+        {
+          "path": "docs/system/background-tasks.md",
+          "changes": "Cập nhật trạng thái"
+        },
+        {
+          "path": "docs/system/architecture.md",
+          "changes": "Thêm Event::Background, 3 lệnh, tasks.json, các sự kiện system task_* của CLI"
+        }
+      ],
+      "approach": "1. Chạy kiểm chứng. 2. Chạy app. 3. Cập nhật tài liệu.",
+      "test": "Bảng khớp việc thật theo sự kiện system; dừng được và có ghi chi phí; tasks.json đúng chỗ; thư mục dự án không đổi; ps sạch sau khi thoát",
+      "doneWhen": "Mọi AC có bằng chứng, tài liệu khớp mã"
+    }
+  ],
+  "traceability": [
+    {
+      "requirement": "REQ-B1",
+      "acceptanceCriteria": ["AC-B1"],
+      "tasks": ["TASK-B05", "TASK-B06"],
+      "test": "Playwright mục menu, phóng to, đóng",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-B2",
+      "acceptanceCriteria": ["AC-B2"],
+      "tasks": ["TASK-B01", "TASK-B02", "TASK-B03", "TASK-B06"],
+      "test": "B01 fixture thật (đạt); B02 test vòng đời (đạt); B03 test parse 4 subtype system và áp bảng; B06 lượt thật",
+      "result": "B01, B02 DONE; B03, B06 chưa chạy"
+    },
+    {
+      "requirement": "REQ-B3",
+      "acceptanceCriteria": ["AC-B3"],
+      "tasks": ["TASK-B01", "TASK-B03", "TASK-B04", "TASK-B06"],
+      "test": "B01 xác nhận không có pid, có TaskStop (đạt); B03 thử control_request và TaskStop qua model; B04 test not_found/stop_failed và dừng lượt thật; B06 dừng trong app",
+      "result": "B01 DONE; còn lại chưa chạy"
+    },
+    {
+      "requirement": "REQ-B4",
+      "acceptanceCriteria": ["AC-B4"],
+      "tasks": ["TASK-B02", "TASK-B04", "TASK-B06"],
+      "test": "clear_finished giữ việc chạy (B02 đạt); background_clear (B04)",
+      "result": "B02 DONE; còn lại chưa chạy"
+    },
+    {
+      "requirement": "REQ-B5",
+      "acceptanceCriteria": ["AC-B5"],
+      "tasks": ["TASK-B02", "TASK-B03", "TASK-B06"],
+      "test": "Bảng dựng ở Rust từ sự kiện system; tool_use Bash một mình không tạo việc; frontend chỉ nhận Event::Background",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-B6",
+      "acceptanceCriteria": ["AC-B6"],
+      "tasks": ["TASK-B04", "TASK-B06"],
+      "test": "tasks.json ở projects/<khoá>/, tối đa 50; git status dự án thử sạch",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-B7",
+      "acceptanceCriteria": ["AC-B7"],
+      "tasks": ["TASK-B05", "TASK-B06"],
+      "test": "Playwright trạng thái rỗng vi/en",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-B8",
+      "acceptanceCriteria": ["AC-B8"],
+      "tasks": ["TASK-B03", "TASK-B04", "TASK-B06"],
+      "test": "B03 (ii) đo lệnh nền sau khi CLI thoát/bị kill; B04 dừng lượt khi thoát; B06 ps sau khi thoát",
+      "result": "Chưa chạy"
+    },
+    {
+      "requirement": "REQ-B9",
+      "acceptanceCriteria": ["AC-B9"],
+      "tasks": ["TASK-B03", "TASK-B05", "TASK-B06"],
+      "test": "Dòng kind=subagent Running -> Done; mở khung xem; dừng cả lượt",
+      "result": "Chưa chạy"
+    }
+  ],
+  "risks": [
+    "Không có pid của lệnh nền (đã đo B01): app không thể tự giết lệnh nền; mọi cách dừng đều đi qua CLI hoặc dừng cả lượt",
+    "Dừng qua control_request chưa kiểm; nếu không được thì TaskStop qua model tốn ít nhất một lượt model (token, tiền, thời gian) và phụ thuộc model làm đúng yêu cầu",
+    "Mọi cách gửi vào CLI cần stdin còn mở: hiện app chỉ dùng --input-format stream-json ở chế độ \"Hỏi từng việc\"; chế độ khác stdin đóng ngay sau prompt, và ở mọi chế độ Responder đóng stdin khi có dòng result -> ngoài các trường hợp đó background_stop trả stop_failed. Bật stream-json input cho mọi chế độ sẽ thêm AskUserQuestion/EnterPlanMode/ExitPlanMode (P01) nên không làm trong plan này",
+    "Chưa biết lệnh nền có sống sau khi lượt kết thúc hoặc khi agent_stop gửi SIGTERM tới CLI (kill chỉ pid CLI trên Unix): nếu sống thì thành tiến trình mồ côi app không thấy, AC-B8 có thể BLOCKED",
+    "Giá trị status khi lệnh nền tự xong/lỗi chưa chụp (chỉ thấy killed/stopped): ánh xạ completed/failed là giả định tới khi B03 (i) xác nhận",
+    "Tên/hình sự kiện system là của claude 2.1.319, không có tài liệu ổn định: bản CLI khác có thể đổi; parser bỏ qua giá trị lạ, không lỗi",
+    "Sub-agent có thể cũng phát task_* (task_type khác local_bash): chỉ nhận local_bash từ system, sub-agent giữ nguồn Event::Subagent để không trùng dòng",
+    "Bốn việc cùng sửa parse_line/agent.rs: làm tuần tự",
+    "TASK-B04 cần project_data.rs của plan Ngăn Plan (TASK-P07): tệp đã có trong src-tauri/src, vẫn giữ phụ thuộc tới khi P07 DONE",
+    "Đầu ra lệnh có thể nhạy cảm: chỉ lưu ở dữ liệu app, cắt độ dài, không vào logs; tệp .output nằm ở thư mục tạm của CLI, không đọc ở đợt này (Q7)"
+  ],
+  "rollback": "Git revert từng nhóm khi được phép commit; xoá tay projects/<khoá>/tasks.json không ảnh hưởng DB.",
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Codex có việc nền tương đương?",
+      "default": "Chỉ Claude đợt này (Codex chưa chụp được: hết hạn mức)"
+    },
+    {
+      "id": "Q2",
+      "question": "Dừng lệnh nền do CLI giữ: (a) theo pid, (b) qua CLI, (c) chỉ đọc?",
+      "default": "Đã quyết 2026-11-07: (a) loại vì không có pid. Chọn (b): thử control_request ở B03; nếu không được thì tin yêu cầu model gọi TaskStop{task_id}, ghi rõ chi phí lượt model. Không gửi được (stdin đóng) thì background_stop trả stop_failed",
+      "answer": "Một phần: cơ chế cụ thể chốt sau B03"
+    },
+    {
+      "id": "Q3",
+      "question": "Xác nhận tên công cụ và trường bằng lượt thật?",
+      "default": "Có (TASK-B01)",
+      "answer": "Đã xác nhận 2026-11-07 (claude 2.1.319): Bash run_in_background, backgroundTaskId, TaskStop, 4 sự kiện system; không có BashOutput/KillShell"
+    },
+    {
+      "id": "Q4",
+      "question": "Điện thoại có xem việc nền?",
+      "default": "Không"
+    },
+    {
+      "id": "Q5",
+      "question": "Thanh bên có giữ lối tắt tới sub-agent không (sub-agent đã đi chung bảng)?",
+      "default": "Giữ lối tắt, cùng nguồn dữ liệu"
+    },
+    {
+      "id": "Q6",
+      "question": "Mục menu ... là điểm vào duy nhất, hay thêm nút riêng trên thanh công cụ?",
+      "default": "Chỉ mục menu (như ảnh)"
+    },
+    {
+      "id": "Q7",
+      "question": "Đầu ra gần nhất: không có BashOutput, đầu ra nằm ở tệp output_file (thư mục tạm của CLI). Rust có đọc phần cuối tệp này không?",
+      "default": "Không đọc ở đợt này; outputTail để rỗng cho dòng shell. Nếu đọc thì chỉ tệp đúng output_file do CLI báo, tên trùng task_id, đọc một lần khi kết thúc, cắt 2 000 ký tự, cần duyệt riêng"
+    },
+    {
+      "id": "Q8",
+      "question": "Khi không gửi được lệnh dừng qua CLI (stdin đã đóng), nút dừng có tự dừng cả lượt bằng agent_stop không?",
+      "default": "Không tự dừng cả lượt; trả background.stop_failed, người dùng tự bấm dừng chat nếu muốn"
+    },
+    {
+      "id": "Q9",
+      "question": "Có bật --input-format stream-json cho mọi chế độ để dừng được lệnh nền không (kéo theo tool AskUserQuestion/EnterPlanMode/ExitPlanMode)?",
+      "default": "Không trong plan này; cân nhắc sau khi plan Plan-pane chốt hành vi ExitPlanMode"
+    }
+  ]
+}

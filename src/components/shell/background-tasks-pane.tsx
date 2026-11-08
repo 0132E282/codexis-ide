@@ -48,13 +48,11 @@ function TaskRow({
                         <ChevronRight aria-hidden="true" className="size-4" />
                     )}
                 </button>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                    {t(
-                        isSubagent
-                            ? 'background_tasks.subagent'
-                            : 'background_tasks.shell',
-                    )}
-                </span>
+                {!isSubagent && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                        {t('background_tasks.shell')}
+                    </span>
+                )}
                 {isSubagent ? (
                     <button
                         type="button"
@@ -115,7 +113,69 @@ function TaskRow({
     );
 }
 
-/** Background tab of the bottom panel: what the AI runs in the background (shell commands and sub-agents) of one project, with stop. */
+type TaskCategory =
+    'terminal' | 'python' | 'node' | 'rust' | 'subagent' | 'other';
+
+// * The category tabs, in the order shown; a tab appears only while it has tasks.
+const CATEGORIES: { id: TaskCategory; label: string }[] = [
+    { id: 'terminal', label: 'background_tasks.category_terminal' },
+    { id: 'python', label: 'background_tasks.category_python' },
+    { id: 'node', label: 'background_tasks.category_node' },
+    { id: 'rust', label: 'background_tasks.category_rust' },
+    { id: 'subagent', label: 'subagents.title' },
+    { id: 'other', label: 'background_tasks.category_other' },
+];
+
+// * The first word of a shell command, by what it runs.
+const COMMAND_CATEGORY: Record<string, TaskCategory> = {
+    python: 'python',
+    python3: 'python',
+    pip: 'python',
+    pip3: 'python',
+    uv: 'python',
+    pytest: 'python',
+    node: 'node',
+    npm: 'node',
+    pnpm: 'node',
+    yarn: 'node',
+    npx: 'node',
+    bun: 'node',
+    deno: 'node',
+    vite: 'node',
+    tsc: 'node',
+    cargo: 'rust',
+    rustc: 'rust',
+    sh: 'terminal',
+    bash: 'terminal',
+    zsh: 'terminal',
+    fish: 'terminal',
+    cd: 'terminal',
+    ls: 'terminal',
+    cat: 'terminal',
+    tail: 'terminal',
+    grep: 'terminal',
+    git: 'terminal',
+    make: 'terminal',
+    curl: 'terminal',
+    docker: 'terminal',
+    ssh: 'terminal',
+    sleep: 'terminal',
+    echo: 'terminal',
+};
+
+/** The category tab a task belongs to: sub-agents have their own, a shell command goes by its first word. */
+function categoryOf(task: BackgroundTask): TaskCategory {
+    if (task.kind === 'subagent') {
+        return 'subagent';
+    }
+
+    const command = task.label.trim().split(/\s+/)[0] ?? '';
+    const name = command.split('/').pop() ?? '';
+
+    return COMMAND_CATEGORY[name] ?? 'other';
+}
+
+/** The Việc chạy nền tab of the bottom panel: what the AI runs in the background of one project, with stop; a small tab bar splits it into terminal, python, node, rust, sub-agent and other. */
 export function BackgroundTasksPane({
     tasks,
     failed,
@@ -128,6 +188,20 @@ export function BackgroundTasksPane({
     /** Opens the sub-agent view of the task with this id. */
     onOpenSubagent: (id: string) => void;
 }) {
+    const [chosen, setChosen] = useState<TaskCategory>('terminal');
+    const counts = new Map<TaskCategory, number>();
+
+    for (const task of tasks) {
+        const category = categoryOf(task);
+
+        counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+
+    const categories = CATEGORIES.filter((item) => counts.has(item.id));
+    // * A tab whose tasks are all gone falls back to the first that has some.
+    const category = counts.has(chosen) ? chosen : categories[0]?.id;
+    const shown = tasks.filter((task) => categoryOf(task) === category);
+
     return (
         <section
             aria-label={t('background_tasks.title')}
@@ -149,16 +223,43 @@ export function BackgroundTasksPane({
                     </p>
                 </div>
             ) : (
-                <ul className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                    {tasks.map((task) => (
-                        <TaskRow
-                            key={task.id}
-                            task={task}
-                            onStop={onStop}
-                            onOpenSubagent={onOpenSubagent}
-                        />
-                    ))}
-                </ul>
+                <>
+                    <div
+                        role="tablist"
+                        aria-label={t('background_tasks.categories')}
+                        className="flex shrink-0 items-center gap-1 overflow-x-auto border-b px-3 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    >
+                        {categories.map((item) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={category === item.id}
+                                onClick={() => setChosen(item.id)}
+                                className={cn(
+                                    'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                    category === item.id &&
+                                        'bg-accent font-medium text-accent-foreground',
+                                )}
+                            >
+                                {t(item.label)}
+                                <span className="text-[11px] opacity-70">
+                                    {counts.get(item.id)}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                    <ul className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                        {shown.map((task) => (
+                            <TaskRow
+                                key={task.id}
+                                task={task}
+                                onStop={onStop}
+                                onOpenSubagent={onOpenSubagent}
+                            />
+                        ))}
+                    </ul>
+                </>
             )}
         </section>
     );

@@ -896,21 +896,21 @@ sequenceDiagram
     participant M as use-agent-turns (chat chính)
     participant R as remote.rs
 
-    U->>SC: hỏi (Cmd/Ctrl+; mở khung)
+    U->>SC: hỏi (Cmd/Ctrl+dấu chấm phẩy mở khung)
     SC->>A: agent_send(runId "side-<uuid>", cli claude, mode plan, session của tab, worktree null)
     A->>P: chạy trong thư mục dự án
     P-->>A: dòng JSON
     A-->>SC: agent-event {runId side-…}
     A-->>M: cùng sự kiện, bỏ qua (runId không thuộc runs của hook chính)
     A-->>R: cùng sự kiện, event_message trả None (không tới điện thoại)
-    SC->>SC: giữ session id theo tab; không chat_save_turn, không ghi DB
+    SC->>SC: giữ session id theo tab, không chat_save_turn, không ghi DB
 ```
 
 Ranh giới `runId`:
 
-| Tiền tố | Chủ | Ai xử lý sự kiện |
-| --- | --- | --- |
-| `run-…` (chat chính) | `use-agent-turns.ts` | hook chính (lọc theo `runs`); `remote.rs` phát cho điện thoại |
+| Tiền tố              | Chủ                                    | Ai xử lý sự kiện                                                                                                                          |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `run-…` (chat chính) | `use-agent-turns.ts`                   | hook chính (lọc theo `runs`); `remote.rs` phát cho điện thoại                                                                             |
 | `side-…` (side chat) | `use-side-chat.ts` (map `runId` → tab) | chỉ hook side chat; `remote.rs::event_message` lọc theo hằng `SIDE_RUN_PREFIX = "side-"` (khớp tiền tố chính xác trên `runId` kiểu chuỗi) |
 
 Giữ nguyên: danh sách cuộc chat, `chat_save_turn`, `usage` không bị side chat đụng tới (trạng thái chỉ nằm trong bộ nhớ React, đóng app là mất). Hiện chỉ Claude (`--permission-mode plan`); `agent/codex.rs::turn_args` chưa có cờ chỉ đọc nên side chat không gửi `codex`.
@@ -930,14 +930,14 @@ sequenceDiagram
     P-->>A: control_request can_use_tool ExitPlanMode {plan}
     A-->>O: Event::Plan (kind text, markdown) rồi Event::Permission
     O-->>C: agent-event kind=plan
-    O->>D: PlanStore.record: plans/&lt;session&gt;.json; RunLog: logs/&lt;ngày&gt;.log
+    O->>D: PlanStore.record: plans/#lt;session#gt;.json, RunLog: logs/#lt;ngày#gt;.log
     C->>O: plan_load(session, root) khi mở chat cũ
-    O->>D: đọc plans/&lt;session&gt;.json
+    O->>D: đọc plans/#lt;session#gt;.json
 ```
 
 - `Event::Plan(String)`: JSON camelCase `{"kind":"text","markdown":...}` (dạng `todos` có trong `plan.rs` nhưng không được phát, P2 hoãn); chỉ lấy từ `control_request`, không từ dòng `assistant`; không mang `planFilePath`.
 - `plan_load(root, session) -> Option<String>`: lệnh Tauri trong `commands/plan.rs`, qua `workspace_for(root)`, đọc `PlanStore` của dự án.
-- Lưu theo dự án: `project_data.rs` (`ProjectData::dir/read/write_atomic/append_line`) tạo `projects/<khoá-dự-án>/` trong `app_data_dir`, chặn `..` và symlink; `plan_store.rs` ghi `plans/<session>.json`; `run_log.rs` ghi `logs/<yyyy-mm-dd>.log` (chỉ `Start`, `Tool`, `Error`, `End`; 14 ngày, 5 MB mỗi tệp). Lỗi ghi bị bỏ qua, không làm hỏng lượt. Thư mục dự án của người dùng chỉ nhận plan khi bật `save_plans_to_project` (mặc định tắt).
+- Lưu theo dự án: `project_data.rs` (`ProjectData::dir/read/write_atomic/append_line`) tạo `projects/<khoá-dự-án>/` trong `app_data_dir`, chặn `..` và symlink; `plans/store.rs` ghi `plans/<session>.json`; `run_log.rs` ghi `logs/<yyyy-mm-dd>.log` (chỉ `Start`, `Tool`, `Error`, `End`; 14 ngày, 5 MB mỗi tệp). Lỗi ghi bị bỏ qua, không làm hỏng lượt. Thư mục dự án của người dùng chỉ nhận plan khi bật `save_plans_to_project` (mặc định tắt).
 
 ## 9. Bộ sơ đồ bổ sung
 

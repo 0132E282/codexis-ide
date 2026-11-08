@@ -23,3 +23,6 @@ export const CHAT_OPEN_WIDTH = 384;
 export const FILE_PANEL_DEFAULT_WIDTH = 600;
 // * The change list column starts this wide; the chat takes the rest, and the column is dragged wider or narrower.
 export const CHANGES_PANEL_DEFAULT_WIDTH = FILE_PANEL_DEFAULT_WIDTH;
+
+/** Drag data type carrying the path (relative to the project) of a file or folder dragged out of the file tree. */
+export const TREE_PATH_MIME = 'application/x-codexis-tree-path';

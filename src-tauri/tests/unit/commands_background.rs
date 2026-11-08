@@ -3,7 +3,7 @@ use crate::background::{TaskKind, TaskState, ERROR_NOT_FOUND};
 use tempfile::tempdir;
 
 #[test]
-fn finished_tasks_are_saved_and_loaded_and_running_ones_are_not() {
+fn finished_tasks_are_not_kept_and_old_saved_ones_are_dropped() {
     let data = tempdir().unwrap();
     let store = BackgroundStore::new(data.path().to_path_buf());
     let project = store.project("/p", "demo", "id1").unwrap();
@@ -17,13 +17,11 @@ fn finished_tasks_are_saved_and_loaded_and_running_ones_are_not() {
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(text.contains("done one") && !text.contains("running one"));
 
+    // * The file of an older version still holds a finished task: opening the project drops it.
     let reopened = BackgroundStore::new(data.path().to_path_buf())
         .project("/p", "demo", "id1")
         .unwrap();
-    let tasks = reopened.table.snapshot();
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].id, "a");
-    assert_eq!(tasks[0].state, TaskState::Done);
+    assert!(reopened.table.snapshot().is_empty());
 }
 
 #[test]

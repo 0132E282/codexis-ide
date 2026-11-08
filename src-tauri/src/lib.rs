@@ -20,10 +20,7 @@ pub mod language_server_convert;
 pub mod language_server_protocol;
 pub mod migrations;
 pub mod permission;
-pub mod plan;
-pub mod plan_docs;
-pub mod plan_project;
-pub mod plan_store;
+pub mod plans;
 pub mod profiles;
 pub mod project_data;
 pub mod projects;
@@ -161,6 +158,7 @@ pub fn run() {
             commands::plan::plan_load,
             commands::plan::plan_docs_list,
             commands::plan::plan_doc_read,
+            commands::plan::plan_doc_set_status,
             commands::activity::file_events_list,
             commands::activity::file_events_delete,
             commands::activity::file_events_clear,

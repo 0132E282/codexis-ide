@@ -3,7 +3,7 @@
 use super::{asks_person, text, AgentCli, Event, TurnOptions, PLAN_MODE, READ_ONLY_PLAN_MODE};
 use crate::cli::{self, CliKind};
 use crate::context::ContextUsage;
-use crate::plan::Plan;
+use crate::plans::types::Plan;
 use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;

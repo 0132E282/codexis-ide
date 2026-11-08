@@ -53,6 +53,8 @@ impl ProjectTasks {
 
         if let Ok(file) = serde_json::from_str::<TasksFile>(&saved) {
             table.restore(file.tasks);
+            // * A finished task is not kept: the ones saved by an older version go too.
+            table.clear_finished();
         }
 
         Self {
@@ -151,6 +153,8 @@ impl BackgroundStore {
 
         for project in projects.values() {
             if project.table.stop_all_running() {
+                project.table.clear_finished();
+
                 if let Err(message) = project.save() {
                     eprintln!("background tasks not saved: {message}");
                 }
@@ -227,6 +231,7 @@ pub fn background_stop(
                 .map_err(|_| ERROR_STOP_FAILED.to_string())?;
 
             project.table.stop(&id)?;
+            project.table.clear_finished();
             project.save()
         }
     }

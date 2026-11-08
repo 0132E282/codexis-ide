@@ -3,12 +3,12 @@ use super::plan::project_data_dir;
 use super::state::AppState;
 use crate::activity;
 use crate::agent::{self, AgentCli, Decision, Responder, TurnObserver, TurnOptions, TurnRequest};
-use crate::background::{BackgroundChange, TaskKind, TaskState};
+use crate::background::{BackgroundChange, TaskKind};
 use crate::cli::CliKind;
 use crate::credentials::CredentialStore;
 use crate::git;
-use crate::plan::Plan;
-use crate::plan_store::PlanStore;
+use crate::plans::store::PlanStore;
+use crate::plans::types::Plan;
 use crate::profiles::ProfileStore;
 use crate::relay::{self, HopRunner, RelayStop};
 use crate::run_log::{LogEntry, RunLog};
@@ -347,6 +347,8 @@ impl TurnObserver for TauriTurnObserver {
 
     fn background(&self, change: &BackgroundChange) {
         if self.background.table.apply(change) {
+            // * A task that ended is dropped at once: nothing finished is kept in the table.
+            self.background.table.clear_finished();
             self.announce_background();
         }
     }
@@ -367,7 +369,8 @@ impl TurnObserver for TauriTurnObserver {
                     )
                 })
             }
-            agent::Event::SubagentDone(id) => self.background.table.finish(id, TaskState::Done),
+            // * A finished sub-agent leaves the table: only its final result stays, in the chat.
+            agent::Event::SubagentDone(id) => self.background.table.remove(id),
             _ => false,
         };
 
@@ -753,6 +756,7 @@ pub async fn agent_send(
 
         // * A sub-agent lives inside the CLI process, so none is still running when the turn ends.
         if background.table.stop_running_subagents() {
+            background.table.clear_finished();
             observer.announce_background();
         }
 

@@ -5,7 +5,6 @@ import {
     mergeWaiting,
     parsePayload,
     withDelta,
-    withPlan,
     withSpeaker,
     withSubtext,
     withText,
@@ -14,13 +13,11 @@ import {
 } from '@/components/shell/chat/turn-events';
 import type {
     ContextUsage,
-    PlanEvent,
     SubagentEvent,
     SubtextEvent,
     ToolCallEvent,
     ToolResultEvent,
 } from '@/components/shell/chat/turn-events';
-import type { PlanData } from '@/components/shell/plan-pane';
 import { waitForSession } from '@/components/shell/chat/session-wait';
 import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { errorText, ide, onAgentEvent, onRemoteSend } from '@/lib/ide';
@@ -112,7 +109,6 @@ export function useAgentTurns({
         busy: boolean;
         setTurns: Dispatch<SetStateAction<Turn[]>>;
         setContext: Dispatch<SetStateAction<ContextUsage | null>>;
-        setPlan: Dispatch<SetStateAction<PlanData | null>>;
         setSubagents: Dispatch<SetStateAction<Subagent[]>>;
         sessions: MutableRefObject<Partial<Record<AgentCli, string>>>;
         workspace: MutableRefObject<string | null>;
@@ -126,7 +122,6 @@ export function useAgentTurns({
         busy,
         setTurns,
         setContext,
-        setPlan,
         setSubagents,
         sessions,
         workspace,
@@ -278,6 +273,18 @@ export function useAgentTurns({
                 }
                 case 'subagentdone':
                     working.current.delete(payload);
+                    // * Only the final result of a finished sub-agent stays (in the call that returned it): its own steps are dropped, they are not kept in the chat.
+                    update(runId, (turn) => {
+                        if (turn.sub?.[payload] === undefined) {
+                            return turn;
+                        }
+
+                        const rest = { ...turn.sub };
+
+                        delete rest[payload];
+
+                        return { ...turn, sub: rest };
+                    });
                     setSubagents((current) =>
                         current.map((agent) =>
                             agent.id === payload
@@ -294,15 +301,6 @@ export function useAgentTurns({
                             ...turn,
                             permissions: [...(turn.permissions ?? []), asked],
                         }));
-                    }
-
-                    break;
-                }
-                case 'plan': {
-                    const written = parsePayload<PlanEvent>(payload);
-
-                    if (written !== null) {
-                        setPlan((current) => withPlan(current, written));
                     }
 
                     break;
@@ -530,6 +528,11 @@ export function useAgentTurns({
                 { prompt, cli, conversation: conversation.current },
             ]);
 
+            // * The message now sits in the thread: the box is emptied like for a turn that starts.
+            if (fromComposer) {
+                onComposerSent();
+            }
+
             return;
         }
 
@@ -579,8 +582,6 @@ export function useAgentTurns({
             send(prompt, false);
         }
     });
-
-    const clearWaiting = useStableCallback(() => keepQueue([]));
 
     // * A message from the phone app is sent as if it was typed here.
     const remoteSend = useStableCallback((prompt: string) => {
@@ -671,7 +672,6 @@ export function useAgentTurns({
 
     return {
         waiting,
-        clearWaiting,
         choose,
         sendFromComposer,
         sendPrompt,

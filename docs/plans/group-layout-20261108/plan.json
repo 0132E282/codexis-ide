@@ -1,0 +1,152 @@
+{
+  "title": "Chế độ group (chat grid): bố cục co giãn, không chồng khung",
+  "description": "Kế hoạch sửa lỗi cột Thay đổi/Tệp bị chữ của khung khác đè lên trong chế độ group và khi kéo cột rộng; cột co theo chỗ trống, kẹp bề rộng đã lưu, giữ bề rộng tối thiểu cho ô chat, kiểm chứng bằng ảnh.",
+  "tags": ["group", "chat-grid", "layout", "code-viewer", "frontend"],
+  "createdAt": "2026-11-08",
+  "status": "CHO_KIEM_TRA",
+  "design": {
+    "source": "docs/system/group-layout.md",
+    "related": ["docs/system/pane-placement.md"]
+  },
+  "hardConstraints": [
+    "Chỉ sửa bố cục frontend, không đổi lệnh Tauri",
+    "Không thêm dependency",
+    "Không git commit/push",
+    "Giữ bề rộng đã lưu trong localStorage, chỉ kẹp khi hiển thị"
+  ],
+  "requirements": [
+    {
+      "id": "REQ-G1",
+      "source": "1",
+      "text": "Cột Thay đổi và cột tệp mở co theo chỗ trống"
+    },
+    {
+      "id": "REQ-G2",
+      "source": "1",
+      "text": "Chat trong group luôn dùng được"
+    },
+    {
+      "id": "REQ-G3",
+      "source": "1",
+      "text": "Bề rộng đã lưu không phá bố cục"
+    },
+    {
+      "id": "REQ-G4",
+      "source": "1",
+      "text": "Kiểm chứng bằng ảnh ba cỡ"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-G1",
+      "requirement": "REQ-G1",
+      "text": "Chỗ trống nhỏ hơn bề rộng đã lưu thì cột co lại, không tràn sang chat",
+      "source": "REQ-G1 · Chờ duyệt. Bằng chứng: docs/plans/group-layout-20261108/evidence/wide.png (1100px, cột Thay đổi lưu 1400px, cột co lại, chat vẫn thấy)"
+    },
+    {
+      "id": "AC-G2",
+      "requirement": "REQ-G2",
+      "text": "Ô chat giữ bề rộng tối thiểu; thiếu chỗ thì cột tệp co trước",
+      "source": "REQ-G2 · Chờ duyệt. Bằng chứng: docs/plans/group-layout-20261108/evidence/g2wide.png (group 2 chat, 1906px) và docs/plans/group-layout-20261108/evidence/g4wide.png (group 4 chat, 1100px): khung tệp nhường trước, ô chat >= 288px, không bị đè"
+    },
+    {
+      "id": "AC-G3",
+      "requirement": "REQ-G3",
+      "text": "Bề rộng lưu từ cửa sổ lớn được kẹp theo chỗ trống hiện tại, giá trị đã lưu không bị ghi đè",
+      "source": "REQ-G3 · Chờ duyệt. Bằng chứng: docs/plans/group-layout-20261108/evidence/wide-g02.png (bề rộng lưu 1400px, hiển thị bị kẹp theo chỗ trống; giá trị lưu không bị ghi đè trong code use-resizable-width.ts)"
+    },
+    {
+      "id": "AC-G4",
+      "requirement": "REQ-G4",
+      "text": "Ảnh group 2 chat, group 4 chat và một chat kéo rộng cột đều không có khung đè khung",
+      "source": "REQ-G4 · Chờ duyệt. Bằng chứng: docs/plans/group-layout-20261108/evidence/g2wide.png, docs/plans/group-layout-20261108/evidence/g4wide.png, docs/plans/group-layout-20261108/evidence/wide.png trong docs/plans/group-layout-20261108/evidence/, script chụp chup-anh.mjs; chụp trên vite với lệnh Tauri giả, chưa kiểm trên app Tauri thật"
+    }
+  ],
+  "verificationCommands": ["pnpm typecheck", "pnpm lint", "pnpm format:check"],
+  "codingGroups": [
+    {
+      "id": "G-A",
+      "name": "frontend",
+      "tasks": ["TASK-G01", "TASK-G02", "TASK-G03", "TASK-G04"],
+      "dependsOnGroups": [],
+      "parallel": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-G01",
+      "title": "Cột Thay đổi và cột tệp mở co lại được (shrink thay shrink-0)",
+      "status": "CHO_KIEM_TRA",
+      "result": "2026-11-08: changes-panel.tsx và code-viewer.tsx đổi shrink-0 thành shrink. Ảnh docs/plans/group-layout-20261108/evidence/wide.png (1100px, cột Thay đổi lưu 1400px): cột co lại, chat vẫn thấy. Chạy trên vite với lệnh Tauri giả, chưa kiểm trên app Tauri thật.",
+      "priority": "P1",
+      "requirements": ["REQ-G1"],
+      "acceptanceCriteria": ["AC-G1"],
+      "design": "group-layout.md mục 3, đợt 1",
+      "inScope": "Hai className của hai cột",
+      "outOfScope": "Kẹp bề rộng lưu",
+      "filesToChange": [
+        {
+          "path": "src/components/ai-chat/code-viewer/changes-panel.tsx",
+          "changes": "shrink thay shrink-0"
+        },
+        {
+          "path": "src/components/ai-chat/code-viewer.tsx",
+          "changes": "shrink thay shrink-0 cho cột tệp mở"
+        }
+      ]
+    },
+    {
+      "id": "TASK-G02",
+      "title": "Kẹp bề rộng cột theo chỗ trống của vùng chứa",
+      "status": "CHO_KIEM_TRA",
+      "result": "2026-11-08: use-resizable-width.ts nhận max là hàm, đọc lại khi cửa sổ đổi cỡ; bề rộng hiển thị bị kẹp theo chỗ trống, giá trị lưu localStorage không bị ghi đè. use-panel-widths.ts kẹp cột tệp và cột Thay đổi theo cửa sổ trừ sidebar, cây tệp tối thiểu và ô chat tối thiểu 288px. Ảnh docs/plans/group-layout-20261108/evidence/wide-g02.png (1100px, bề rộng lưu 1400px: cột co lại, chat vẫn dùng được). typecheck 0 lỗi, eslint và prettier sạch. Chạy trên vite với lệnh Tauri giả, chưa kiểm trên app Tauri thật; chưa kiểm kéo thay đổi cỡ cửa sổ lúc đang chạy.",
+      "priority": "P2",
+      "requirements": ["REQ-G3"],
+      "acceptanceCriteria": ["AC-G3"],
+      "design": "group-layout.md mục 3, đợt 2",
+      "inScope": "use-panel-widths và use-resizable-width",
+      "outOfScope": "Đổi khoá localStorage",
+      "filesToChange": [
+        {
+          "path": "src/components/ai-chat/code-viewer/use-panel-widths.ts",
+          "changes": "Kẹp theo chỗ trống của vùng chứa"
+        },
+        {
+          "path": "src/hooks/use-resizable-width.ts",
+          "changes": "Cho phép truyền giới hạn động nếu cần"
+        }
+      ]
+    },
+    {
+      "id": "TASK-G03",
+      "title": "Bề rộng tối thiểu cho ô chat trong group",
+      "status": "CHO_KIEM_TRA",
+      "result": "2026-11-08: chat-grid.tsx để khung tệp chiếm một bên vùng chat (không còn nổi đè), kẹp để mỗi ô chat >= 288px, khung tệp >= 320px. Ảnh docs/plans/group-layout-20261108/evidence/g2wide.png (group 2 chat, 1906px) và docs/plans/group-layout-20261108/evidence/g4wide.png (group 4 chat, 1100px): các ô chat nằm trọn, không bị đè. Ở 1100px với 4 chat, cột Thay đổi co gần hết, chỉ còn cây tệp. typecheck 0 lỗi, prettier và eslint sạch. Chưa kiểm trên app Tauri thật.",
+      "priority": "P2",
+      "requirements": ["REQ-G2"],
+      "acceptanceCriteria": ["AC-G2"],
+      "design": "group-layout.md mục 3, đợt 3",
+      "inScope": "Ô chat trong ChatGrid",
+      "outOfScope": "Đổi cách chia ô",
+      "filesToChange": [
+        {
+          "path": "src/components/shell/chat-grid.tsx",
+          "changes": "min-w cho ô chat; cột tệp thu về tối thiểu trước"
+        }
+      ]
+    },
+    {
+      "id": "TASK-G04",
+      "title": "Chụp ảnh kiểm chứng ba cỡ",
+      "status": "CHO_KIEM_TRA",
+      "result": "2026-11-08: ảnh ở docs/plans/group-layout-20261108/evidence/ (docs/plans/group-layout-20261108/evidence/g2wide.png, docs/plans/group-layout-20261108/evidence/g4wide.png, docs/plans/group-layout-20261108/evidence/wide.png), script chụp chup-anh.mjs (Playwright + Chrome, stub __TAURI_INTERNALS__ trên vite). Không phải app Tauri thật; chưa có ảnh 'trước khi sửa' lưu lại.",
+      "priority": "P2",
+      "requirements": ["REQ-G4"],
+      "acceptanceCriteria": ["AC-G4"],
+      "design": "group-layout.md mục 3, đợt 4",
+      "inScope": "Chạy app thật, chụp ảnh",
+      "outOfScope": "Sửa code",
+      "filesToChange": []
+    }
+  ]
+}

@@ -98,10 +98,10 @@ export const MessageList = forwardRef<
                             return (
                                 <div
                                     key={`${index}-${prompt}`}
-                                    className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-1"
+                                    className="ml-auto flex w-fit max-w-[85%] min-w-0 flex-col items-end gap-2"
                                 >
                                     {files.length > 0 && (
-                                        <ul className="flex flex-wrap justify-end gap-2 opacity-70">
+                                        <ul className="flex flex-wrap justify-end gap-2">
                                             {files.map((file) => (
                                                 <li key={file.path}>
                                                     <AttachmentView
@@ -113,13 +113,10 @@ export const MessageList = forwardRef<
                                         </ul>
                                     )}
                                     {text !== '' && (
-                                        <p className="max-h-80 max-w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap opacity-70 [overflow-wrap:anywhere]">
+                                        <p className="max-h-80 max-w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-2xl bg-muted px-4 py-2.5 whitespace-pre-wrap [overflow-wrap:anywhere]">
                                             {text}
                                         </p>
                                     )}
-                                    <span className="text-xs text-muted-foreground">
-                                        {t('message_list.waiting')}
-                                    </span>
                                 </div>
                             );
                         })}

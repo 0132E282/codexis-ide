@@ -33,28 +33,51 @@ function readWidth(key: string, fallback: number, min: number, max: number) {
  * Width of a side panel that the user drags by its left edge (pointer events, one update per frame)
  * or resizes with the arrow keys. The width is a display preference kept in localStorage.
  * With `axis` 'y' the same hook sizes a panel by its top edge (its "width" is then the height; dragging up makes it taller).
+ * `max` may be a function: it is read each time, so the width follows the room there is now (e.g. a window resized after the width was saved). The displayed width is clamped to it; the saved width is only changed by a drag, a key or `setTo`.
  * With `edge` 'trailing' the handle is on the right (or bottom) edge instead, so dragging right (or down) makes the panel larger.
  */
 export function useResizableWidth(
     storageKey: string,
     initial: number,
     min: number,
-    max: number,
+    max: number | (() => number),
     axis: 'x' | 'y' = 'x',
     edge: 'leading' | 'trailing' = 'leading',
 ) {
     const direction = edge === 'leading' ? 1 : -1;
+    const readMax = typeof max === 'function' ? max : () => max;
+    const maxRef = useRef(readMax);
     const [width, setWidth] = useState(() =>
-        readWidth(storageKey, initial, min, max),
+        readWidth(storageKey, initial, min, Infinity),
     );
+    // * Bumped on a window resize so a changing `max` is read again.
+    const [, setResizes] = useState(0);
+
+    useEffect(() => {
+        maxRef.current = readMax;
+    });
+
+    useEffect(() => {
+        if (typeof max !== 'function') {
+            return;
+        }
+
+        const onResize = () => setResizes((count) => count + 1);
+
+        window.addEventListener('resize', onResize);
+
+        return () => window.removeEventListener('resize', onResize);
+    }, [max]);
     const drag = useRef<{ start: number; startWidth: number } | null>(null);
     const frame = useRef<number | undefined>(undefined);
-    const latest = useRef(width);
+    const limit = Math.max(min, readMax());
+    const shownWidth = Math.min(width, limit);
+    const latest = useRef(shownWidth);
     const [dragging, setDragging] = useState(false);
 
     useEffect(() => {
-        latest.current = width;
-    }, [width]);
+        latest.current = shownWidth;
+    }, [shownWidth]);
 
     useEffect(
         () => () => {
@@ -65,8 +88,9 @@ export function useResizableWidth(
     );
 
     const clamp = useCallback(
-        (value: number) => Math.min(max, Math.max(min, value)),
-        [min, max],
+        (value: number) =>
+            Math.min(Math.max(min, maxRef.current()), Math.max(min, value)),
+        [min],
     );
 
     const save = useCallback(() => {
@@ -185,16 +209,16 @@ export function useResizableWidth(
     );
 
     return {
-        width,
+        width: shownWidth,
         shrinkTo,
         setTo,
         handleProps: {
             role: 'separator' as const,
             'aria-orientation': (axis === 'x' ? 'vertical' : 'horizontal') as
                 'vertical' | 'horizontal',
-            'aria-valuenow': Math.round(width),
+            'aria-valuenow': Math.round(shownWidth),
             'aria-valuemin': min,
-            'aria-valuemax': max,
+            'aria-valuemax': limit,
             'data-dragging': dragging,
             tabIndex: 0,
             onPointerDown,

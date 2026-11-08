@@ -22,7 +22,6 @@ import {
     ContextPanel,
     type ContextUsage,
 } from '@/components/shell/context-panel';
-import type { PlanData } from '@/components/shell/plan-pane';
 import { Composer } from '@/components/shell/composer';
 import { cn } from '@/lib/utils';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
@@ -58,7 +57,6 @@ export function ChatPanel({
     onConversation,
     onChanged,
     onSubagents,
-    onPlan,
     onContext,
     onRunningPrompts,
     collapsed,
@@ -96,7 +94,6 @@ export function ChatPanel({
     /** Told which sub-agents the AI has started in the running turn (empty when none). */
     onSubagents: (subagents: Subagent[]) => void;
     /** Told the plan the AI wrote in the open conversation, when it is loaded or a turn writes a new one (null: none). */
-    onPlan: (plan: PlanData | null) => void;
     /** Told the context usage of the open conversation whenever it changes (null: none reported yet), for the session rail. */
     onContext?: (usage: ContextUsage | null) => void;
     /** Told the prompts of the turns that are running, whenever that list changes. */
@@ -173,7 +170,6 @@ export function ChatPanel({
         },
         onChanged,
         onSubagents,
-        onPlan,
         onRestoreCli: setCli,
         onReset: attachmentState.reset,
     });
@@ -216,7 +212,6 @@ export function ChatPanel({
 
     const {
         waiting,
-        clearWaiting,
         choose,
         sendFromComposer,
         sendPrompt,
@@ -449,8 +444,6 @@ export function ChatPanel({
                 onChange={setText}
                 onSubmit={send}
                 busy={busy}
-                waiting={waitingPrompts}
-                onClearWaiting={clearWaiting}
                 onStop={stopTurns}
                 cli={cli}
                 model={models[cli] ?? null}

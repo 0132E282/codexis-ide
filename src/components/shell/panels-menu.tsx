@@ -20,17 +20,10 @@ export type PanelsMenuItem = {
 };
 
 /**
- * The "..." menu of the dock panels (Side chat, Background tasks, Plan): one row each, ticked while the panel is open; a click toggles it.
+ * The "..." menu of the dock panels (Side chat, Background tasks, Plans): one row each, ticked while the panel is open; a click toggles it.
  * The icon leads each row and the tick ends it. Where a panel sits is chosen in the panel's own header (PanelMenu).
  */
-export function PanelsMenu({
-    items,
-    unseen = false,
-}: {
-    items: PanelsMenuItem[];
-    /** A dot on the button: something new is waiting in a closed panel. */
-    unseen?: boolean;
-}) {
+export function PanelsMenu({ items }: { items: PanelsMenuItem[] }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -40,15 +33,9 @@ export function PanelsMenu({
                     size="icon-sm"
                     aria-label={t('panels_menu.open')}
                     title={t('panels_menu.open')}
-                    className="relative text-muted-foreground"
+                    className="text-muted-foreground"
                 >
                     <MoreHorizontal aria-hidden="true" className="size-5" />
-                    {unseen && (
-                        <span
-                            data-testid="plan-unseen"
-                            className="absolute top-1 right-1 size-2 rounded-full bg-primary"
-                        />
-                    )}
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-52">

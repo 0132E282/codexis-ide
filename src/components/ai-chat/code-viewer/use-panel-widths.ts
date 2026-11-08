@@ -8,16 +8,25 @@ import {
     TREE_MAX_WIDTH,
 } from './constants';
 
+// * The narrowest chat that stays usable beside the columns.
+const CHAT_MIN_WIDTH = 288;
+
 /** * Widths of the file and tree columns. Either can be dragged out to the full width: the chat then shrinks, and closes once it is too narrow to use. */
 export function usePanelWidths(
     chatCollapsed: boolean,
     treeEdge: 'leading' | 'trailing' = 'leading',
 ) {
+    // * The room a column may take: the window less the sidebar and the narrowest tree, and less a usable chat while the chat is open.
+    const columnMax = () =>
+        window.innerWidth -
+        SIDEBAR_WIDTH -
+        256 -
+        (chatCollapsed ? 0 : CHAT_MIN_WIDTH);
     const fileWidth = useResizableWidth(
         'ai-chat.width.file',
         FILE_PANEL_DEFAULT_WIDTH,
         320,
-        window.innerWidth,
+        columnMax,
         'x',
         // * With the tree on the left, the file column's drag bar is on its right edge, like the tree's.
         treeEdge === 'trailing' ? 'trailing' : 'leading',
@@ -26,7 +35,7 @@ export function usePanelWidths(
         'ai-chat.width.changes',
         CHANGES_PANEL_DEFAULT_WIDTH,
         320,
-        window.innerWidth,
+        columnMax,
         'x',
         // * With the tree on the left, the change list is beside the chat's side of the tree: dragged by its right edge like the tree.
         treeEdge === 'trailing' ? 'trailing' : 'leading',

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PlanData } from '@/components/shell/plan-pane';
 import { parsePayload } from '@/components/shell/chat/turn-events';
 import type { ContextUsage } from '@/components/shell/chat/turn-events';
 import { restoreContext, restoreTurns } from '@/components/shell/chat/turn';
@@ -16,7 +15,6 @@ export function useChatSession({
     onConversation,
     onChanged,
     onSubagents,
-    onPlan,
     onRestoreCli,
     onReset,
 }: {
@@ -27,7 +25,6 @@ export function useChatSession({
     onChanged: () => void;
     onSubagents: (subagents: Subagent[]) => void;
     /** The plan of the open conversation changed (null: it has none). */
-    onPlan: (plan: PlanData | null) => void;
     /** The AI of the last turn of a loaded conversation is the one picked again. */
     onRestoreCli: (cli: AgentCli) => void;
     /** Another conversation is shown: what was typed for the old one (attachments) goes. */
@@ -37,8 +34,6 @@ export function useChatSession({
     const [turns, setTurns] = useState<Turn[]>([]);
     // * Context usage of the open conversation; null until a turn reports it (it is not saved, so another conversation starts empty).
     const [context, setContext] = useState<ContextUsage | null>(null);
-    // * The plan the AI wrote in the open conversation: loaded from the saved one, then replaced by each new plan of a turn.
-    const [plan, setPlan] = useState<PlanData | null>(null);
     // * One session per CLI: a Claude session id means nothing to Codex.
     const sessions = useRef<Partial<Record<AgentCli, string>>>({});
     // * Key of the saved history; null while it is not loaded (or could not be), and nothing is saved then.
@@ -54,11 +49,6 @@ export function useChatSession({
         onSubagents(subagents);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [subagents]);
-
-    useEffect(() => {
-        onPlan(plan);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [plan]);
 
     // * Shows a loaded conversation: `replace` swaps the turns, otherwise they go before what was typed while it loaded.
     const apply = (history: ChatHistory, replace: boolean) => {
@@ -80,24 +70,6 @@ export function useChatSession({
 
         if (replace) {
             setContext(restoreContext(history));
-            setPlan(null);
-        }
-
-        // * The plan was written by Claude (its `ExitPlanMode`); a plan that arrived while this loaded is newer.
-        const claudeSession = history.sessions.claude;
-
-        if (claudeSession !== undefined) {
-            void ide
-                .planLoad(claudeSession, root)
-                .then((json) => {
-                    const saved =
-                        json === null ? null : parsePayload<PlanData>(json);
-
-                    if (saved !== null) {
-                        setPlan((current) => current ?? saved);
-                    }
-                })
-                .catch(() => undefined);
         }
 
         notifyConversation(history.conversation);
@@ -155,7 +127,6 @@ export function useChatSession({
                 sessions.current = {};
                 setTurns([]);
                 setContext(null);
-                setPlan(null);
                 onReset();
                 notifyConversation(id);
                 notifyChanged();
@@ -170,7 +141,6 @@ export function useChatSession({
         setTurns,
         context,
         setContext,
-        setPlan,
         setSubagents,
         busy,
         sessions,

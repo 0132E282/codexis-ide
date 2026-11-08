@@ -14,6 +14,7 @@ Codexis IDE là IDE desktop độc lập (Tauri 2 + Rust): trình soạn code c�
     - `src/lib/api.ts`: lớp gọi các Rust command — nơi duy nhất nên đổi khi đổi cách gọi backend.
     - Thư mục: `actions/`, `components/` (`ai-chat`, `file-manager`, `form`, `shell`, `tables`, `ui`), `contexts/`, `css/`, `hooks/`, `icons/`, `lib/`, `wayfinder/`; entry `main.tsx`, `app.tsx`.
 - `prompts/`: prompt Markdown cho AI agent.
+- `docs/plans/<tên-plan>/`: mỗi plan một thư mục: `plan.json` (hoặc `plan.md`) và `evidence/` (ảnh bằng chứng): chỉ là báo cáo. Test Playwright của plan nằm ở `e2e/<tên-plan>/`, trong hệ thống, không nằm trong `docs/plans/`; module Rust `src-tauri/src/plans/` đọc cả plan nằm rời `docs/plans/<tên>.json` cũ.
 - `.claude/skills/`: ba skill Rust (nguồn BeautifulRust): `rust-best-practices`, `rust-port`, `rust-review`.
 
 ## Lệnh

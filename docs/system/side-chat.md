@@ -105,7 +105,7 @@ sequenceDiagram
         R-->>M: cùng sự kiện, bị bỏ qua (runId lạ)
     end
     R-->>S: Done
-    S->>S: giữ session id, hiện trả lời; KHÔNG chat_save_turn
+    S->>S: giữ session id, hiện trả lời, KHÔNG chat_save_turn
     U->>S: hỏi tiếp
     S->>R: agent_send(..., session = id đã giữ)
 ```

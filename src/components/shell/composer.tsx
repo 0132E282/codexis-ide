@@ -19,7 +19,6 @@ import { SuggestionList } from '@/components/shell/chat/suggestion-list';
 import { useCommandSuggestions } from '@/components/shell/chat/use-command-suggestions';
 import { Button } from '@/components/ui/button';
 import { referenceForPaste } from '@/lib/editor-copy';
-import { splitPrompt } from '@/components/shell/chat/turn';
 import type { AgentCli } from '@/lib/ide';
 import type { ToolEntry } from '@/lib/ide-tools';
 import { t } from '@/lib/i18n';
@@ -38,8 +37,6 @@ export const Composer = memo(function Composer({
     onChange,
     onSubmit,
     busy,
-    waiting,
-    onClearWaiting,
     onStop,
     cli,
     model,
@@ -64,8 +61,6 @@ export const Composer = memo(function Composer({
     /** A turn is running: switching CLI and the other controls wait for it; sending does not (a message sent meanwhile starts its own turn if a sub-agent works, else it waits for the turn). */
     busy: boolean;
     /** Messages sent while a turn runs that wait for it (shown above the box), and the button that drops them. */
-    waiting: string[];
-    onClearWaiting: () => void;
     /** Ctrl+C while a turn runs: stops it. */
     onStop: () => void;
     cli: AgentCli;
@@ -259,36 +254,6 @@ export const Composer = memo(function Composer({
                     attachError={attachError}
                     onRemove={onRemoveAttachment}
                 />
-                {waiting.length > 0 && (
-                    <div className="text-muted-foreground flex items-center gap-1 px-2 pt-1 text-xs">
-                        <span className="min-w-0 flex-1 truncate">
-                            {t('composer.waiting', {
-                                count: waiting.length,
-                                text: waiting
-                                    .map((prompt) => {
-                                        const { text, files } =
-                                            splitPrompt(prompt);
-
-                                        return [
-                                            text,
-                                            ...files.map((file) => file.name),
-                                        ]
-                                            .filter((part) => part !== '')
-                                            .join(' ');
-                                    })
-                                    .join(' / '),
-                            })}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={onClearWaiting}
-                            aria-label={t('composer.clear_waiting')}
-                            className="hover:text-foreground shrink-0 rounded"
-                        >
-                            <X className="size-3" />
-                        </button>
-                    </div>
-                )}
                 {menuOpen && (
                     <SuggestionList
                         prefix={prefix}

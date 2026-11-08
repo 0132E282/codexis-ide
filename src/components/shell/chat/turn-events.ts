@@ -1,6 +1,5 @@
 import type { AgentCli, Step } from '@/lib/ide';
 import type { Turn } from '@/components/shell/chat/turn';
-import type { PlanData } from '@/components/shell/plan-pane';
 
 /** A tool call the CLI started (`parent` is set when a sub-agent made it). */
 export type ToolCallEvent = {
@@ -40,21 +39,6 @@ export type ContextUsage = {
     output: number;
     model: string;
 };
-
-/** A plan the AI wrote, as the backend sends it (`Event::Plan`, `plan::Plan`): only the text kind is shown for now, the todos kind is ignored. */
-export type PlanEvent =
-    | { kind: 'text'; markdown: string }
-    | { kind: 'todos'; todos: PlanData['todos'] };
-
-/** The plan shown after `event`: a new plan text replaces the old one; other kinds change nothing. */
-export function withPlan(
-    plan: PlanData | null,
-    event: PlanEvent,
-): PlanData | null {
-    return event.kind === 'text'
-        ? { todos: plan?.todos ?? [], markdown: event.markdown }
-        : plan;
-}
 
 /** The payload of an agent event that carries JSON; null when it is malformed (such an event is not shown). */
 export function parsePayload<Payload>(payload: string): Payload | null {

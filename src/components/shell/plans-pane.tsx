@@ -1,5 +1,6 @@
 import { FileJson, FileText, Play, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Field } from '@/components/form';
 import { PlanDetail } from '@/components/shell/plan-detail';
 import {
@@ -9,7 +10,7 @@ import {
     STATUS_TEXT,
 } from '@/components/shell/plan-status';
 import { Button } from '@/components/ui/button';
-import { t } from '@/lib/i18n';
+import { t, translateError } from '@/lib/i18n';
 import { errorText, ide, onPlansChanged } from '@/lib/ide';
 import type { PlanDoc, PlanDocStatus, PlanDocsList } from '@/lib/ide';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,14 @@ const FILTER_STATUSES: Record<PlanFilter, PlanDocStatus[] | null> = {
     in_progress: ['in_progress', 'partial'],
     review: ['review'],
     done: ['done'],
+};
+
+// * The statuses a card can be dropped on: the chips of these filters are the drop targets.
+const DROP_STATUS: Partial<Record<PlanFilter, string>> = {
+    draft: 'draft',
+    in_progress: 'in_progress',
+    review: 'review',
+    done: 'done',
 };
 
 /** The filter the person chose last; the plans that are done come first by default. */
@@ -75,9 +84,12 @@ function PlanCard({
     plan,
     onOpen,
     onContinue,
+    onDragChange,
     isWorking,
 }: {
     plan: PlanDoc;
+    /** The card is being dragged (its path) or the drag ended (null). */
+    onDragChange: (path: string | null) => void;
     /** A turn of the chat that started from this plan is running. */
     isWorking: boolean;
     onOpen: (path: string) => void;
@@ -90,7 +102,16 @@ function PlanCard({
     const FormatIcon = plan.format === 'json' ? FileJson : FileText;
 
     return (
-        <li className="flex h-full flex-col rounded-lg border bg-card text-card-foreground shadow-xs hover:bg-accent/40">
+        <li
+            draggable
+            onDragStart={(event) => {
+                event.dataTransfer.setData('text/plain', plan.path);
+                event.dataTransfer.effectAllowed = 'move';
+                onDragChange(plan.path);
+            }}
+            onDragEnd={() => onDragChange(null)}
+            className="flex h-full cursor-grab flex-col rounded-lg border bg-card text-card-foreground shadow-xs hover:bg-accent/40 active:cursor-grabbing"
+        >
             <button
                 type="button"
                 data-testid="plan-card"
@@ -195,26 +216,28 @@ function PlanCard({
                     </span>
                 </span>
             </button>
-            <div className="flex px-3 pb-3">
-                <Button
-                    type="button"
-                    size="xs"
-                    data-testid="plan-continue"
-                    disabled={
-                        plan.tasksTotal === 0 ||
-                        plan.tasksDone >= plan.tasksTotal
-                    }
-                    onClick={() => onContinue(plan)}
-                    className="ml-auto"
-                >
-                    <Play aria-hidden="true" />
-                    {t(
-                        plan.tasksDone > 0
-                            ? 'plans.continue'
-                            : 'plans.do_tasks',
-                    )}
-                </Button>
-            </div>
+            {!isWorking && (
+                <div className="flex px-3 pb-3">
+                    <Button
+                        type="button"
+                        size="xs"
+                        data-testid="plan-continue"
+                        disabled={
+                            plan.tasksTotal === 0 ||
+                            plan.tasksDone >= plan.tasksTotal
+                        }
+                        onClick={() => onContinue(plan)}
+                        className="ml-auto"
+                    >
+                        <Play aria-hidden="true" />
+                        {t(
+                            plan.tasksDone > 0
+                                ? 'plans.continue'
+                                : 'plans.do_tasks',
+                        )}
+                    </Button>
+                </div>
+            )}
         </li>
     );
 }
@@ -238,6 +261,9 @@ export function PlansPane({
     const [load, setLoad] = useState<Load>({ state: 'loading' });
     const [filter, setFilter] = useState<PlanFilter>(readFilter);
     const [search, setSearch] = useState('');
+    // * The card being dragged (its path) and the filter chip it is over: a drop on a chip sets that status.
+    const [dragging, setDragging] = useState<string | null>(null);
+    const [dropOver, setDropOver] = useState<PlanFilter | null>(null);
     // * The plan whose detail is shown instead of the list (its file path), or null.
     const [selected, setSelected] = useState<string | null>(null);
 
@@ -322,6 +348,25 @@ export function PlansPane({
             })
             .catch((error: unknown) => console.error(errorText(error)));
 
+    const dropPlan = (path: string, filterId: PlanFilter) => {
+        const status = DROP_STATUS[filterId];
+
+        setDragging(null);
+        setDropOver(null);
+
+        if (status === undefined) {
+            return;
+        }
+
+        // * The folder watcher reports the change and the list is read again; the reload covers a watcher that is not running.
+        void ide
+            .planDocSetStatus(path, status, root)
+            .then(() => setReload((count) => count + 1))
+            .catch((error: unknown) =>
+                toast.error(translateError(errorText(error))),
+            );
+    };
+
     const chooseFilter = (next: PlanFilter) => {
         setFilter(next);
         saveFilter(next);
@@ -403,21 +448,63 @@ export function PlansPane({
                     aria-label={t('plans.filter_label')}
                     className="flex items-center gap-1"
                 >
-                    {FILTERS.map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            aria-pressed={filter === item.id}
-                            onClick={() => chooseFilter(item.id)}
-                            className={cn(
-                                'rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                filter === item.id &&
-                                    'bg-accent font-medium text-accent-foreground',
-                            )}
-                        >
-                            {t(item.label)}
-                        </button>
-                    ))}
+                    {FILTERS.map((item) => {
+                        const isTarget =
+                            dragging !== null &&
+                            DROP_STATUS[item.id] !== undefined;
+
+                        return (
+                            <button
+                                key={item.id}
+                                type="button"
+                                aria-pressed={filter === item.id}
+                                onClick={() => chooseFilter(item.id)}
+                                onDragOver={
+                                    isTarget
+                                        ? (event) => {
+                                              event.preventDefault();
+                                              event.dataTransfer.dropEffect =
+                                                  'move';
+                                          }
+                                        : undefined
+                                }
+                                onDragEnter={
+                                    isTarget
+                                        ? () => setDropOver(item.id)
+                                        : undefined
+                                }
+                                onDragLeave={
+                                    isTarget
+                                        ? () =>
+                                              setDropOver((current) =>
+                                                  current === item.id
+                                                      ? null
+                                                      : current,
+                                              )
+                                        : undefined
+                                }
+                                onDrop={
+                                    isTarget
+                                        ? (event) => {
+                                              event.preventDefault();
+                                              dropPlan(dragging, item.id);
+                                          }
+                                        : undefined
+                                }
+                                className={cn(
+                                    'rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                    filter === item.id &&
+                                        'bg-accent font-medium text-accent-foreground',
+                                    isTarget && 'ring-1 ring-ring/50',
+                                    isTarget &&
+                                        dropOver === item.id &&
+                                        'bg-primary/20 text-foreground ring-2 ring-primary',
+                                )}
+                            >
+                                {t(item.label)}
+                            </button>
+                        );
+                    })}
                 </div>
                 <Field
                     name="plans-search"
@@ -460,6 +547,7 @@ export function PlansPane({
                                 plan={plan}
                                 onOpen={setSelected}
                                 onContinue={continuePlan}
+                                onDragChange={setDragging}
                                 isWorking={runningPrompts.some((prompt) =>
                                     prompt.includes(plan.path),
                                 )}

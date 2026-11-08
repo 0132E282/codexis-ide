@@ -43,7 +43,7 @@ pub enum Event {
     Error(String),
     /// The context level after a turn, as the JSON of [`crate::context::ContextUsage`].
     Context(String),
-    /// A plan the agent wrote (not from a sub-agent), as the JSON of [`crate::plan::Plan`]; sent right after the `Tool` event of the same call.
+    /// A plan the agent wrote (not from a sub-agent), as the JSON of [`crate::plans::types::Plan`]; sent right after the `Tool` event of the same call.
     Plan(String),
     /// The background tasks of the project changed: JSON `{"tasks": [...]}` of [`crate::background::BackgroundTasks::snapshot_json`].
     Background(String),

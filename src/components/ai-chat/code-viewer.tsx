@@ -491,7 +491,8 @@ export function CodeViewer({
                     style={isFilling ? undefined : { width: fileWidth.width }}
                     className={cn(
                         '@container relative hidden min-h-0 max-w-full min-w-0 flex-col overflow-hidden lg:flex [&>*]:@max-[10rem]:hidden',
-                        isFilling ? 'flex-1' : 'shrink-0',
+                        // * With its own width it still gives way when the room is smaller (a group of chats, a wide column): it would spill over the chat otherwise.
+                        isFilling ? 'flex-1' : 'shrink',
                         treePlacement.placement !== 'left' && 'border-l',
                     )}
                 >

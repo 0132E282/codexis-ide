@@ -76,15 +76,8 @@ export default function App() {
         refreshConversations,
     } = workspace;
     const activeState = paneStates[activeKey] ?? FRESH;
-    // * One table of background tasks for the open project: the bottom panel lists it and the sidebar shortcuts to its sub-agents come from it.
+    // * One table of background tasks for the open project: the bottom panel lists it (shell commands and sub-agents in their own tabs).
     const background = useBackgroundTasks(activePane?.root);
-    const backgroundSubagents = background.tasks
-        .filter((task) => task.kind === 'subagent')
-        .map((task) => ({
-            id: task.id,
-            label: task.label,
-            done: task.state !== 'running',
-        }));
     // * Chat settings (the open tab) and the AI statistics, both opened from the sidebar's ⋮ menu.
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [usageOpen, setUsageOpen] = useState(false);
@@ -353,7 +346,6 @@ export default function App() {
                             }
                             conversations={workspace.conversations}
                             currentConversation={activeState.conversation}
-                            subagents={backgroundSubagents}
                             onOpenConversation={(id) => {
                                 leaveGrid();
                                 // * Picking a chat opens the chat pane too, even when a file had folded it away.
@@ -365,9 +357,6 @@ export default function App() {
                                     chatCollapsed: false,
                                 });
                             }}
-                            onOpenSubagent={(id) =>
-                                patchPane(activeKey, { viewSubagent: id })
-                            }
                             activeRoot={activeRoot}
                             grid={grid}
                             openGroup={showGrid ? openGroup : null}

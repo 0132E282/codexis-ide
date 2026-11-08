@@ -173,6 +173,8 @@ export type PlanTask = {
     priority: string | null;
     /** Files the task says it changes. */
     files: string[];
+    /** What was done and how it was checked, when the task has it. */
+    result: string | null;
 };
 /** One block of a Markdown plan. */
 export type MarkdownBlock =
@@ -385,6 +387,9 @@ export const ide = {
     /** One plan of `docs/plans/` in full; `path` is the `path` of its card. */
     planDocRead: (path: string, root?: string) =>
         invoke<PlanDocDetail>('plan_doc_read', { path, root }),
+    /** Sets the status of one plan (`path` is the `path` of its card; `status` is `draft`, `in_progress`, `review` or `done`): the status word of the file is rewritten. */
+    planDocSetStatus: (path: string, status: string, root?: string) =>
+        invoke<void>('plan_doc_set_status', { path, status, root }),
     chatList: (root?: string) =>
         invoke<ChatConversation[]>('chat_list', { root }),
     /** Starts a new conversation (the previous ones stay in the list) and resolves to its id. */
