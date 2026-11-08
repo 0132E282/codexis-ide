@@ -38,6 +38,8 @@ pub enum PlanStatus {
     Partial,
     Todo,
     Draft,
+    /// Built, waiting to be checked (`CHO_KIEM_TRA`).
+    Review,
     Unknown,
 }
 
@@ -50,6 +52,7 @@ impl PlanStatus {
             "DONE" | "COMPLETED" | "COMPLETE" | "DA_XONG" | "HOAN_THANH" => Self::Done,
             "IN_PROGRESS" | "DOING" | "DANG_LAM" => Self::InProgress,
             "PARTIAL" => Self::Partial,
+            "CHO_KIEM_TRA" | "REVIEW" | "IN_REVIEW" => Self::Review,
             "TODO" | "PENDING" | "OPEN" => Self::Todo,
             _ if word.starts_with("DRAFT") || word.contains("CHO_DUYET") => Self::Draft,
             // * "Implemented, UI not checked yet": built, but not signed off.

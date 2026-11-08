@@ -533,7 +533,7 @@ flowchart LR
 Kiểm TASK-M3 (2026-11-08, ảnh ở `.agents/storage/evidence/permission-modes-m3/`, Playwright trên vite với `invoke` giả; thư mục tạm rỗng):
 
 - Đạt: backend nhận `bypassPermissions` (`cargo test agent`: 53 đạt); chọn Bypass hiện hộp thoại xác nhận, huỷ giữ nguyên chế độ, xác nhận mới đổi; một lượt `claude -p --permission-mode bypassPermissions` (cờ như `claude.rs`, không qua app Tauri) tạo được `hello.txt`, sự kiện khởi tạo báo `permissionMode: bypassPermissions`.
-- Chưa đạt (lỗi sản phẩm, chưa sửa): menu hiện dùng (cả hai nơi gọi `ProjectRow` đều `compact`) là menu Cài đặt, không có mô tả hiển thị (chỉ tooltip), không có nhãn Recommended, phím 1–5 không chọn mục, dấu chọn là chấm tròn không phải ✓. Nhánh có mô tả, Recommended, phím 1–5 chỉ nằm trong nhánh không-compact, hiện không hiển thị ở đâu.
+- Đã sửa và kiểm lại (2026-11-08, ảnh `04`–`07` cùng thư mục): `ProjectRow` dựng danh sách chế độ một chỗ (`modeItems`) dùng chung cho menu Cài đặt (compact) và menu Mode (không-compact): 5 mục đúng thứ tự, mô tả ngắn, nhãn Khuyên dùng/Recommended cho Auto, phím 1–5 chọn mục (menu đóng trước, Bypass vẫn qua hộp thoại xác nhận), dấu ✓ ở mục đang chọn. Playwright (mock `invoke`): phím 3 đổi sang Tự sửa file; phím 5 hiện hộp thoại, Hủy giữ nguyên; bấm mục 5 rồi xác nhận mới đổi sang Bỏ qua quyền.
 - Chưa chạy: lượt Bypass qua app Tauri thật (không có GUI trong phiên này).
 
 ### 6.3. Sơ đồ kiểm đường dẫn (P1, P2)

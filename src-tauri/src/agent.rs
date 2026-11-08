@@ -49,6 +49,8 @@ pub enum Event {
     Background(String),
     /// The AI that speaks from now on in a relayed turn (`claude`, `codex`): the chat shows it as a label before that AI's steps.
     Speaker(String),
+    /// The main agent finished writing its answer (its message ended the turn), though the CLI may print the `Result` only after the background sub-agents are done. The chat treats the main agent as free from here while it keeps listening.
+    Idle(String),
     /// The CLI printed the final result of the turn: the answer is complete, even if the process lingers (sub-agents, background tasks). The chat ends the turn here and ignores the `Done` that follows.
     Result(String),
     /// The CLI exited; always the last event of a turn.

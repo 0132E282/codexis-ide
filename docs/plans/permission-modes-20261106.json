@@ -78,7 +78,7 @@
     {
       "id": "TASK-M3",
       "title": "Kiểm UI bằng Playwright và chạy thật chế độ Bypass",
-      "status": "PARTIAL_UI_FAIL_MENU_CHUA_CHAY_APP_THAT",
+      "status": "PARTIAL_UI_DAT_CHO_KIEM_TRA_CHUA_CHAY_APP_THAT",
       "priority": "P1",
       "priorityReason": "Yêu cầu người dùng: thêm chế độ quyền như menu mẫu",
       "requirements": ["REQ-M1"],
@@ -96,12 +96,12 @@
       "approach": "Theo kế hoạch đã duyệt",
       "test": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
       "doneWhen": "Menu 5 mục, phím 1–5, ✓, hộp thoại xác nhận; một lượt thật với bypassPermissions",
-      "note": "2026-11-08. Đạt: backend nhận bypassPermissions (cargo test agent 53 đạt); hộp thoại xác nhận (huỷ giữ chế độ, xác nhận mới đổi); lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo hello.txt (qua CLI, không qua app Tauri). Chưa đạt: menu Cài đặt (ProjectRow compact, cả hai nơi gọi) không hiện mô tả, không có Recommended cho Auto, phím 1–5 không chọn mục, dấu chọn là chấm không phải ✓ (các phần này chỉ có ở nhánh không-compact, không hiển thị). Chưa chạy: lượt Bypass qua app Tauri thật (không có GUI). Ảnh: .agents/storage/evidence/permission-modes-m3/."
+      "note": "2026-11-08. Đạt: backend nhận bypassPermissions (cargo test agent 53 đạt); lượt claude -p --permission-mode bypassPermissions trong thư mục tạm tạo hello.txt (qua CLI, không qua app Tauri). Đã sửa project-row.tsx: menu Cài đặt (compact) và menu Mode dùng chung modeItems; Playwright (mock Tauri, Chrome) đạt: 5 mục có mô tả, Khuyên dùng cho Auto, phím 1–5 chọn mục, ✓ mục đang chọn, hộp thoại Bypass (Hủy giữ chế độ, xác nhận mới đổi). Chưa kiểm: lượt Bypass qua app Tauri thật (không có GUI) và người dùng chưa duyệt. Ảnh: .agents/storage/evidence/permission-modes-m3/ (04–07)."
     }
   ],
   "risks": [
     "Chưa chạy thật --permission-mode bypassPermissions: trình phân loại quyền của phiên này chặn lượt thử; claude --help liệt kê bypassPermissions là giá trị hợp lệ",
-    "UI đã kiểm bằng Playwright (mock Tauri): menu 5 mục, phím 1–5, ✓, Hủy giữ nguyên, xác nhận đổi nhãn thành Bỏ qua quyền; còn thiếu lượt chạy thật",
+    "UI đã kiểm bằng Playwright (mock Tauri) trên menu Cài đặt: menu 5 mục, mô tả, Khuyên dùng, phím 1–5, ✓, Hủy giữ nguyên, xác nhận đổi sang Bỏ qua quyền; còn thiếu lượt chạy thật qua app Tauri",
     "Bypass cho CLI xoá file và chạy lệnh không hỏi; đã có hộp thoại xác nhận mỗi lần chọn"
   ],
   "openQuestions": [

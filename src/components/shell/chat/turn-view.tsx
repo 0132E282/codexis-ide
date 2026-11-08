@@ -54,6 +54,7 @@ export const TurnView = memo(function TurnView({
     onSwitchAccount,
     onPermission,
     projectName,
+    waitingSubagentCount = 0,
 }: {
     turn: Turn;
     /** Sends this turn again under another account of the same AI. */
@@ -72,6 +73,8 @@ export const TurnView = memo(function TurnView({
     /** The pending choice card is shown in a popup above the message box, not in the thread. */
     choicesInPopup?: boolean;
     projectName: string;
+    /** Sub-agents still working (only given to the last turn): once the turn has written its answer it shows it waits for them, not that it works. */
+    waitingSubagentCount?: number;
 }) {
     const choices: ChoiceHandlers = useMemo(
         () => ({
@@ -122,6 +125,7 @@ export const TurnView = memo(function TurnView({
                     changed={turn.changed}
                     choices={choices}
                     projectName={projectName}
+                    waitingSubagentCount={waitingSubagentCount}
                 />
             ) : (
                 typed !== '' && (

@@ -143,6 +143,12 @@ impl AgentCli for ClaudeAgent {
                         .map(Event::Delta)
                         .into_iter()
                         .collect()
+                // * The main agent's own message ended its turn: with background sub-agents the CLI prints the `result` only when they are done, so this is when the main agent is really free.
+                } else if value["parent_tool_use_id"].is_null()
+                    && event["type"] == "message_delta"
+                    && event["delta"]["stop_reason"] == "end_turn"
+                {
+                    vec![Event::Idle(String::new())]
                 } else {
                     Vec::new()
                 }
@@ -191,10 +197,19 @@ impl AgentCli for ClaudeAgent {
                         let finished = tool_finished(part, parent);
 
                         match parent {
+                            // * A background sub-agent's call returns at once ("launched"): it is not done; its `task_notification` says when it is.
+                            None if is_background_launch(part) => vec![finished],
                             None => vec![finished, Event::SubagentDone(id)],
                             Some(_) => vec![finished],
                         }
                     })
+                    .collect()
+            }
+            // * A task (sub-agent, background shell) ended; only the ids of started sub-agents pass the event filter.
+            Some("system") if value["subtype"] == "task_notification" => {
+                text(value.get("tool_use_id"))
+                    .map(Event::SubagentDone)
+                    .into_iter()
                     .collect()
             }
             Some("result") if value["is_error"] == true => text(value.get("result"))
@@ -393,6 +408,20 @@ fn cut(text: &str, limit: usize) -> String {
 /// Whether a `tool_use` part starts a sub-agent.
 fn is_subagent_call(part: &serde_json::Value) -> bool {
     matches!(part["name"].as_str(), Some("Task" | "Agent"))
+}
+
+/// Whether a `tool_result` only reports that a sub-agent was launched in the background.
+fn is_background_launch(part: &serde_json::Value) -> bool {
+    const MARK: &str = "Async agent launched";
+
+    match &part["content"] {
+        serde_json::Value::String(text) => text.starts_with(MARK),
+        serde_json::Value::Array(parts) => parts
+            .iter()
+            .filter_map(|piece| piece["text"].as_str())
+            .any(|text| text.starts_with(MARK)),
+        _ => false,
+    }
 }
 
 /// The event for a sub-agent that was just started: its tool-call id and a short label (kind and description).

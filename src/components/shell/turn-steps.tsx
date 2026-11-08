@@ -177,6 +177,7 @@ export const TurnSteps = memo(function TurnSteps({
     changed,
     choices,
     projectName = '',
+    waitingSubagentCount = 0,
 }: {
     steps: Step[];
     running: boolean;
@@ -185,10 +186,14 @@ export const TurnSteps = memo(function TurnSteps({
     choices: ChoiceHandlers;
     /** Name of the project shown on the card of changed files. */
     projectName?: string;
+    /** Sub-agents still working: when the last step is the AI's own words, the turn only waits for them. */
+    waitingSubagentCount?: number;
 }) {
     // * Once the turn ends, its last words are the result: shown below the timeline, not as a step of it.
     const last = steps[steps.length - 1];
     const result = !running && last?.kind === 'text' ? last.text : null;
+    const isWaitingForSubagents =
+        running && waitingSubagentCount > 0 && last?.kind === 'text';
     const edited: ChangedFile[] = running
         ? []
         : (changed ??
@@ -234,17 +239,28 @@ export const TurnSteps = memo(function TurnSteps({
                             </li>
                         );
                     })}
-                    {running && (
+                    {isWaitingForSubagents ? (
                         <li
                             role="status"
-                            className="flex items-center gap-2 text-[#d97757]"
+                            className="flex items-center gap-2 text-muted-foreground"
                         >
-                            <Asterisk
-                                aria-hidden="true"
-                                className="size-4 animate-spin motion-reduce:animate-none"
-                            />
-                            {t('turn_steps.working')}
+                            {t('turn_steps.waiting_subagents', {
+                                count: waitingSubagentCount,
+                            })}
                         </li>
+                    ) : (
+                        running && (
+                            <li
+                                role="status"
+                                className="flex items-center gap-2 text-[#d97757]"
+                            >
+                                <Asterisk
+                                    aria-hidden="true"
+                                    className="size-4 animate-spin motion-reduce:animate-none"
+                                />
+                                {t('turn_steps.working')}
+                            </li>
+                        )
                     )}
                 </ol>
             )}

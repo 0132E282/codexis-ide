@@ -177,7 +177,10 @@ export function ChatPanel({
         onRestoreCli: setCli,
         onReset: attachmentState.reset,
     });
-    const { turns, busy, context } = session;
+    const { turns, busy, context, subagents } = session;
+    const runningSubagentCount = subagents.filter(
+        (agent) => !agent.done,
+    ).length;
     // * Only a finished answer: the speaker button reads it, and the message box is not redrawn for every streamed piece.
     let lastAnswer = '';
 
@@ -437,6 +440,7 @@ export function ChatPanel({
                 onPermission={answerPermission}
                 projectName={projectName}
                 waiting={waitingPrompts}
+                runningSubagentCount={runningSubagentCount}
             />
             <Composer
                 project={null}

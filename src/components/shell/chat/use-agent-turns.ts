@@ -332,6 +332,18 @@ export function useAgentTurns({
                 case 'background':
                     // * Announced mid-turn (handled by the background-tasks hook); it must not end the turn.
                     break;
+                // * The main agent finished its answer but sub-agents still work (the CLI prints `result` only after them): the chat is free now, yet the run stays listened to for what they and the main agent add later.
+                case 'idle':
+                    if (working.current.size > 0) {
+                        update(runId, (turn) => ({
+                            ...turn,
+                            running: false,
+                            permissions: undefined,
+                        }));
+                        flushQueue.current?.();
+                    }
+
+                    break;
                 // * `result`: the answer is complete, so the chat is free even if the CLI process lingers for sub-agents or background tasks; the `done` after it is ignored.
                 case 'result':
                 default: {

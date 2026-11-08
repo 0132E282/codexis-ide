@@ -116,6 +116,7 @@ fn status_words_are_normalised() {
         ("DRAFT", PlanStatus::Draft),
         ("DRAFT_CHO_DUYET", PlanStatus::Draft),
         ("CHO_DUYET", PlanStatus::Draft),
+        ("CHO_KIEM_TRA", PlanStatus::Review),
         ("DA_TRIEN_KHAI_CHUA_KIEM_UI", PlanStatus::Partial),
         ("BLOCKED", PlanStatus::Unknown),
     ] {

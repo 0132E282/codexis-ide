@@ -130,7 +130,13 @@ export type ChatConversation = {
 
 /** How far a plan document stands, one vocabulary for the JSON and Markdown plans. */
 export type PlanDocStatus =
-    'done' | 'in_progress' | 'partial' | 'todo' | 'draft' | 'unknown';
+    | 'done'
+    | 'in_progress'
+    | 'partial'
+    | 'todo'
+    | 'draft'
+    | 'review'
+    | 'unknown';
 /** One plan of the project's `docs/plans/` folder (a card). */
 export type PlanDoc = {
     /** Path relative to the project (the key of the card). */
@@ -427,6 +433,7 @@ export type AgentEvent = {
         | 'background'
         | 'speaker'
         | 'error'
+        | 'idle'
         | 'result'
         | 'done';
     text: string;

@@ -14,23 +14,25 @@ import { errorText, ide, onPlansChanged } from '@/lib/ide';
 import type { PlanDoc, PlanDocStatus, PlanDocsList } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 
-type PlanFilter = 'all' | 'done' | 'in_progress' | 'draft';
+type PlanFilter = 'all' | 'draft' | 'in_progress' | 'review' | 'done';
 
 const FILTER_KEY = 'ide.plans.filter';
 
 const FILTERS: { id: PlanFilter; label: string }[] = [
     { id: 'all', label: 'plans.filter_all' },
-    { id: 'done', label: 'plans.filter_done' },
-    { id: 'in_progress', label: 'plans.filter_in_progress' },
     { id: 'draft', label: 'plans.filter_draft' },
+    { id: 'in_progress', label: 'plans.filter_in_progress' },
+    { id: 'review', label: 'plans.filter_review' },
+    { id: 'done', label: 'plans.filter_done' },
 ];
 
 // * Which statuses each quick filter shows.
 const FILTER_STATUSES: Record<PlanFilter, PlanDocStatus[] | null> = {
     all: null,
-    done: ['done'],
-    in_progress: ['in_progress', 'partial'],
     draft: ['draft', 'todo'],
+    in_progress: ['in_progress', 'partial'],
+    review: ['review'],
+    done: ['done'],
 };
 
 /** The filter the person chose last; the plans that are done come first by default. */

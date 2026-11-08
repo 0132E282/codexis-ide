@@ -166,6 +166,7 @@ export function useChatSession({
 
     return {
         turns,
+        subagents,
         setTurns,
         context,
         setContext,

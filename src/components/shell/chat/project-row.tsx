@@ -1,4 +1,5 @@
 import {
+    Check,
     ChevronDown,
     CircleHelp,
     FilePen,
@@ -12,7 +13,7 @@ import {
     ShieldCheck,
     Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { MODES } from '@/components/shell/chat/cli-options';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,8 +24,6 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
     DropdownMenuShortcut,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -86,6 +85,7 @@ export function ProjectRow({
     const [projectSearch, setProjectSearch] = useState('');
     const { confirm, dialog } = useConfirm();
     const [modeMenuOpen, setModeMenuOpen] = useState(false);
+    const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
 
     // * A mode that accepts every permission is used only after the person confirms, every time it is picked.
     const chooseMode = async (next: string) => {
@@ -106,6 +106,52 @@ export function ProjectRow({
 
         onModeChange(next);
     };
+
+    // * The number on each row picks it.
+    const pickModeByNumber = (
+        event: KeyboardEvent<HTMLElement>,
+        closeMenu: () => void,
+    ) => {
+        const picked = MODES[Number(event.key) - 1];
+
+        if (picked !== undefined) {
+            event.preventDefault();
+            // * The menu closes first, so the confirmation is not drawn over an open menu.
+            closeMenu();
+            void chooseMode(picked.value);
+        }
+    };
+
+    // * Every mode with its hint, the Recommended tag, its number and a ✓ on the current one (the Settings menu and the mode menu share it).
+    const modeItems = MODES.map((option, index) => {
+        const Icon = MODE_ICONS[option.value];
+
+        return (
+            <DropdownMenuItem
+                key={option.value}
+                role="menuitemradio"
+                aria-checked={option.value === mode}
+                onSelect={() => void chooseMode(option.value)}
+            >
+                {Icon === undefined ? null : <Icon aria-hidden="true" />}
+                <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex items-center gap-2">
+                        {t(option.label)}
+                        {option.recommended && (
+                            <span className="rounded-full border px-1.5 text-xs text-muted-foreground">
+                                {t('cli_options.recommended')}
+                            </span>
+                        )}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                        {t(option.hint)}
+                    </span>
+                </span>
+                {option.value === mode && <Check aria-hidden="true" />}
+                <DropdownMenuShortcut>{index + 1}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+        );
+    });
 
     return (
         <div
@@ -185,7 +231,10 @@ export function ProjectRow({
                 </DropdownMenuContent>
             </DropdownMenu>
             {compact ? (
-                <DropdownMenu>
+                <DropdownMenu
+                    open={settingsMenuOpen}
+                    onOpenChange={setSettingsMenuOpen}
+                >
                     <DropdownMenuTrigger asChild>
                         <Button
                             type="button"
@@ -210,7 +259,16 @@ export function ProjectRow({
                             <ChevronDown aria-hidden="true" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuContent
+                        align="start"
+                        className="w-72"
+                        onKeyDown={(event) =>
+                            cli === 'claude' &&
+                            pickModeByNumber(event, () =>
+                                setSettingsMenuOpen(false),
+                            )
+                        }
+                    >
                         {showWorktree && (
                             <DropdownMenuCheckboxItem
                                 checked={worktree}
@@ -243,31 +301,7 @@ export function ProjectRow({
                                 <DropdownMenuLabel>
                                     {t('project_row.choose_mode')}
                                 </DropdownMenuLabel>
-                                <DropdownMenuRadioGroup
-                                    value={mode}
-                                    onValueChange={(next) =>
-                                        void chooseMode(next)
-                                    }
-                                >
-                                    {MODES.map((option) => (
-                                        <DropdownMenuRadioItem
-                                            key={option.value}
-                                            value={option.value}
-                                            title={t(option.hint)}
-                                        >
-                                            {(() => {
-                                                const Icon =
-                                                    MODE_ICONS[option.value];
-
-                                                return Icon ===
-                                                    undefined ? null : (
-                                                    <Icon aria-hidden="true" />
-                                                );
-                                            })()}
-                                            {t(option.label)}
-                                        </DropdownMenuRadioItem>
-                                    ))}
-                                </DropdownMenuRadioGroup>
+                                {modeItems}
                             </>
                         )}
                     </DropdownMenuContent>
@@ -313,52 +347,13 @@ export function ProjectRow({
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
                                     align="start"
-                                    onKeyDown={(event) => {
-                                        // * The number on each row picks it.
-                                        const picked =
-                                            MODES[Number(event.key) - 1];
-
-                                        if (picked !== undefined) {
-                                            event.preventDefault();
-                                            // * The menu closes first, so the confirmation is not drawn over an open menu.
-                                            setModeMenuOpen(false);
-                                            void chooseMode(picked.value);
-                                        }
-                                    }}
+                                    onKeyDown={(event) =>
+                                        pickModeByNumber(event, () =>
+                                            setModeMenuOpen(false),
+                                        )
+                                    }
                                 >
-                                    <DropdownMenuRadioGroup
-                                        value={mode}
-                                        onValueChange={(next) =>
-                                            void chooseMode(next)
-                                        }
-                                    >
-                                        {MODES.map((option, index) => (
-                                            <DropdownMenuRadioItem
-                                                key={option.value}
-                                                value={option.value}
-                                                title={t(option.hint)}
-                                            >
-                                                <span className="flex flex-col">
-                                                    <span className="flex items-center gap-2">
-                                                        {t(option.label)}
-                                                        {option.recommended && (
-                                                            <span className="rounded-full border px-1.5 text-xs text-muted-foreground">
-                                                                {t(
-                                                                    'cli_options.recommended',
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {t(option.hint)}
-                                                    </span>
-                                                </span>
-                                                <DropdownMenuShortcut>
-                                                    {index + 1}
-                                                </DropdownMenuShortcut>
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
+                                    {modeItems}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             <Button

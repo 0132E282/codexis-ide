@@ -335,7 +335,7 @@
     {
       "id": "TASK-S05",
       "title": "Kiểm chứng toàn bộ và cập nhật tài liệu",
-      "status": "TODO",
+      "status": "PARTIAL",
       "priority": "P1",
       "priorityReason": "Đóng AC có bằng chứng chạy thật",
       "requirements": [

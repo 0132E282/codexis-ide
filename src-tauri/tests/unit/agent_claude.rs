@@ -235,6 +235,31 @@ fn claude_task_call_starts_a_subagent_and_its_result_ends_it() {
 }
 
 #[test]
+fn a_background_subagent_is_done_at_its_notification_and_the_main_end_of_turn_is_idle() {
+    let launched = r#"{"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"Async agent launched successfully."}]}]}}"#;
+    let notified = r#"{"type":"system","subtype":"task_notification","task_id":"a1","tool_use_id":"t1","status":"completed"}"#;
+    let main_end = r#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_delta","delta":{"stop_reason":"end_turn"}}}"#;
+    let main_tool = r#"{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_delta","delta":{"stop_reason":"tool_use"}}}"#;
+    let sub_end = r#"{"type":"stream_event","parent_tool_use_id":"t1","event":{"type":"message_delta","delta":{"stop_reason":"end_turn"}}}"#;
+
+    // * Only the step finishes at "launched"; the sub-agent keeps working.
+    let launch_events = ClaudeAgent.parse_line(launched);
+
+    assert_eq!(launch_events.len(), 1);
+    assert!(matches!(launch_events[0], Event::ToolResult(_)));
+    assert_eq!(
+        ClaudeAgent.parse_line(notified),
+        vec![Event::SubagentDone("t1".to_string())]
+    );
+    assert_eq!(
+        ClaudeAgent.parse_line(main_end),
+        vec![Event::Idle(String::new())]
+    );
+    assert!(ClaudeAgent.parse_line(main_tool).is_empty());
+    assert!(ClaudeAgent.parse_line(sub_end).is_empty());
+}
+
+#[test]
 fn claude_sub_agent_words_stay_out_of_the_answer() {
     let words = r#"{"type":"assistant","parent_tool_use_id":"t1","message":{"content":[{"type":"text","text":"working"}]}}"#;
     let delta = r#"{"type":"stream_event","parent_tool_use_id":"t1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"wor"}}}"#;

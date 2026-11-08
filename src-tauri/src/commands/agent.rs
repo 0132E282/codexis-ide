@@ -498,7 +498,7 @@ impl TurnObserver for HopObserver<'_> {
             }
             agent::Event::Error(_) => self.failed.store(true, Ordering::Relaxed),
             // * The relay ends the turn itself (its own `Done`), not at the result of one hop.
-            agent::Event::Done(_) | agent::Event::Result(_) => return,
+            agent::Event::Done(_) | agent::Event::Result(_) | agent::Event::Idle(_) => return,
             _ => {}
         }
 

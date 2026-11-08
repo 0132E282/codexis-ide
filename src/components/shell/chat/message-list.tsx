@@ -30,6 +30,8 @@ export const MessageList = forwardRef<
         projectName: string;
         /** Messages sent while a turn runs: shown at the end at once, as sent but not answered yet. */
         waiting?: string[];
+        /** Sub-agents still working: the last running turn shows it waits for them once its own answer is written. */
+        runningSubagentCount?: number;
     }
 >(function MessageList(
     {
@@ -42,6 +44,7 @@ export const MessageList = forwardRef<
         onPermission,
         projectName,
         waiting = [],
+        runningSubagentCount = 0,
     },
     bottom,
 ) {
@@ -82,6 +85,11 @@ export const MessageList = forwardRef<
                                 onSwitchAccount={onSwitchAccount}
                                 onPermission={onPermission}
                                 projectName={projectName}
+                                waitingSubagentCount={
+                                    index === turns.length - 1
+                                        ? runningSubagentCount
+                                        : 0
+                                }
                             />
                         ))}
                         {waiting.map((prompt, index) => {
