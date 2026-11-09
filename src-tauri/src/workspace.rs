@@ -658,8 +658,13 @@ impl Access<'_> {
         }
 
         // * A folder dropped onto itself or onto what it holds would never end.
-        if meta.is_dir() && directory.starts_with(source) {
-            return Err(WorkspaceError::BadPath);
+        // * Compared by real path: the folders are canonical, a path the person dropped may not be.
+        if meta.is_dir() {
+            let real = fs::canonicalize(source).map_err(|_| WorkspaceError::NotFound)?;
+
+            if directory.starts_with(&real) {
+                return Err(WorkspaceError::BadPath);
+            }
         }
 
         let name = free_name(&directory, source_name);
