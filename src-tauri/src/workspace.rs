@@ -375,6 +375,11 @@ impl Workspace {
         self.access(&Unguarded).copy(path, folder)
     }
 
+    /// Copies a file or folder from outside the project into `folder`: the person's drop on the file tree.
+    pub fn import_for_viewer(&self, source: &Path, folder: &str) -> Result<String> {
+        self.access(&Unguarded).import(source, folder)
+    }
+
     /// Moves a file or folder into `folder`: the person's drag and drop in the file tree.
     pub fn move_for_viewer(&self, path: &str, folder: &str) -> Result<String> {
         self.access(&Unguarded).move_into(path, folder)
@@ -619,6 +624,49 @@ impl Access<'_> {
         let mut budget = MAX_COPY_ENTRIES;
 
         copy_entry(&source, &target, &mut budget).inspect_err(|_| {
+            // * A half-made copy is removed again.
+            let _ = if target.is_dir() {
+                fs::remove_dir_all(&target)
+            } else {
+                fs::remove_file(&target)
+            };
+        })?;
+
+        Ok(join_relative(&relative_folder, &name))
+    }
+
+    /// Copies a file or folder from outside the project (dropped on the file tree) into `folder` (empty: the project root) under a free name and returns the new relative path. Links are refused, and a folder holding the project is too big a source to take.
+    pub fn import(&self, source: &Path, folder: &str) -> Result<String> {
+        if !source.is_absolute() {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let meta = fs::symlink_metadata(source).map_err(|_| WorkspaceError::NotFound)?;
+
+        if meta.file_type().is_symlink() {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let source_name = source
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or(WorkspaceError::BadPath)?;
+        let (directory, relative_folder) = self.folder_for_entries(folder)?;
+
+        if in_denied_directory(&join_relative(&relative_folder, source_name)) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        // * A folder dropped onto itself or onto what it holds would never end.
+        if meta.is_dir() && directory.starts_with(source) {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let name = free_name(&directory, source_name);
+        let target = directory.join(&name);
+        let mut budget = MAX_COPY_ENTRIES;
+
+        copy_entry(source, &target, &mut budget).inspect_err(|_| {
             // * A half-made copy is removed again.
             let _ = if target.is_dir() {
                 fs::remove_dir_all(&target)

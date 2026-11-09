@@ -66,7 +66,7 @@ export function SidebarGridGroups({
     openGroup: number | null;
     targetGroup: number;
     maxGrid: number;
-    onOpenGroup: (group: number) => void;
+    onOpenGroup: (group: number, root?: string) => void;
     onNewGroup: () => void;
     onRemoveGridProject: (root: string, group: number) => void;
 }) {
@@ -144,7 +144,9 @@ export function SidebarGridGroups({
                                 <button
                                     type="button"
                                     disabled={entry.count < 2}
-                                    onClick={() => onOpenGroup(entry.group)}
+                                    onClick={() =>
+                                        onOpenGroup(entry.group, project.root)
+                                    }
                                     className="flex w-full items-center gap-2 rounded-sm py-1.5 pr-8 pl-2.5 text-left text-sm text-foreground hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:hover:bg-transparent"
                                 >
                                     <Folder

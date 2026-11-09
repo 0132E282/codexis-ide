@@ -18,6 +18,7 @@ import {
     PanelRightOpen,
     X,
 } from 'lucide-react';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -168,6 +169,116 @@ export function TreePanel({
     } | null>(null);
     const [newName, setNewName] = useState('');
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
+
+    const rows = useRef<HTMLDivElement>(null);
+    // * Latest values for the drop listener, which is set up once per project.
+    const reloadRef = useRef(onReload);
+
+    useEffect(() => {
+        reloadRef.current = onReload;
+    }, [onReload]);
+
+    // * Files dragged in from outside the app: dropped on a folder (or on a file: its folder, or on the empty area: the project root) they are copied there.
+    useEffect(() => {
+        if (localRoot === null || isClosed) {
+            return;
+        }
+
+        const target = (x: number, y: number) => {
+            const element = document.elementFromPoint(
+                x / window.devicePixelRatio,
+                y / window.devicePixelRatio,
+            );
+
+            if (element === null || !rows.current?.contains(element)) {
+                return null;
+            }
+
+            const item = element.closest<HTMLElement>('li[data-path]');
+
+            if (item === null) {
+                return { folder: '', item: null };
+            }
+
+            const path = item.dataset.path ?? '';
+
+            return item.hasAttribute('aria-expanded')
+                ? { folder: path, item }
+                : {
+                      folder: path.split('/').slice(0, -1).join('/'),
+                      item: null,
+                  };
+        };
+        const clearHighlight = () =>
+            rows.current
+                ?.querySelectorAll('[data-drop-target]')
+                .forEach((item) => item.removeAttribute('data-drop-target'));
+        let cancelled = false;
+        let stop: (() => void) | null = null;
+
+        void getCurrentWebview()
+            .onDragDropEvent(({ payload }) => {
+                if (payload.type === 'leave') {
+                    clearHighlight();
+
+                    return;
+                }
+
+                if (payload.type === 'drop') {
+                    clearHighlight();
+                } else if (
+                    payload.type !== 'over' &&
+                    payload.type !== 'enter'
+                ) {
+                    return;
+                }
+
+                const hit = target(payload.position.x, payload.position.y);
+
+                if (payload.type !== 'drop') {
+                    clearHighlight();
+                    hit?.item?.setAttribute('data-drop-target', '');
+
+                    return;
+                }
+
+                if (hit === null || payload.paths.length === 0) {
+                    return;
+                }
+
+                ide.workspaceImport(hit.folder, payload.paths, localRoot)
+                    .then((created) => {
+                        reloadRef.current();
+                        toast.success(
+                            t('tree_panel.imported', {
+                                count: created.length,
+                            }),
+                        );
+                    })
+                    .catch((caught) =>
+                        toast.error(
+                            t(
+                                typeof caught === 'string'
+                                    ? caught
+                                    : 'common.something_went_wrong',
+                            ),
+                        ),
+                    );
+            })
+            .then((unlisten) => {
+                if (cancelled) {
+                    unlisten();
+                } else {
+                    stop = unlisten;
+                }
+            })
+            .catch(() => undefined);
+
+        return () => {
+            cancelled = true;
+            stop?.();
+        };
+    }, [localRoot, isClosed]);
 
     const startCreate = (folder: string, isFolder: boolean) => {
         setNewName('');
@@ -485,7 +596,10 @@ export function TreePanel({
                     placeholder={t('tree_panel.filter_files2')}
                     className="h-8"
                 />
-                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                <div
+                    ref={rows}
+                    className="flex min-h-0 flex-1 flex-col overflow-y-auto [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"
+                >
                     {paths === null ? (
                         <LoadingRows rows={10} className="px-2" />
                     ) : error !== null ? (

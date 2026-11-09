@@ -522,3 +522,50 @@ fn viewer_creates_copies_and_moves_entries_inside_the_project() {
     );
     assert!(dir.path().join("lib/a.txt").is_file());
 }
+
+#[test]
+fn files_from_outside_the_project_are_imported_under_a_free_name() {
+    let (dir, workspace) = project();
+    let outside = tempfile::tempdir().unwrap();
+
+    fs::create_dir(dir.path().join("src")).unwrap();
+    fs::write(outside.path().join("sync.sh"), "pull").unwrap();
+    fs::create_dir(outside.path().join("docs")).unwrap();
+    fs::write(outside.path().join("docs/a.md"), "a").unwrap();
+
+    assert_eq!(
+        workspace.import_for_viewer(&outside.path().join("sync.sh"), "src"),
+        Ok("src/sync.sh".to_string())
+    );
+    assert_eq!(
+        workspace.import_for_viewer(&outside.path().join("sync.sh"), "src"),
+        Ok("src/sync copy.sh".to_string())
+    );
+    assert_eq!(
+        workspace.import_for_viewer(&outside.path().join("docs"), ""),
+        Ok("docs".to_string())
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("docs/a.md")).unwrap(),
+        "a"
+    );
+
+    // * A link, a missing file and a relative path are refused; the project folder itself never goes inside.
+    symlink(outside.path().join("sync.sh"), outside.path().join("link")).unwrap();
+    assert_eq!(
+        workspace.import_for_viewer(&outside.path().join("link"), ""),
+        Err(WorkspaceError::BadPath)
+    );
+    assert_eq!(
+        workspace.import_for_viewer(&outside.path().join("none"), ""),
+        Err(WorkspaceError::NotFound)
+    );
+    assert_eq!(
+        workspace.import_for_viewer(Path::new("sync.sh"), ""),
+        Err(WorkspaceError::BadPath)
+    );
+    assert_eq!(
+        workspace.import_for_viewer(dir.path(), "src"),
+        Err(WorkspaceError::BadPath)
+    );
+}

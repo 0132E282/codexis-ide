@@ -64,9 +64,12 @@ export function ChatGrid({
     members,
     projects,
     headerStart,
+    focus,
     onChanged,
 }: {
     members: GridMember[];
+    /** A project the sidebar asked to pick (a new object per request): its first chat becomes the picked one. */
+    focus?: { root: string; n: number } | null;
     /** Saved projects (folder + name). */
     projects: { root: string; name: string }[];
     /** The button that unfolds the sidebar, shown while it is folded away. */
@@ -84,6 +87,16 @@ export function ChatGrid({
         }));
     // * The chat the user last clicked: the file tree shows its project, and a file double-clicked there is attached to it.
     const [pickedId, setPickedId] = useState<number | null>(null);
+    const [seenFocus, setSeenFocus] = useState(focus);
+
+    if (focus !== seenFocus) {
+        setSeenFocus(focus);
+        const target = members.find((member) => member.workspace === focus?.root);
+
+        if (target !== undefined) {
+            setPickedId(target.conversation);
+        }
+    }
     const [attach, setAttach] = useState<{ path: string; n: number } | null>(
         null,
     );

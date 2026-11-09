@@ -244,6 +244,9 @@ export const ide = {
         isFolder: boolean,
         root?: string,
     ) => invoke<string>('workspace_create', { root, folder, name, isFolder }),
+    /** Copies files and folders from outside the project (by full path) into `folder` (empty: the project root); resolves to their new paths. */
+    workspaceImport: (folder: string, paths: string[], root?: string) =>
+        invoke<string[]>('workspace_import', { root, folder, paths }),
     projects: () =>
         invoke<{ projects: Project[]; selected: string | null }>(
             'projects_list',

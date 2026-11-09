@@ -70,6 +70,7 @@ export const codeViewerEnglish: Record<string, string> = {
     'tree_panel.file_tree_name': 'File tree {name}',
     'tree_panel.filter_files': 'Filter files',
     'tree_panel.filter_files2': 'Filter files...',
+    'tree_panel.imported': 'Copied {count} items into the project',
     'tree_panel.no_files': 'No files.',
     'tree_panel.resize_file_tree': 'Resize file tree',
     'tree_panel.search': 'Go to the filter',

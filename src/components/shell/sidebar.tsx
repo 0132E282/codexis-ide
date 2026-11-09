@@ -112,7 +112,7 @@ export function Sidebar({
     /** Adds the chat to a group, or takes it out when it is in one. */
     onToggleGrid: (root: string, conversation: number, group: number) => void;
     /** Shows a group (it needs two chats). */
-    onOpenGroup: (group: number) => void;
+    onOpenGroup: (group: number, root?: string) => void;
     /** Starts an empty group; the next chats added go to it. */
     onNewGroup: () => void;
     /** Takes every chat of one project out of one group. */

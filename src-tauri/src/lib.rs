@@ -112,6 +112,7 @@ pub fn run() {
             commands::files::workspace_create,
             commands::files::workspace_copy,
             commands::files::workspace_move,
+            commands::files::workspace_import,
             commands::git::local_changes,
             commands::git::local_branches,
             commands::git::local_head,

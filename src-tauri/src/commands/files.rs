@@ -278,6 +278,43 @@ pub fn workspace_copy(
     Ok(copied)
 }
 
+/// Copies files and folders dropped from outside the app into `folder` (empty: the project root) and returns their new paths. One that cannot be copied is skipped, the rest still go in.
+#[tauri::command]
+pub fn workspace_import(
+    app: AppHandle,
+    state: State<AppState>,
+    root: Option<String>,
+    folder: String,
+    paths: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+    let mut imported = Vec::new();
+    let mut last_error = None;
+
+    for source in &paths {
+        match workspace.import_for_viewer(std::path::Path::new(source), &folder) {
+            Ok(created) => {
+                log_file_event(
+                    &app,
+                    &NewFileEvent::user(
+                        &workspace.root().display().to_string(),
+                        &created,
+                        FileAction::Copy,
+                    )
+                    .with_old_path(source),
+                );
+                imported.push(created);
+            }
+            Err(error) => last_error = Some(error.to_string()),
+        }
+    }
+
+    match (imported.is_empty(), last_error) {
+        (true, Some(error)) => Err(error),
+        _ => Ok(imported),
+    }
+}
+
 /// Moves a file or folder into `folder` (empty: the project root), the drag and drop of the file tree, and returns the new path.
 #[tauri::command]
 pub fn workspace_move(

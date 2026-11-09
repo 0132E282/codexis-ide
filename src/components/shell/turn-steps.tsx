@@ -156,13 +156,17 @@ function SpeakerLabel({ cli }: { cli: AgentCli }) {
     );
 }
 
+// * The AI's own memory notes live in the Claude folder of the user's home, outside the project: they are not a change to it.
+const MEMORY_FILE = /\/\.claude\/projects\/[^/]+\/memory\//;
+
 /** The files the AI edited or wrote in the turn (calls that carry a change), each once, in order. */
 function editedFiles(steps: Step[]): string[] {
     const paths = steps.flatMap((step) =>
         step.kind === 'tool' &&
         step.change !== undefined &&
         step.status !== 'error' &&
-        step.input !== ''
+        step.input !== '' &&
+        !MEMORY_FILE.test(step.input)
             ? [step.input]
             : [],
     );

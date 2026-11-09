@@ -88,6 +88,9 @@ export default function App() {
     // * The chat grids span projects, so they are one list for the whole app, kept in the backend: read at start, read again after each change (it brings the titles). Each chat has its group; a group is shown from two chats on.
     const [grid, setGrid] = useState<GridMember[]>([]);
     const [openGroup, setOpenGroup] = useState<number | null>(null);
+    const [focus, setFocus] = useState<{ root: string; n: number } | null>(
+        null,
+    );
     // * The group the next chat added goes to.
     const [targetGroup, setTargetGroup] = useState(1);
     const targetChosen = useRef(false);
@@ -174,7 +177,9 @@ export default function App() {
 
         saveGrid(rest, stillOpen(rest));
     };
-    const showGroup = (group: number) => {
+    const showGroup = (group: number, root?: string) => {
+        // * A project row of the group also picks that project's chat, so the file tree follows it.
+        setFocus(root === undefined ? null : { root, n: (focus?.n ?? 0) + 1 });
         setOpenGroup(group);
         setTargetGroup(group);
     };
@@ -404,6 +409,7 @@ export default function App() {
                         <ChatGrid
                             key={openGroup}
                             members={openMembers}
+                            focus={focus}
                             projects={chatProjects}
                             headerStart={
                                 sidebarCollapsed
