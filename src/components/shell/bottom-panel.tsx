@@ -68,7 +68,7 @@ export function BottomPanel({
     /** Prompts of the turns running in the chat of the open project. */
     runningPrompts: string[];
 }) {
-    const sessions = useTerminalSessions(onClose);
+    const sessions = useTerminalSessions(onClose, root);
     const { tasks, failed, stopTask, clearFinished } = background;
     const hasFinished = tasks.some((task) => task.state !== 'running');
     // * The shells start with the first visit to the Terminal tab and then stay alive while another tab is shown.
@@ -213,7 +213,6 @@ export function BottomPanel({
                 {terminalStarted && (
                     <ActivityTerminal
                         sessions={sessions}
-                        root={root}
                         visible={tab === 'terminal'}
                     />
                 )}

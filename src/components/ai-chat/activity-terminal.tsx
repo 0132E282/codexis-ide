@@ -206,11 +206,15 @@ function ShellTerminal({
 }
 
 /** The terminal sessions of the bottom panel: kept by the panel so the tab bar (add, split) and the session list share one state. */
-export function useTerminalSessions(onClose: () => void) {
+export function useTerminalSessions(
+    onClose: () => void,
+    root: string | undefined,
+) {
     const counter = useRef(2);
-    const [terminals, setTerminals] = useState([
-        { id: 1, title: 'Terminal 1' },
-    ]);
+    // * Each shell starts in the folder of the project open when it was made and stays there: switching project leaves it running.
+    const [terminals, setTerminals] = useState<
+        { id: number; title: string; root: string | undefined }[]
+    >([{ id: 1, title: 'Terminal 1', root }]);
     const [active, setActive] = useState(1);
     // * The terminal drawn beside the active one (null: only one on screen).
     const [split, setSplit] = useState<number | null>(null);
@@ -220,7 +224,7 @@ export function useTerminalSessions(onClose: () => void) {
 
         setTerminals((current) => [
             ...current,
-            { id, title: `Terminal ${id}` },
+            { id, title: `Terminal ${id}`, root },
         ]);
         setActive(id);
     };
@@ -244,7 +248,7 @@ export function useTerminalSessions(onClose: () => void) {
 
         setTerminals((current) => [
             ...current,
-            { id, title: `Terminal ${id}` },
+            { id, title: `Terminal ${id}`, root },
         ]);
         setSplit(id);
     };
@@ -286,12 +290,9 @@ export type TerminalSessions = ReturnType<typeof useTerminalSessions>;
 /** Terminal tab: the shells on the left, a narrow list of the sessions on the right. */
 export function ActivityTerminal({
     sessions,
-    root,
     visible,
 }: {
     sessions: TerminalSessions;
-    /** Folder of the open project (the shells start there). */
-    root: string | undefined;
     /** The tab is on screen; the shells stay alive when it is not. */
     visible: boolean;
 }) {
@@ -331,7 +332,7 @@ export function ActivityTerminal({
                         )}
                     >
                         <ShellTerminal
-                            root={root}
+                            root={terminal.root}
                             visible={
                                 visible &&
                                 (terminal.id === active ||
