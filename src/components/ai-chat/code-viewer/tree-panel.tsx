@@ -81,8 +81,11 @@ export function TreePanel({
     closed,
     onClosedChange,
     createRequest,
+    accountMenu,
 }: {
     /** The host holds the closed state and draws the button that opens the tree again (the chat grid puts it in its header): closed, the tree draws nothing. */
+    /** The account menu button, drawn right of the filter; none, no button. */
+    accountMenu?: ReactNode;
     closed?: boolean;
     onClosedChange?: (closed: boolean) => void;
     /** * A new object each time the editor options menu asks for a new file or folder at the project root (local projects). */
@@ -595,14 +598,19 @@ export function TreePanel({
                 aria-label={t('tree_panel.file_tree')}
                 className="flex min-h-0 flex-1 flex-col gap-2 p-2"
             >
-                <Input
-                    ref={filterInput}
-                    value={filter}
-                    onChange={(event) => onFilterChange(event.target.value)}
-                    aria-label={t('tree_panel.filter_files')}
-                    placeholder={t('tree_panel.filter_files2')}
-                    className="h-8"
-                />
+                <div className="flex items-center gap-1">
+                    <Input
+                        ref={filterInput}
+                        value={filter}
+                        onChange={(event) =>
+                            onFilterChange(event.target.value)
+                        }
+                        aria-label={t('tree_panel.filter_files')}
+                        placeholder={t('tree_panel.filter_files2')}
+                        className="h-8"
+                    />
+                    {accountMenu}
+                </div>
                 <div
                     ref={rows}
                     className="flex min-h-0 flex-1 flex-col overflow-y-auto [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"

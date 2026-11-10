@@ -40,6 +40,7 @@ export function CodeViewer({
     repos,
     onViewRepo,
     headerActions,
+    accountMenu,
     branch = null,
     changes,
     openRequest = null,
@@ -69,6 +70,8 @@ export function CodeViewer({
     onViewRepo: (repo: string) => void;
     /** * Extra buttons in the tree header (branch and Terminal), next to the project name. */
     headerActions?: ReactNode;
+    /** The account menu button, drawn next to the tree filter. */
+    accountMenu?: ReactNode;
     /** * GitHub branch to browse (null: the default one). */
     branch?: string | null;
     /** * Files the AI changed in this conversation (shown with M/A marks and a diff). */
@@ -430,6 +433,7 @@ export function CodeViewer({
             repos={repos}
             onViewRepo={onViewRepo}
             headerActions={headerActions}
+            accountMenu={accountMenu}
             isLocal={localRoot !== null}
             view={view}
             onViewChange={setView}

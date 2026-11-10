@@ -68,6 +68,7 @@ export function WorkspacePane({
     sidebarToggle,
     hasWindowButtons,
     bottomPanel,
+    accountMenu,
     onToggleTerminal,
     onToggleBackground,
     onTogglePlans,
@@ -93,6 +94,8 @@ export function WorkspacePane({
     hasWindowButtons: boolean;
     /** The bottom panel when it sits under the work area: drawn under the file area only, never under the main chat. */
     bottomPanel: ReactNode;
+    /** The account menu button for the file tree header. */
+    accountMenu: ReactNode;
     onToggleTerminal: () => void;
     onToggleBackground: () => void;
     onTogglePlans: () => void;
@@ -355,6 +358,7 @@ export function WorkspacePane({
                 trailing={
                     <CodeViewer
                         alwaysShowEditor
+                        accountMenu={accountMenu}
                         treeClosed={treeClosed}
                         onTreeClosedChange={setTreeClosed}
                         chatCollapsed={state.chatCollapsed}

@@ -11,6 +11,7 @@ import { LoginScreen } from '@/components/shell/accounts';
 import { DialogsHost } from '@/components/shell/dialogs-host';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Sidebar } from '@/components/shell/sidebar';
+import { AccountMenu } from '@/components/shell/sidebar-footer';
 import { SidebarToggle } from '@/components/shell/sidebar-toggle';
 import { UpdateBanner } from '@/components/shell/update-banner';
 import { WorkspacePane } from '@/components/shell/workspace-pane';
@@ -660,6 +661,22 @@ export default function App() {
                                             sidebarCollapsed={sidebarCollapsed}
                                             sidebarToggle={sidebarToggle}
                                             hasWindowButtons={!isFullscreen}
+                                            accountMenu={
+                                                <AccountMenu
+                                                    github={auth.statuses?.find(
+                                                        (status) =>
+                                                            status.provider ===
+                                                            'github',
+                                                    )}
+                                                    onOpenSettings={
+                                                        setSettingsTab
+                                                    }
+                                                    onOpenUsage={() =>
+                                                        setUsageOpen(true)
+                                                    }
+                                                    side="bottom"
+                                                />
+                                            }
                                             bottomPanel={
                                                 pane.key === activeKey &&
                                                 bottomPanel !== null &&

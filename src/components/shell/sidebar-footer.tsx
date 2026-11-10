@@ -38,15 +38,18 @@ function GithubAvatar({ account }: { account: string | null }) {
     );
 }
 
-/** The three-dot menu of the account: GitHub sign-in, chat settings and statistics. It sits in the sidebar footer. */
+/** The three-dot menu of the account: GitHub sign-in, chat settings and statistics. It sits in the sidebar footer and in the file tree header. */
 export function AccountMenu({
     github,
     onOpenSettings,
     onOpenUsage,
+    side = 'top',
 }: {
     github: AuthStatus | undefined;
     onOpenSettings: (tab: SettingsTab) => void;
     onOpenUsage: () => void;
+    /** Where the menu opens; the file tree header opens it downwards. */
+    side?: 'top' | 'bottom';
 }) {
     return (
         <DropdownMenu>
@@ -61,7 +64,7 @@ export function AccountMenu({
                     <EllipsisVertical aria-hidden="true" />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top">
+            <DropdownMenuContent align="end" side={side}>
                 {github?.loggedIn && (
                     <DropdownMenuItem disabled>
                         <Github aria-hidden="true" />
