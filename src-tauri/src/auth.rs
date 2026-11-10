@@ -139,6 +139,21 @@ pub trait AuthTool: Sync {
         Ok(None)
     }
 
+    /// Gives the authorization code the sign-in page showed to the login `start_login` left waiting. Only tools that ask for one support it.
+    ///
+    /// # Errors
+    /// Fails when the tool takes no code, no login is waiting, or the code is refused.
+    fn submit_code(
+        &self,
+        _environment: &[(&'static str, String)],
+        _code: &str,
+    ) -> Result<(), String> {
+        Err("auth.code_unsupported".to_string())
+    }
+
+    /// Stops the login `start_login` left waiting; nothing to do for tools whose login ends by itself.
+    fn cancel_login(&self, _environment: &[(&'static str, String)]) {}
+
     /// Signs out under `environment` with the tool's own logout command and waits for it.
     ///
     /// # Errors

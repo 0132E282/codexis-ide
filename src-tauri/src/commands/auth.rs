@@ -59,7 +59,7 @@ pub async fn claude_usage_profile(
     .await
 }
 
-/// Starts the login flow of `provider` (`claude`, `codex` or `github`), for the account `profile` of an AI CLI (the default one when absent); GitHub returns the one-time code to type in the browser.
+/// Starts the login flow of `provider` (`claude`, `codex`, `gemini`, `antigravity` or `github`), for the account `profile` of an AI CLI (the default one when absent); GitHub returns the one-time code to type in the browser; Antigravity returns its sign-in URL and then waits for `auth_submit_code`.
 #[tauri::command]
 pub async fn auth_login(
     app: AppHandle,
@@ -73,6 +73,45 @@ pub async fn auth_login(
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
         provider.auth().start_login(&environment)
+    })
+    .await
+}
+
+/// Gives the authorization code of the sign-in page to the login of `provider` left waiting by `auth_login` (Antigravity); fails when the code is refused.
+#[tauri::command]
+pub async fn auth_submit_code(
+    app: AppHandle,
+    provider: String,
+    profile: Option<i64>,
+    code: String,
+) -> Result<(), String> {
+    let provider = parse_provider(&provider)?;
+
+    blocking("auth.code_failed", move || {
+        let environment =
+            profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
+
+        provider.auth().submit_code(&environment, &code)
+    })
+    .await
+}
+
+/// Stops the login of `provider` left waiting by `auth_login`.
+#[tauri::command]
+pub async fn auth_cancel_login(
+    app: AppHandle,
+    provider: String,
+    profile: Option<i64>,
+) -> Result<(), String> {
+    let provider = parse_provider(&provider)?;
+
+    blocking("auth.login_failed", move || {
+        let environment =
+            profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
+
+        provider.auth().cancel_login(&environment);
+
+        Ok(())
     })
     .await
 }

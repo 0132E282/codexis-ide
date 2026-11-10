@@ -119,6 +119,12 @@ export const shellSettingsEnglish: Record<string, string> = {
     'errors.auth.status_failed': 'Could not read the sign-in status.',
     'errors.auth.usage_failed': 'Could not read the usage.',
     'errors.auth.login_failed': 'Could not start the sign-in.',
+    'errors.auth.code_rejected':
+        'The authorization code is wrong or has expired.',
+    'errors.auth.code_invalid': 'The authorization code is not valid.',
+    'errors.auth.no_pending_login': 'No sign-in is waiting; sign in again.',
+    'errors.auth.code_failed': 'Could not send the authorization code.',
+    'errors.auth.code_unsupported': 'This account takes no authorization code.',
     'errors.auth.unsupported': 'This account is not supported yet.',
     'errors.credentials.invalid': 'The key is not valid.',
     'errors.credentials.save_failed': 'Could not save the key.',

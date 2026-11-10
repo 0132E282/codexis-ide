@@ -9,6 +9,7 @@ import { AntigravityIcon, ClaudeIcon, CodexIcon, GeminiIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type AuthStatus } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
+import { LoginCodeDialog } from '@/components/shell/login-code-dialog';
 import { t } from '@/lib/i18n';
 
 const LABEL: Record<AuthProvider, string> = {
@@ -111,6 +112,8 @@ function AccountRow({
 }) {
     const [busy, setBusy] = useState(false);
     const [code, setCode] = useState<string | null>(null);
+    // * Antigravity's login ends by pasting the code of its sign-in page.
+    const [codeUrl, setCodeUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const connect = () => {
@@ -119,8 +122,13 @@ function AccountRow({
         setCode(null);
         ideAuth
             .login(status.provider)
-            .then((oneTimeCode) => {
-                setCode(oneTimeCode);
+            .then((shown) => {
+                if (status.provider === 'antigravity' && shown !== null) {
+                    setCodeUrl(shown);
+                } else {
+                    setCode(shown);
+                }
+
                 onChanged();
             })
             .catch((caught) => setError(errorText(caught)))
@@ -183,6 +191,25 @@ function AccountRow({
                     </Button>
                 )}
             </div>
+            {codeUrl !== null && (
+                <LoginCodeDialog
+                    url={codeUrl}
+                    onSubmit={(typed) =>
+                        ideAuth
+                            .submitCode(status.provider, undefined, typed)
+                            .then(() => {
+                                setCodeUrl(null);
+                                onChanged();
+                            })
+                    }
+                    onCancel={() => {
+                        void ideAuth
+                            .cancelLogin(status.provider)
+                            .catch(() => undefined);
+                        setCodeUrl(null);
+                    }}
+                />
+            )}
             {code !== null && (
                 <p className="text-xs">
                     {t('common.enter_the_code')}{' '}

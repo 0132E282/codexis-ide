@@ -50,3 +50,56 @@ fn logout_is_not_supported() {
         Err("auth.logout_unsupported".to_string())
     );
 }
+
+#[test]
+fn url_is_found_once_its_line_is_complete() {
+    let partial = "Authentication required. Please visit the URL to log in:\r\n  https://accounts.google.com/o/oauth2/auth?a=1&b=";
+    let complete = format!("{partial}2\r\n\r\nWaiting for authentication (timeout 60s)...\r\n");
+
+    assert_eq!(find_url(partial), None);
+    assert_eq!(
+        find_url(&complete),
+        Some("https://accounts.google.com/o/oauth2/auth?a=1&b=2".to_string())
+    );
+    assert_eq!(find_url("no link here\r\n"), None);
+}
+
+#[test]
+fn refusal_is_read_from_the_output() {
+    assert!(is_rejection(
+        "Error: Authentication failed: token exchange failed\r\n"
+    ));
+    assert!(!is_rejection("Waiting for authentication (timeout 60s)..."));
+}
+
+#[test]
+fn code_is_one_trimmed_line() {
+    assert_eq!(check_code("  4/0Abc-d_e \n"), Ok("4/0Abc-d_e"));
+    assert!(check_code("   ").is_err());
+    assert!(check_code("a\nb").is_err());
+    assert!(check_code(&"x".repeat(MAX_CODE_CHARS + 1)).is_err());
+}
+
+#[test]
+fn code_without_a_waiting_login_is_refused() {
+    let environment = vec![("HOME", "/no/such/login/home".to_string())];
+
+    assert_eq!(
+        AntigravityAuth.submit_code(&environment, "abc"),
+        Err("auth.no_pending_login".to_string())
+    );
+}
+
+#[test]
+fn tmp_cancel_kills() {
+    let home = tempfile::tempdir().unwrap();
+    let environment = vec![("HOME", home.path().display().to_string())];
+    assert!(AntigravityAuth.start_login(&environment).unwrap().is_some());
+    AntigravityAuth.cancel_login(&environment);
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    let out = std::process::Command::new("pgrep")
+        .args(["-f", home.path().to_str().unwrap()])
+        .output()
+        .unwrap();
+    eprintln!("pgrep: {:?}", String::from_utf8_lossy(&out.stdout));
+}

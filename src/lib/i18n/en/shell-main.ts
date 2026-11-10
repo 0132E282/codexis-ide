@@ -19,6 +19,7 @@ export const shellMainEnglish: Record<string, string> = {
     'app.pick_aproject_to': 'Pick a project to get started.',
     'app.resize_terminal_height': 'Resize terminal height',
     'bottom_panel.close': 'Close panel',
+    'bottom_panel.open_window': 'Detach the whole panel into a separate window',
     'bottom_panel.label': 'Bottom panel',
     'history.title': 'History',
     'plans.title': 'Plans',
@@ -253,6 +254,14 @@ export const shellMainEnglish: Record<string, string> = {
     'connect_phone_dialog.open_the_app_on':
         'Open the app on your phone (same Wi-Fi network) and scan the QR code to control the AI chat.',
     'connect_phone_dialog.qr_code_to_connect': 'QR code to connect a phone',
+    'login_code_dialog.cancel': 'Cancel',
+    'login_code_dialog.code': 'Authorization code',
+    'login_code_dialog.description':
+        'Sign in in the browser, then copy the authorization code the sign-in page shows and paste it here.',
+    'login_code_dialog.open_link': 'Open the sign-in page again',
+    'login_code_dialog.placeholder': 'Paste the authorization code',
+    'login_code_dialog.submit': 'Confirm',
+    'login_code_dialog.title': 'Enter the authorization code',
     'manage_accounts_page.24h_turns_turns_tokens':
         '24h: {turns} turns · {tokens}',
     'manage_accounts_page.7d_turns_turns_tokens':

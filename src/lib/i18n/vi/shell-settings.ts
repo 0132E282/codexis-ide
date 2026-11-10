@@ -116,6 +116,12 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'errors.auth.status_failed': 'Không đọc được trạng thái đăng nhập.',
     'errors.auth.usage_failed': 'Không đọc được usage.',
     'errors.auth.login_failed': 'Không bắt đầu được đăng nhập.',
+    'errors.auth.code_rejected': 'Mã xác thực không đúng hoặc đã hết hạn.',
+    'errors.auth.code_invalid': 'Mã xác thực không hợp lệ.',
+    'errors.auth.no_pending_login':
+        'Không còn lần đăng nhập nào đang chờ; hãy bấm đăng nhập lại.',
+    'errors.auth.code_failed': 'Không gửi được mã xác thực.',
+    'errors.auth.code_unsupported': 'Tài khoản này không cần mã xác thực.',
     'errors.auth.unsupported': 'Chưa hỗ trợ tài khoản này.',
     'errors.credentials.invalid': 'Khóa không hợp lệ.',
     'errors.credentials.save_failed': 'Không lưu được khóa.',

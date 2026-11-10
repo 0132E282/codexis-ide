@@ -18,6 +18,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'app.pick_aproject_to': 'Chọn một dự án để bắt đầu.',
     'app.resize_terminal_height': 'Đổi chiều cao terminal',
     'bottom_panel.close': 'Đóng bảng dưới',
+    'bottom_panel.open_window': 'Tách cả khung thành cửa sổ riêng',
     'bottom_panel.label': 'Bảng dưới',
     'history.title': 'Lịch sử',
     'history.branch': 'Nhánh',
@@ -251,6 +252,14 @@ export const shellMainVietnamese: Record<string, string> = {
     'connect_phone_dialog.open_the_app_on':
         'Mở app trên điện thoại (cùng mạng Wi-Fi) và quét mã QR để điều khiển chat AI.',
     'connect_phone_dialog.qr_code_to_connect': 'Mã QR kết nối điện thoại',
+    'login_code_dialog.cancel': 'Hủy',
+    'login_code_dialog.code': 'Mã xác thực',
+    'login_code_dialog.description':
+        'Đăng nhập ở trình duyệt, rồi sao chép mã xác thực trang đăng nhập hiển thị và dán vào đây.',
+    'login_code_dialog.open_link': 'Mở lại trang đăng nhập',
+    'login_code_dialog.placeholder': 'Dán mã xác thực',
+    'login_code_dialog.submit': 'Xác nhận',
+    'login_code_dialog.title': 'Nhập mã xác thực',
     'manage_accounts_page.24h_turns_turns_tokens':
         '24h: {turns} lượt · {tokens}',
     'manage_accounts_page.7d_turns_turns_tokens': '7d: {turns} lượt · {tokens}',

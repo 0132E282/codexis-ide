@@ -105,17 +105,32 @@ pub fn parse_claude_models(output: &str) -> Vec<ModelOption> {
         .collect()
 }
 
-/// `sonnet[1m]` shown as `Sonnet (1M)`, `opus` as `Opus`.
+/// The version each Claude alias points to. `claude -p "/model"` only names the current model, not what every alias resolves to, so this is the one place to update when Anthropic moves an alias (Fable `claude-fable-5-1`, Opus `claude-opus-5-5`, Sonnet `claude-sonnet-5-5`, Haiku `claude-haiku-5-5`). Aliases without a fixed version (`best`, `opusplan`, `default`) are not listed.
+const CLAUDE_ALIAS_VERSIONS: [(&str, &str); 4] = [
+    ("fable", "5.1"),
+    ("opus", "5.5"),
+    ("sonnet", "5.5"),
+    ("haiku", "5.5"),
+];
+
+/// `sonnet[1m]` shown as `Sonnet 5.5 (1M)`, `opus` as `Opus 5.5`, `best` as `Best`; only the label changes, the alias stays the value sent to the CLI.
 fn alias_label(alias: &str) -> String {
     let (name, window) = match alias.split_once('[') {
         Some((name, rest)) => (name, Some(rest.trim_end_matches(']').to_uppercase())),
         None => (alias, None),
     };
     let mut letters = name.chars();
-    let title: String = letters
+    let mut title: String = letters
         .next()
         .map(|first| first.to_uppercase().chain(letters).collect())
         .unwrap_or_default();
+
+    if let Some((_, version)) = CLAUDE_ALIAS_VERSIONS
+        .iter()
+        .find(|(known, _)| *known == name)
+    {
+        title = format!("{title} {version}");
+    }
 
     match window {
         Some(window) => format!("{title} ({window})"),

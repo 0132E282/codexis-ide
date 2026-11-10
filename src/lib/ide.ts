@@ -1,5 +1,5 @@
 import { invoke } from '@/lib/invoke';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { t } from '@/lib/i18n';
 
@@ -274,6 +274,11 @@ export const ide = {
     terminalResize: (id: string, columns: number, rows: number) =>
         invoke<void>('terminal_resize', { id, columns, rows }),
     terminalClose: (id: string) => invoke<void>('terminal_close', { id }),
+    /** Opens the separate operating-system window that holds the whole bottom panel on `tab` (an open one is brought to the front). */
+    terminalWindowOpen: (root?: string, tab?: string) =>
+        invoke<void>('terminal_window_open', { root, tab }),
+    /** The project folder the separate terminal window that asks was opened for. */
+    terminalWindowRoot: () => invoke<string | null>('terminal_window_root'),
     /** Starts one chat turn; the answer arrives through `onAgentEvent`, tagged with `runId`. */
     agentSend: (
         runId: string,
@@ -503,6 +508,37 @@ export const onTerminalData = (
     listen<{ id: string; data: string }>('terminal-data', ({ payload }) =>
         handler(payload),
     );
+
+/** What the separate bottom-panel window asks of the main window, which alone holds the chats and the editor. */
+export type BottomWindowAction =
+    | { kind: 'ready' }
+    | { kind: 'open-file'; path: string }
+    | { kind: 'send-prompt'; text: string }
+    | { kind: 'open-subagent'; id: string };
+
+/** The separate window asks the main window to do something (or says it is ready for the state). */
+export const emitBottomAction = (action: BottomWindowAction) =>
+    emit('bottom-window-action', action);
+
+export const onBottomAction = (handler: (action: BottomWindowAction) => void) =>
+    listen<BottomWindowAction>('bottom-window-action', ({ payload }) =>
+        handler(payload),
+    );
+
+/** The main window tells the separate one the prompts of the turns running in its chat. */
+export const emitBottomState = (runningPrompts: string[]) =>
+    emit('bottom-window-state', { runningPrompts });
+
+export const onBottomState = (
+    handler: (state: { runningPrompts: string[] }) => void,
+) =>
+    listen<{ runningPrompts: string[] }>('bottom-window-state', ({ payload }) =>
+        handler(payload),
+    );
+
+/** Listens to the separate bottom-panel window being closed. */
+export const onTerminalWindowClosed = (handler: () => void) =>
+    listen<null>('terminal-window-closed', () => handler());
 
 /** Listens to shells that ended (the id of each). */
 export const onTerminalExit = (handler: (id: string) => void) =>

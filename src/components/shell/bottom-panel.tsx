@@ -1,4 +1,4 @@
-import { Columns2, Plus, Trash2, X } from 'lucide-react';
+import { Columns2, ExternalLink, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import {
     ActivityTerminal,
@@ -49,6 +49,7 @@ export function BottomPanel({
     onSendPrompt,
     runningPrompts,
     terminalCommand,
+    onDetach,
 }: {
     tab: BottomTab;
     /** Folder of the open project. */
@@ -76,6 +77,8 @@ export function BottomPanel({
     runningPrompts: string[];
     /** A Terminal menu choice to carry out (a new object per choice); `isFresh`: the panel was opened by it, so its first terminal is the new one. */
     terminalCommand?: TerminalCommand | null;
+    /** Moves the whole panel into a separate window; absent in that window itself (and then the placement menu is hidden too). */
+    onDetach?: () => void;
 }) {
     const sessions = useTerminalSessions(onClose, root);
     const [doneCommand, setDoneCommand] = useState<TerminalCommand | null>(
@@ -185,15 +188,30 @@ export function BottomPanel({
                             <Trash2 aria-hidden="true" />
                         </Button>
                     ) : null}
-                    <PanelMenu
-                        placement={placement}
-                        dockedPlacement={dockedPlacement}
-                        floatable
-                        edges={['bottom']}
-                        onPlacementChange={onPlacementChange}
-                        onSaveDefault={onSaveDefault}
-                        onResetDefault={onResetDefault}
-                    />
+                    {onDetach !== undefined && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title={t('bottom_panel.open_window')}
+                            aria-label={t('bottom_panel.open_window')}
+                            onClick={onDetach}
+                            className={ACTION_STYLE}
+                        >
+                            <ExternalLink aria-hidden="true" />
+                        </Button>
+                    )}
+                    {onDetach !== undefined && (
+                        <PanelMenu
+                            placement={placement}
+                            dockedPlacement={dockedPlacement}
+                            floatable
+                            edges={['bottom']}
+                            onPlacementChange={onPlacementChange}
+                            onSaveDefault={onSaveDefault}
+                            onResetDefault={onResetDefault}
+                        />
+                    )}
                     <Button
                         type="button"
                         variant="ghost"

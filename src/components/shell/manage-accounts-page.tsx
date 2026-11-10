@@ -18,6 +18,7 @@ import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { ideProfiles, type Profile, type ProfileCli } from '@/lib/ide-profiles';
 import type { ReactNode } from 'react';
+import { LoginCodeDialog } from '@/components/shell/login-code-dialog';
 import { t } from '@/lib/i18n';
 
 // * Account 0 is the CLI's own login on this machine; the others were added through a browser login.
@@ -87,6 +88,11 @@ export function ManageAccountsPage({
     const [detailId, setDetailId] = useState<number | null>(null);
     const [addOpen, setAddOpen] = useState(false);
     const [code, setCode] = useState<string | null>(null);
+    // * Antigravity's login ends by pasting the code of its sign-in page: the account waiting for it and the page's URL.
+    const [codeLogin, setCodeLogin] = useState<{
+        id: number;
+        url: string;
+    } | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -193,7 +199,25 @@ export function ManageAccountsPage({
 
     // * GitHub's login is finished by typing a one-time code in the browser, so the code is shown on the page.
     const login = (id: number) =>
-        ideAuth.login(cli, id).then((oneTimeCode) => setCode(oneTimeCode));
+        ideAuth.login(cli, id).then((shown) => {
+            if (cli === 'antigravity' && shown !== null) {
+                setCodeLogin({ id, url: shown });
+            } else {
+                setCode(shown);
+            }
+        });
+
+    const submitCode = (code: string) =>
+        ideAuth.submitCode(cli, codeLogin?.id, code).then(() => {
+            setCodeLogin(null);
+
+            return load().then(onChanged);
+        });
+
+    const cancelCode = () => {
+        void ideAuth.cancelLogin(cli, codeLogin?.id).catch(() => undefined);
+        setCodeLogin(null);
+    };
 
     // * The account is named "Tài khoản N" and shows the email the provider reports once the browser login finishes.
     const add = () =>
@@ -585,6 +609,13 @@ export function ManageAccountsPage({
                     </p>
                 )}
             </div>
+            {codeLogin !== null && (
+                <LoginCodeDialog
+                    url={codeLogin.url}
+                    onSubmit={submitCode}
+                    onCancel={cancelCode}
+                />
+            )}
             <Dialog
                 open={detailId !== null}
                 onOpenChange={(open) => !open && setDetailId(null)}

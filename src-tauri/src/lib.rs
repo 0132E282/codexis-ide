@@ -46,13 +46,27 @@ pub mod vscode_extensions;
 pub mod window_buttons;
 pub mod workspace;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .menu(app_menu::build)
         .on_menu_event(|app, event| app_menu::handle_event(app, &event))
+        .on_window_event(|window, event| {
+            // * A closed window takes its shells with it, so no shell is left running without a screen.
+            if let tauri::WindowEvent::Destroyed = event {
+                window
+                    .app_handle()
+                    .state::<terminal::Terminals>()
+                    .close_owned(window.label());
+
+                // * The main window takes the bottom panel back.
+                if window.label() == commands::terminal::WINDOW_LABEL {
+                    let _ = window.app_handle().emit("terminal-window-closed", ());
+                }
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -104,6 +118,8 @@ pub fn run() {
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
+            commands::terminal::terminal_window_open,
+            commands::terminal::terminal_window_root,
             commands::remote::remote_start,
             commands::remote::remote_stop,
             commands::remote::remote_status,
@@ -163,6 +179,8 @@ pub fn run() {
             commands::auth::auth_status_profile,
             commands::auth::claude_usage_profile,
             commands::auth::auth_login,
+            commands::auth::auth_submit_code,
+            commands::auth::auth_cancel_login,
             commands::auth::github_profile,
             commands::auth::auth_logout,
             commands::chat::chat_load,

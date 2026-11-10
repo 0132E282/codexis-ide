@@ -57,9 +57,18 @@ export const ideAuth = {
         invoke<LimitUsage[] | null>('claude_usage_profile', { profile }),
     /** Profile of the GitHub account `gh` is signed in with (login, name, email, avatar). */
     githubProfile: () => invoke<GithubProfile>('github_profile'),
-    /** Starts the tool's own login (opens the browser); GitHub resolves with the one-time code to type there. */
+    /** Starts the tool's own login (opens the browser); GitHub resolves with the one-time code to type there, Antigravity with its sign-in URL (then asks for the code through `submitCode`). */
     login: (provider: AuthProvider, profile?: number) =>
         invoke<string | null>('auth_login', { provider, profile }),
+    /** Gives the tool's login the authorization code its sign-in page showed (Antigravity); rejects when the code is refused. */
+    submitCode: (
+        provider: AuthProvider,
+        profile: number | undefined,
+        code: string,
+    ) => invoke<void>('auth_submit_code', { provider, profile, code }),
+    /** Stops a login that waits for its code. */
+    cancelLogin: (provider: AuthProvider, profile?: number) =>
+        invoke<void>('auth_cancel_login', { provider, profile }),
     /** Signs the tool out with its own logout command. */
     logout: (provider: AuthProvider, profile?: number) =>
         invoke<void>('auth_logout', { provider, profile }),

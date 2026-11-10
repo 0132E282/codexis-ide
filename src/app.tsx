@@ -26,8 +26,11 @@ import { useWorkspace } from '@/hooks/use-workspace';
 import {
     errorText,
     ide,
+    emitBottomState,
+    onBottomAction,
     onFileMenu,
     onTerminalMenu,
+    onTerminalWindowClosed,
     pickFolders,
 } from '@/lib/ide';
 import type { GridMember } from '@/lib/ide';
@@ -71,16 +74,39 @@ export default function App() {
         }
     }, [bottomTab]);
 
+    // * The tab the panel was detached on: while it is set, the whole panel lives in the separate window and the main window shows none.
+    const [detachedTab, setDetachedTab] = useState<BottomTab | null>(null);
+    const detachedTabRef = useRef<BottomTab | null>(null);
+
+    useEffect(() => {
+        detachedTabRef.current = detachedTab;
+    }, [detachedTab]);
+
+    // * Shows a tab of the panel: in the separate window when it holds the panel (brought to the front), otherwise in the main window.
+    const showBottomTab = useCallback((tab: BottomTab, root?: string) => {
+        if (detachedTabRef.current === null) {
+            setBottomTab(tab);
+
+            return;
+        }
+
+        void ide.terminalWindowOpen(root, tab).catch(() => undefined);
+    }, []);
+    const activeRootRef = useRef<string | undefined>(undefined);
+
     useEffect(() => {
         const stop = onTerminalMenu((action) => {
-            setTerminalCommand({ action, isFresh: !isBottomOpen.current });
-            setBottomTab('terminal');
+            if (detachedTabRef.current === null) {
+                setTerminalCommand({ action, isFresh: !isBottomOpen.current });
+            }
+
+            showBottomTab('terminal', activeRootRef.current);
         });
 
         return () => {
             void stop.then((unlisten) => unlisten());
         };
-    }, []);
+    }, [showBottomTab]);
     // * File > Open… / Open Folder…: pick folders and add them as a project (the sidebar's "Thêm mới dự án" does the same through its dialog).
     const createdProjectRef = useRef(workspace.createdProject);
 
@@ -118,12 +144,14 @@ export default function App() {
         };
     }, []);
     const toggleBottomTab = (tab: BottomTab) =>
-        setBottomTab((current) => (current === tab ? null : tab));
+        detachedTab === null
+            ? setBottomTab((current) => (current === tab ? null : tab))
+            : showBottomTab(tab, activeRoot ?? undefined);
     // * The file whose history the Lịch sử tab shows (null: the whole project).
     const [historyPath, setHistoryPath] = useState<string | null>(null);
     const showFileHistory = (path: string | null = null) => {
         setHistoryPath(path);
-        setBottomTab('history');
+        showBottomTab('history', activeRoot ?? undefined);
     };
     // * Where the bottom panel sits: under the work area, filling it, or floating over it.
     const bottomPlacement = usePanelPlacement('bottom-panel', 'bottom');
@@ -160,6 +188,63 @@ export default function App() {
     const activeState = paneStates[activeKey] ?? FRESH;
     // * One table of background tasks for the open project: the bottom panel lists it (shell commands and sub-agents in their own tabs).
     const background = useBackgroundTasks(activePane?.root);
+
+    useEffect(() => {
+        activeRootRef.current = activeRoot ?? undefined;
+    }, [activeRoot]);
+
+    // * The separate window holding the panel: what it needs from the chats and the editor comes back here (acting on the pane active now), it is told the prompts running, and closing it brings the panel back on the tab it was detached on.
+    const windowBridge = useRef({ patchPane, activeKey, paneStates });
+
+    useEffect(() => {
+        windowBridge.current = { patchPane, activeKey, paneStates };
+    });
+    const runningPromptsKey = JSON.stringify(activeState.runningPrompts);
+
+    useEffect(() => {
+        if (detachedTab !== null) {
+            void emitBottomState(JSON.parse(runningPromptsKey) as string[]);
+        }
+    }, [detachedTab, runningPromptsKey]);
+
+    useEffect(() => {
+        const stopAction = onBottomAction((action) => {
+            const {
+                patchPane: patch,
+                activeKey: key,
+                paneStates: states,
+            } = windowBridge.current;
+
+            if (action.kind === 'ready') {
+                void emitBottomState(JSON.parse(runningPromptsKey) as string[]);
+            } else if (action.kind === 'open-file') {
+                patch(key, {
+                    openFile: {
+                        path: action.path,
+                        n: (states[key]?.openFile?.n ?? 0) + 1,
+                    },
+                });
+            } else if (action.kind === 'send-prompt') {
+                patch(key, {
+                    sendPrompt: {
+                        text: action.text,
+                        n: (states[key]?.sendPrompt?.n ?? 0) + 1,
+                    },
+                });
+            } else {
+                patch(key, { viewSubagent: action.id });
+            }
+        });
+        const stopClosed = onTerminalWindowClosed(() => {
+            setBottomTab(detachedTabRef.current ?? 'terminal');
+            setDetachedTab(null);
+        });
+
+        return () => {
+            void stopAction.then((unlisten) => unlisten());
+            void stopClosed.then((unlisten) => unlisten());
+        };
+    }, [runningPromptsKey]);
     // * Chat settings (the open tab) and the AI statistics, both opened from the sidebar's ⋮ menu.
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [usageOpen, setUsageOpen] = useState(false);
@@ -308,6 +393,17 @@ export default function App() {
                 onClearHistoryPath={() => setHistoryPath(null)}
                 onTabChange={setBottomTab}
                 onClose={() => setBottomTab(null)}
+                onDetach={() => {
+                    const tab = bottomTab;
+
+                    void ide
+                        .terminalWindowOpen(activePane.root, tab)
+                        .then(() => {
+                            setDetachedTab(tab);
+                            setBottomTab(null);
+                        })
+                        .catch((caught) => console.error(errorText(caught)));
+                }}
                 terminalCommand={terminalCommand}
                 onOpenFile={(path) =>
                     patchPane(activeKey, {

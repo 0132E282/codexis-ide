@@ -20,6 +20,8 @@ const THEME = {
 } as const;
 
 /** Unique per mount, so a shell that is still closing never shares its id with the one that replaces it. */
+// * Shell ids are shared by every window (the backend keeps them in one map and the events reach all windows), so each page has its own prefix.
+const SESSION_PREFIX = `shell-${crypto.randomUUID().slice(0, 8)}`;
 let sessionCounter = 0;
 
 /** One real shell in the project folder, drawn by xterm.js; everything typed goes straight to it. */
@@ -54,7 +56,7 @@ function ShellTerminal({
             return;
         }
 
-        const sessionId = `shell-${sessionCounter++}`;
+        const sessionId = `${SESSION_PREFIX}-${sessionCounter++}`;
         let cancelled = false;
         let cleanup = () => {};
 

@@ -66,7 +66,7 @@ fn a_missing_or_broken_cache_gives_no_models() {
 
 #[test]
 fn claude_aliases_are_read_from_the_model_answer() {
-    let output = "Current model: `Sonnet 5.5`\nUsage: /model <name>. Available: sonnet, opus, sonnet[1m], default, or a full model ID.\n";
+    let output = "Current model: `Sonnet 5.5`\nUsage: /model <name>. Available: sonnet, opus, fable[1m], haiku, best, sonnet[1m], opusplan, default, or a full model ID.\n";
     let models: Vec<_> = parse_claude_models(output)
         .into_iter()
         .map(|option| (option.value, option.label))
@@ -75,9 +75,13 @@ fn claude_aliases_are_read_from_the_model_answer() {
     assert_eq!(
         models,
         [
-            ("sonnet".to_string(), "Sonnet".to_string()),
-            ("opus".to_string(), "Opus".to_string()),
-            ("sonnet[1m]".to_string(), "Sonnet (1M)".to_string()),
+            ("sonnet".to_string(), "Sonnet 5.5".to_string()),
+            ("opus".to_string(), "Opus 5.5".to_string()),
+            ("fable[1m]".to_string(), "Fable 5.1 (1M)".to_string()),
+            ("haiku".to_string(), "Haiku 5.5".to_string()),
+            ("best".to_string(), "Best".to_string()),
+            ("sonnet[1m]".to_string(), "Sonnet 5.5 (1M)".to_string()),
+            ("opusplan".to_string(), "Opusplan".to_string()),
             ("default".to_string(), "Default".to_string()),
         ]
     );

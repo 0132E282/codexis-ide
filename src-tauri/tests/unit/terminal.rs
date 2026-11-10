@@ -130,3 +130,63 @@ fn take_text_shows_bytes_that_are_not_text_with_replacement_characters() {
     assert_eq!(take_text(&mut pending), "\u{FFFD}".repeat(5));
     assert!(pending.is_empty());
 }
+
+#[test]
+fn a_terminal_window_keeps_its_folder_until_it_is_closed() {
+    let terminals = Terminals::default();
+
+    terminals
+        .register_window("terminal-1", "/work/app")
+        .unwrap();
+
+    assert_eq!(
+        terminals.window_root("terminal-1").unwrap().as_deref(),
+        Some("/work/app")
+    );
+    assert_eq!(terminals.window_root("terminal-2").unwrap(), None);
+
+    terminals.close_owned("terminal-1");
+
+    assert_eq!(terminals.window_root("terminal-1").unwrap(), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn closing_a_window_ends_only_its_shells() {
+    let terminals = Terminals::default();
+
+    for (id, owner) in [("a", "terminal-1"), ("b", "terminal-1"), ("c", "main")] {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let mut command = CommandBuilder::new("/bin/sh");
+
+        command.args(["-c", "sleep 30"]);
+
+        let child = pair.slave.spawn_command(command).unwrap();
+        let writer = pair.master.take_writer().unwrap();
+
+        terminals.sessions.lock().unwrap().insert(
+            id.to_string(),
+            Session {
+                master: pair.master,
+                writer: Arc::new(Mutex::new(writer)),
+                child,
+                owner: owner.to_string(),
+            },
+        );
+    }
+
+    terminals.close_owned("terminal-1");
+
+    let sessions = terminals.sessions.lock().unwrap();
+
+    assert_eq!(sessions.keys().collect::<Vec<_>>(), vec!["c"]);
+    drop(sessions);
+    terminals.close("c").unwrap();
+}

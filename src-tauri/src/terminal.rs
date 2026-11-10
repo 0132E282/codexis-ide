@@ -56,12 +56,16 @@ struct Session {
     master: Box<dyn MasterPty + Send>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     child: Box<dyn Child + Send + Sync>,
+    /// Label of the window that opened the shell: its shells end with it.
+    owner: String,
 }
 
 /// The open shells by the id the panel gave them.
 #[derive(Default)]
 pub struct Terminals {
     sessions: Mutex<HashMap<String, Session>>,
+    /// Project folder of each separate terminal window, by window label.
+    window_roots: Mutex<HashMap<String, String>>,
 }
 
 fn pty_error(error: impl std::fmt::Display) -> TerminalError {
@@ -148,6 +152,7 @@ impl Terminals {
         &self,
         app: AppHandle,
         id: String,
+        owner: String,
         directory: &Path,
         columns: u16,
         rows: u16,
@@ -221,6 +226,7 @@ impl Terminals {
                 master: pair.master,
                 writer: Arc::new(Mutex::new(writer)),
                 child,
+                owner,
             },
         );
 
@@ -285,6 +291,50 @@ impl Terminals {
                 pixel_height: 0,
             })
             .map_err(pty_error)
+    }
+
+    /// Remembers the project folder a separate terminal window was opened for.
+    pub fn register_window(&self, label: &str, root: &str) -> Result<(), TerminalError> {
+        self.window_roots
+            .lock()
+            .map_err(|_| TerminalError::Poisoned)?
+            .insert(label.to_string(), root.to_string());
+
+        Ok(())
+    }
+
+    /// The project folder of the separate terminal window `label`.
+    pub fn window_root(&self, label: &str) -> Result<Option<String>, TerminalError> {
+        Ok(self
+            .window_roots
+            .lock()
+            .map_err(|_| TerminalError::Poisoned)?
+            .get(label)
+            .cloned())
+    }
+
+    /// Ends every shell the window `owner` opened and forgets its folder: called when the window is destroyed, so no shell is left without a screen.
+    pub fn close_owned(&self, owner: &str) {
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return;
+        };
+        let ids: Vec<String> = sessions
+            .iter()
+            .filter(|(_, session)| session.owner == owner)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in ids {
+            if let Some(mut session) = sessions.remove(&id) {
+                let _ = session.child.kill();
+            }
+        }
+
+        drop(sessions);
+
+        if let Ok(mut roots) = self.window_roots.lock() {
+            roots.remove(owner);
+        }
     }
 
     /// Ends the shell (a terminal that is already gone is not an error).
