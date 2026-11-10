@@ -244,6 +244,9 @@ export const ide = {
         isFolder: boolean,
         root?: string,
     ) => invoke<string>('workspace_create', { root, folder, name, isFolder }),
+    /** The models the CLI really offers to this account; empty when it keeps no list. */
+    agentModels: (cli: AgentCli) =>
+        invoke<{ value: string; label: string }[]>('agent_models', { cli }),
     /** Copies files and folders from outside the project (by full path) into `folder` (empty: the project root); resolves to their new paths. */
     workspaceImport: (folder: string, paths: string[], root?: string) =>
         invoke<string[]>('workspace_import', { root, folder, paths }),

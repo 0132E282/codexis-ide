@@ -808,3 +808,24 @@ pub fn agent_stop(registry: State<'_, TurnRegistry>, run_id: String) -> Result<(
 #[cfg(test)]
 #[path = "../../tests/unit/commands_agent.rs"]
 mod tests;
+
+/// The models an AI CLI offers to the account, as saved when it connected; empty when the CLI keeps no list, so the front end shows its fixed one. Codex is read from its own list now when nothing was saved yet (an account that connected before this was kept).
+#[tauri::command]
+pub fn agent_models(
+    store: State<crate::models::ModelStore>,
+    cli: String,
+) -> Vec<crate::models::ModelOption> {
+    let saved = store.list(&cli).unwrap_or_default();
+
+    if !saved.is_empty() || cli != "codex" {
+        return saved;
+    }
+
+    let listed = crate::models::codex_home()
+        .map(|home| crate::models::codex_models(&home))
+        .unwrap_or_default();
+
+    let _ = store.replace(&cli, &listed);
+
+    listed
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BottomPanel } from '@/components/shell/bottom-panel';
 import { FloatingFrame } from '@/components/shell/floating-frame';
 import type { BottomTab } from '@/components/shell/bottom-panel';
@@ -29,6 +30,18 @@ const SIDEBAR_OPEN_WIDTH = 256;
 const SIDEBAR_MIN_WIDTH = 120;
 // * The chat grid shows at most this many chats (2 × 2); the backend refuses more.
 const MAX_GRID = 4;
+
+/** Where the active pane holds the shared bottom panel: the panel's own node is put in here, and taken along when another pane shows it. */
+function BottomHostSlot({ host }: { host: HTMLElement }) {
+    const attach = useCallback(
+        (slot: HTMLDivElement | null) => {
+            slot?.appendChild(host);
+        },
+        [host],
+    );
+
+    return <div ref={attach} className="h-full min-h-0" />;
+}
 
 export default function App() {
     const workspace = useWorkspace();
@@ -202,7 +215,15 @@ export default function App() {
             .catch((caught) => console.error(errorText(caught)));
 
     const showPanel = selected && activePane !== null;
-    // * The bottom panel; under the work area it is drawn inside the active pane (under the editor, never under the chat); floating or filling it stays here.
+    // * The bottom panel is one for the whole app, drawn into a node of its own that the active pane takes in under its editor (never under the chat): switching project moves the node, so the terminals are not closed.
+    const [bottomHost] = useState(() => {
+        const host = document.createElement('div');
+
+        host.className = 'h-full min-h-0';
+
+        return host;
+    });
+    const isBottomDocked = bottomPlacement.placement === 'bottom';
     const bottomPanel =
         bottomTab !== null && activePane !== null ? (
             <BottomPanel
@@ -470,10 +491,12 @@ export default function App() {
                                             hasWindowButtons={!isFullscreen}
                                             bottomPanel={
                                                 pane.key === activeKey &&
-                                                bottomPlacement.placement ===
-                                                    'bottom'
-                                                    ? bottomPanel
-                                                    : null
+                                                bottomPanel !== null &&
+                                                isBottomDocked ? (
+                                                    <BottomHostSlot
+                                                        host={bottomHost}
+                                                    />
+                                                ) : null
                                             }
                                             onToggleTerminal={() =>
                                                 toggleBottomTab('terminal')
@@ -504,7 +527,7 @@ export default function App() {
                             </div>
                             {bottomTab !== null &&
                                 activePane !== null &&
-                                bottomPlacement.placement !== 'bottom' && (
+                                !isBottomDocked && (
                                     <FloatingFrame
                                         storageKey="ide.float.bottom"
                                         enabled={
@@ -526,6 +549,9 @@ export default function App() {
                         </div>
                     )}
                 </main>
+                {isBottomDocked &&
+                    bottomPanel !== null &&
+                    createPortal(bottomPanel, bottomHost)}
                 <DialogsHost
                     settingsTab={settingsTab}
                     onSettingsTabChange={setSettingsTab}

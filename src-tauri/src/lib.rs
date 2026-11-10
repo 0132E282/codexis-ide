@@ -22,6 +22,7 @@ pub mod language_server_protocol;
 pub mod linter;
 pub mod migrations;
 pub mod permission;
+pub mod models;
 pub mod plans;
 pub mod profiles;
 pub mod project_data;
@@ -78,6 +79,7 @@ pub fn run() {
             profiles::setup(app, &database)?;
             usage::setup(app, &database)?;
             settings::setup(app, &database)?;
+            models::setup(app, &database)?;
             activity::setup(app, &database)?;
             tools::setup(app, &database)?;
 
@@ -192,6 +194,7 @@ pub fn run() {
             settings::settings_get,
             settings::settings_save,
             commands::speech::speech_status,
+            commands::agent::agent_models,
             commands::speech::speech_synthesize,
             tools::tools_skills,
             tools::tools_agents,
