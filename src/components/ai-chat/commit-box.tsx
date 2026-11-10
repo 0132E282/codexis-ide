@@ -62,7 +62,7 @@ export function CommitActions({
                 Commit / Pull request
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg *:min-w-0">
                     {open && (
                         <MessagePopup
                             root={root}
@@ -270,7 +270,7 @@ function MessagePopup({
                 form={form}
                 withFieldGroup={false}
                 onSubmit={submit}
-                className="flex flex-col gap-2"
+                className="flex min-w-0 flex-col gap-2"
             >
                 <Field
                     name="title"
@@ -302,7 +302,7 @@ function MessagePopup({
                 {commands.length > 0 && (
                     <pre
                         aria-label={t('commit_box.commands')}
-                        className="overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground"
+                        className="max-w-full min-w-0 overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground"
                     >
                         {commands.map((command) => (
                             <div key={command} className="truncate">
