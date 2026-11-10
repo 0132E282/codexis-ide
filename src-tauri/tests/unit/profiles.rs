@@ -22,7 +22,7 @@ fn default_profile_is_always_first_and_active() {
     let (_dir, store) = store();
     let list = store.list().unwrap();
 
-    assert_eq!(list.len(), 4);
+    assert_eq!(list.len(), 5);
     assert!(list
         .iter()
         .all(|profile| profile.id == DEFAULT_PROFILE && profile.active));

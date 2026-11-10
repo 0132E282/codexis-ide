@@ -1,11 +1,13 @@
-//! Chat with an AI CLI (`claude` or `codex`): one turn runs the CLI non-interactively in the workspace folder and its JSON lines are turned into events for the chat.
+//! Chat with an AI CLI (`claude`, `codex` or `agy`): one turn runs the CLI non-interactively in the workspace folder and its JSON lines are turned into events for the chat.
 //! The CLIs keep their default permissions, so a turn can read the project but cannot write to it unasked.
 //! What differs per CLI (arguments, output lines) is behind [`AgentCli`], implemented in `claude.rs` and `codex.rs`.
 
+mod antigravity;
 mod claude;
 mod claude_background;
 mod codex;
 
+pub use antigravity::AntigravityAgent;
 pub use claude::ClaudeAgent;
 pub use codex::CodexAgent;
 
@@ -102,6 +104,11 @@ pub trait AgentCli: Sync {
     /// Arguments of one turn; the prompt itself goes through stdin, so it can never be read as a flag.
     fn turn_args(&self, options: &TurnOptions<'_>) -> Vec<String>;
 
+    /// The prompt as arguments, for a CLI that cannot read it from stdin; empty keeps the default (stdin).
+    fn prompt_args(&self, _prompt: &str) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Events carried by one output line of the CLI (empty for lines the chat does not show).
     fn parse_line(&self, line: &str) -> Vec<Event>;
 
@@ -123,6 +130,7 @@ pub trait AgentCli: Sync {
 
 static CLAUDE: ClaudeAgent = ClaudeAgent;
 static CODEX: CodexAgent = CodexAgent;
+static ANTIGRAVITY: AntigravityAgent = AntigravityAgent;
 
 impl CliKind {
     /// The chat adapter of the CLI; none for the CLIs that cannot chat.
@@ -130,6 +138,7 @@ impl CliKind {
         match self {
             Self::Claude => Some(&CLAUDE),
             Self::Codex => Some(&CODEX),
+            Self::Antigravity => Some(&ANTIGRAVITY),
             Self::Gemini | Self::Github => None,
         }
     }
@@ -421,6 +430,10 @@ impl TurnRequest<'_> {
 
         cli::command(&path, self.environment)
             .args(self.cli.turn_args(&self.options))
+            .args(
+                self.cli
+                    .prompt_args(&with_language(self.prompt, self.language)),
+            )
             .current_dir(self.root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -431,6 +444,11 @@ impl TurnRequest<'_> {
 
     fn send_prompt(&self, mut stdin: ChildStdin) {
         let prompt = with_language(self.prompt, self.language);
+
+        // * The CLI already got the prompt as arguments: stdin is dropped (closed) at once.
+        if !self.cli.prompt_args("").is_empty() {
+            return;
+        }
 
         match self.responder {
             // * The input stays open: the CLI's permission questions are answered on it until the turn's result.

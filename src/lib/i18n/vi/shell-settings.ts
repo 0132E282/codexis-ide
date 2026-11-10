@@ -108,6 +108,8 @@ export const shellSettingsVietnamese: Record<string, string> = {
     'errors.github.profile_unreadable': 'Không đọc được hồ sơ GitHub.',
     'errors.auth.github_code_failed': 'Không lấy được mã xác thực GitHub.',
     'errors.auth.logout_failed': 'Không ngắt được kết nối.',
+    'errors.auth.logout_unsupported':
+        'Antigravity chỉ đăng xuất bằng lệnh /logout ngay trong `agy`.',
     'errors.auth.command_missing':
         'Không tìm thấy lệnh `{value}`. Cài rồi thử lại.',
     'errors.auth.command_failed': 'Không chạy được `{value}`.',

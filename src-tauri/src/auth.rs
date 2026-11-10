@@ -1,8 +1,9 @@
-//! Sign-in state of the tools Rynox works with: the `claude` and `codex` CLIs (one is needed to chat), the `gemini` CLI (only connected, it does not chat yet) and GitHub through the `gh` CLI (optional).
+//! Sign-in state of the tools Rynox works with: the `claude` and `codex` CLIs (one is needed to chat), the `gemini` CLI (only connected, it does not chat yet), the Antigravity CLI `agy` and GitHub through the `gh` CLI (optional).
 //! Rynox never sees a password or token: signing in runs the tool's own login flow and the state is read back from the tool.
 //!
 //! [`AuthTool`] is the shared flow (Template Method): each tool only gives its arguments and reads its own status output.
 
+mod antigravity;
 mod claude;
 mod codex;
 mod gemini;
@@ -12,6 +13,7 @@ use crate::cli::{command, locate, CliKind, Environment};
 use serde::Serialize;
 use std::process::{Command, Output, Stdio};
 
+pub use antigravity::AntigravityAuth;
 pub use claude::{ClaudeAuth, LimitUsage};
 pub use codex::CodexAuth;
 pub use gemini::GeminiAuth;
@@ -182,6 +184,7 @@ impl CliKind {
             Self::Claude => &ClaudeAuth,
             Self::Codex => &CodexAuth,
             Self::Gemini => &GeminiAuth,
+            Self::Antigravity => &AntigravityAuth,
             Self::Github => &GithubAuth,
         }
     }

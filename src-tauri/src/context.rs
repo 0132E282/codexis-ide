@@ -33,7 +33,7 @@ pub fn window_of(cli: CliKind, model: &str, reported_window: Option<u64>) -> Opt
             .iter()
             .find(|(prefix, _)| model.starts_with(prefix))
             .map(|(_, window)| *window),
-        CliKind::Claude | CliKind::Gemini | CliKind::Github => None,
+        CliKind::Claude | CliKind::Gemini | CliKind::Antigravity | CliKind::Github => None,
     }
 }
 
@@ -64,7 +64,7 @@ impl ContextUsage {
                     input.saturating_add(read).saturating_add(creation),
                 )
             }
-            CliKind::Gemini | CliKind::Github => return None,
+            CliKind::Gemini | CliKind::Antigravity | CliKind::Github => return None,
         };
         if used == 0 && output == 0 {
             return None;

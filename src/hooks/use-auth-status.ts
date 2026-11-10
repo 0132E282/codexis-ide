@@ -54,11 +54,13 @@ export function useAuthStatus(polling: boolean) {
     return { statuses, error, refresh };
 }
 
-/** Chatting needs Claude or Codex signed in; Gemini (connect only) and GitHub are optional. */
+/** Chatting needs Claude, Codex or Antigravity signed in; Gemini (connect only) and GitHub are optional. */
 export const canChat = (statuses: AuthStatus[]) =>
     statuses.some(
         (status) =>
-            (status.provider === 'claude' || status.provider === 'codex') &&
+            (status.provider === 'claude' ||
+                status.provider === 'codex' ||
+                status.provider === 'antigravity') &&
             status.installed &&
             status.loggedIn,
     );

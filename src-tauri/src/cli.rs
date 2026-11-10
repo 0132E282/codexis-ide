@@ -1,4 +1,4 @@
-//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `gemini`, `gh`): the one place that knows their names, programs and where to find them.
+//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `gemini`, `agy`, `gh`): the one place that knows their names, programs and where to find them.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -14,26 +14,29 @@ pub enum CliKind {
     Claude,
     Codex,
     Gemini,
+    Antigravity,
     Github,
 }
 
 impl CliKind {
     /// Every CLI, in the order used for listings and statistics.
-    pub const ALL: [CliKind; 4] = [
+    pub const ALL: [CliKind; 5] = [
         CliKind::Claude,
         CliKind::Codex,
         CliKind::Gemini,
+        CliKind::Antigravity,
         CliKind::Github,
     ];
 
     /// The CLIs that can run a chat turn (Gemini is only connected for now, it does not chat yet).
-    pub const AGENTS: [CliKind; 2] = [CliKind::Claude, CliKind::Codex];
+    pub const AGENTS: [CliKind; 3] = [CliKind::Claude, CliKind::Codex, CliKind::Antigravity];
 
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
             "gemini" => Some(Self::Gemini),
+            "antigravity" => Some(Self::Antigravity),
             "github" => Some(Self::Github),
             _ => None,
         }
@@ -50,6 +53,7 @@ impl CliKind {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
+            Self::Antigravity => "antigravity",
             Self::Github => "github",
         }
     }
@@ -60,6 +64,7 @@ impl CliKind {
             Self::Claude => "claude",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
+            Self::Antigravity => "agy",
             Self::Github => "gh",
         }
     }
@@ -71,6 +76,8 @@ impl CliKind {
             Self::Codex => "CODEX_HOME",
             // * Not the `.gemini` folder itself: the CLI puts `.gemini` inside this home.
             Self::Gemini => "GEMINI_CLI_HOME",
+            // * `agy` keeps everything under `$HOME/.gemini`, and has no variable of its own for it.
+            Self::Antigravity => "HOME",
             Self::Github => "GH_CONFIG_DIR",
         }
     }

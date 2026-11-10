@@ -137,6 +137,31 @@ pub fn claude_models(program: &Path, environment: &[(&str, String)]) -> Vec<Mode
         .unwrap_or_default()
 }
 
+/// The lines of `agy models` (`<value>\t<label>` after a `Fetching…` line): every model it lists is an agent model, so all are kept.
+pub fn parse_antigravity_models(output: &str) -> Vec<ModelOption> {
+    output
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .filter(|(value, label)| !value.trim().is_empty() && !label.trim().is_empty())
+        .map(|(value, label)| ModelOption {
+            value: value.trim().to_string(),
+            label: label.trim().to_string(),
+        })
+        .collect()
+}
+
+/// Asks `agy models`; empty when the CLI is signed out (it exits with an error) or cannot be run.
+pub fn antigravity_models(program: &Path, environment: &[(&str, String)]) -> Vec<ModelOption> {
+    crate::cli::command(program, environment)
+        .arg("models")
+        .current_dir(std::env::temp_dir())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| parse_antigravity_models(&String::from_utf8_lossy(&output.stdout)))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 #[path = "../tests/unit/models.rs"]
 mod tests;

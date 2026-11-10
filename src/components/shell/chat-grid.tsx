@@ -91,7 +91,9 @@ export function ChatGrid({
 
     if (focus !== seenFocus) {
         setSeenFocus(focus);
-        const target = members.find((member) => member.workspace === focus?.root);
+        const target = members.find(
+            (member) => member.workspace === focus?.root,
+        );
 
         if (target !== undefined) {
             setPickedId(target.conversation);

@@ -827,6 +827,15 @@ pub async fn agent_models(
                     .map(|program| crate::models::claude_models(&program, &environment))
                     .unwrap_or_default()
             }
+            "antigravity" => {
+                let environment = app
+                    .state::<ProfileStore>()
+                    .active_environment("antigravity");
+
+                crate::cli::locate(crate::cli::CliKind::Antigravity.program())
+                    .map(|program| crate::models::antigravity_models(&program, &environment))
+                    .unwrap_or_default()
+            }
             _ => Vec::new(),
         })
     })

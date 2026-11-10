@@ -1,11 +1,11 @@
-import { Github, Sparkles } from 'lucide-react';
+import { Github } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiKeySection } from '@/components/shell/settings-tabs/api-key-section';
 import { ManageAccountsPage } from '@/components/shell/manage-accounts-page';
-import { ClaudeIcon, CodexIcon } from '@/icons';
+import { AntigravityIcon, ClaudeIcon, CodexIcon, GeminiIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type AuthStatus } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
@@ -15,17 +15,16 @@ const LABEL: Record<AuthProvider, string> = {
     claude: 'Claude',
     codex: 'ChatGPT (Codex)',
     gemini: 'Gemini',
+    antigravity: 'Antigravity',
     github: 'GitHub',
 };
 
 const ICON: Record<AuthProvider, ReactNode> = {
     claude: <ClaudeIcon aria-hidden="true" className="size-5 shrink-0" />,
     codex: <CodexIcon className="size-5 shrink-0 rounded-sm" />,
-    gemini: (
-        <Sparkles
-            aria-hidden="true"
-            className="size-5 shrink-0 text-muted-foreground"
-        />
+    gemini: <GeminiIcon aria-hidden="true" className="size-5 shrink-0" />,
+    antigravity: (
+        <AntigravityIcon aria-hidden="true" className="size-5 shrink-0" />
     ),
     github: (
         <Github
@@ -39,6 +38,7 @@ const INSTALL_HINT: Record<AuthProvider, string> = {
     claude: 'accounts.the_claude_command_is',
     codex: 'accounts.the_codex_command_is',
     gemini: 'accounts.the_gemini_command_is',
+    antigravity: 'accounts.the_antigravity_command_is',
     github: 'accounts.github_cli_gh_is',
 };
 

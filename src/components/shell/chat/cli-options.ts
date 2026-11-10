@@ -1,12 +1,17 @@
-import { ClaudeIcon, CodexIcon } from '@/icons';
+import { AntigravityIcon, ClaudeIcon, CodexIcon } from '@/icons';
 import type { AgentCli } from '@/lib/ide';
 
 // * Just the brand icon, with no tile behind it.
-export const CLI_ICONS = { claude: ClaudeIcon, codex: CodexIcon };
+export const CLI_ICONS = {
+    claude: ClaudeIcon,
+    codex: CodexIcon,
+    antigravity: AntigravityIcon,
+};
 
 export const CLIS: { value: AgentCli; label: string; vendor: string }[] = [
     { value: 'claude', label: 'Claude', vendor: 'anthropic' },
     { value: 'codex', label: 'ChatGPT', vendor: 'openai' },
+    { value: 'antigravity', label: 'Antigravity', vendor: 'google' },
 ];
 
 // * Fixed lists: they name aliases / models each CLI accepts for `--model` / `-m`; none picked (null) runs the CLI's own default and the button shows the CLI's name.
@@ -23,6 +28,8 @@ export const MODELS: Record<
         { value: 'gpt-5', label: 'GPT-5' },
         { value: 'gpt-5-codex', label: 'GPT-5 Codex' },
     ],
+    // * No fixed list: the models are the ones `agy models` lists, and only when it is signed in (empty = not offered).
+    antigravity: [],
 };
 
 // * Permission modes of the Claude CLI (`--permission-mode`); "auto" is the one the chat starts with.

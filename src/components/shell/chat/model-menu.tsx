@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CLI_ICONS, CLIS, MODELS } from '@/components/shell/chat/cli-options';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,28 +22,29 @@ const MENU_ITEM_HEIGHT = 32;
 function useModels() {
     const [models, setModels] = useState(MODELS);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        for (const { value: cli } of CLIS) {
+    const load = useCallback((clis: AgentCli[]) => {
+        for (const cli of clis) {
             ide.agentModels(cli)
-                .then((listed) => {
-                    if (!cancelled && listed.length > 0) {
-                        setModels((current) => ({
-                            ...current,
-                            [cli]: listed,
-                        }));
-                    }
-                })
+                .then((listed) =>
+                    setModels((current) => ({
+                        ...current,
+                        // * Antigravity lists nothing while signed out, so it leaves the menu; the others keep their fixed list.
+                        [cli]:
+                            listed.length > 0 || cli === 'antigravity'
+                                ? listed
+                                : current[cli],
+                    })),
+                )
                 .catch(() => undefined);
         }
-
-        return () => {
-            cancelled = true;
-        };
     }, []);
 
-    return models;
+    useEffect(() => {
+        load(CLIS.map((option) => option.value));
+    }, [load]);
+
+    // * Antigravity is signed in from the accounts page, so its list is read again whenever the menu opens.
+    return { models, reloadAntigravity: () => load(['antigravity']) };
 }
 
 /** The button that shows the chosen AI and model, and the menu that picks both: a model under each AI. */
@@ -59,12 +60,15 @@ export function ModelMenu({
     model: string | null;
     onChoose: (cli: AgentCli, model: string | null) => void;
 }) {
-    const models = useModels();
+    const { models, reloadAntigravity } = useModels();
+    const visibleClis = CLIS.filter(
+        (option) => models[option.value].length > 0,
+    );
     const selected = CLIS.find((option) => option.value === cli) ?? CLIS[0];
     const CliIcon = CLI_ICONS[selected.value];
 
     return (
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => open && reloadAntigravity()}>
             <DropdownMenuTrigger asChild>
                 <Button
                     type="button"
@@ -85,7 +89,7 @@ export function ModelMenu({
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-                {CLIS.map((option) => {
+                {visibleClis.map((option) => {
                     const OptionIcon = CLI_ICONS[option.value];
 
                     return (

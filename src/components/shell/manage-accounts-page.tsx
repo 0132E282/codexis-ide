@@ -12,7 +12,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { errorText } from '@/lib/ide';
+import { errorText, type AgentCli } from '@/lib/ide';
 import { ideAuth, type AuthStatus, type LimitUsage } from '@/lib/ide-auth';
 import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
@@ -27,8 +27,14 @@ const PROVIDER: Record<ProfileCli, string> = {
     claude: 'Anthropic',
     codex: 'ChatGPT',
     gemini: 'Google',
+    antigravity: 'Google',
     github: 'GitHub',
 };
+
+// * Tools that report no usage numbers: their accounts have no usage column.
+const NO_USAGE: ProfileCli[] = ['github', 'gemini'];
+
+const hasUsage = (cli: ProfileCli): cli is AgentCli => !NO_USAGE.includes(cli);
 
 // * A login finishes in the browser, outside the app, so the accounts are re-read while the page is open.
 const POLL_MILLISECONDS = 3000;
@@ -95,14 +101,13 @@ export function ManageAccountsPage({
                             ideAuth.statusProfile(cli, profile.id),
                         ),
                     );
-                    const used =
-                        cli === 'github' || cli === 'gemini'
-                            ? []
-                            : await Promise.all(
-                                  mine.map((profile) =>
-                                      ideUsage.statsProfile(cli, profile.id),
-                                  ),
-                              );
+                    const used = !hasUsage(cli)
+                        ? []
+                        : await Promise.all(
+                              mine.map((profile) =>
+                                  ideUsage.statsProfile(cli, profile.id),
+                              ),
+                          );
 
                     setProfiles(mine);
                     setUsages(
@@ -250,7 +255,7 @@ export function ManageAccountsPage({
                                 <th className="px-2 py-2 font-medium whitespace-nowrap">
                                     {t('manage_accounts_page.status')}
                                 </th>
-                                {cli !== 'github' && cli !== 'gemini' && (
+                                {hasUsage(cli) && (
                                     <th className="px-2 py-2 font-medium whitespace-nowrap">
                                         Usage
                                     </th>
@@ -359,15 +364,12 @@ export function ManageAccountsPage({
                                                 t('common.not_connected')
                                             )}
                                         </td>
-                                        {cli !== 'github' &&
-                                            cli !== 'gemini' && (
-                                                <td className="px-2 py-2 text-xs whitespace-nowrap text-muted-foreground">
-                                                    {cli === 'claude' &&
-                                                    limits[profile.id] !==
-                                                        undefined
-                                                        ? (limits[
-                                                              profile.id
-                                                          ]?.map((limit) => (
+                                        {hasUsage(cli) && (
+                                            <td className="px-2 py-2 text-xs whitespace-nowrap text-muted-foreground">
+                                                {cli === 'claude' &&
+                                                limits[profile.id] !== undefined
+                                                    ? (limits[profile.id]?.map(
+                                                          (limit) => (
                                                               <div
                                                                   key={
                                                                       limit.label
@@ -437,28 +439,26 @@ export function ManageAccountsPage({
                                                                       </span>
                                                                   )}
                                                               </div>
-                                                          )) ??
-                                                          t(
-                                                              'manage_accounts_page.unreadable',
-                                                          ))
-                                                        : usages[profile.id] ===
-                                                                undefined ||
-                                                            (cli === 'claude' &&
-                                                                statuses[
-                                                                    profile.id
-                                                                ]?.loggedIn)
-                                                          ? '...'
-                                                          : describeUsage(
-                                                                usages[
-                                                                    profile.id
-                                                                ],
-                                                            ).map((line) => (
-                                                                <div key={line}>
-                                                                    {line}
-                                                                </div>
-                                                            ))}
-                                                </td>
-                                            )}
+                                                          ),
+                                                      ) ??
+                                                      t(
+                                                          'manage_accounts_page.unreadable',
+                                                      ))
+                                                    : usages[profile.id] ===
+                                                            undefined ||
+                                                        (cli === 'claude' &&
+                                                            statuses[profile.id]
+                                                                ?.loggedIn)
+                                                      ? '...'
+                                                      : describeUsage(
+                                                            usages[profile.id],
+                                                        ).map((line) => (
+                                                            <div key={line}>
+                                                                {line}
+                                                            </div>
+                                                        ))}
+                                            </td>
+                                        )}
                                         <td className="px-2 py-2 whitespace-nowrap">
                                             <div className="flex items-center justify-end gap-1">
                                                 {status?.installed &&

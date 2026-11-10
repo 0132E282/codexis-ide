@@ -111,6 +111,8 @@ export const shellSettingsEnglish: Record<string, string> = {
     'errors.auth.github_code_failed':
         'Could not get the GitHub verification code.',
     'errors.auth.logout_failed': 'Could not disconnect.',
+    'errors.auth.logout_unsupported':
+        'Antigravity can only sign out from its own /logout command, inside `agy`.',
     'errors.auth.command_missing':
         'Command `{value}` not found. Install it and try again.',
     'errors.auth.command_failed': 'Could not run `{value}`.',

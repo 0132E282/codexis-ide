@@ -8,7 +8,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ClaudeIcon, CodexIcon } from '@/icons';
+import { AntigravityIcon, ClaudeIcon, CodexIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type LimitUsage } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
@@ -20,6 +20,7 @@ import { t } from '@/lib/i18n';
 const CLI_LABELS: Record<CliUsage['cli'], string> = {
     claude: 'Claude',
     codex: 'Codex',
+    antigravity: 'Antigravity',
 };
 
 /** Brand color of each CLI: its name and its usage bar. */
@@ -32,9 +33,17 @@ const CLI_COLORS: Record<CliUsage['cli'], { text: string; bar: string }> = {
         text: 'text-emerald-600 dark:text-emerald-400',
         bar: 'bg-emerald-500',
     },
+    antigravity: {
+        text: 'text-blue-600 dark:text-blue-400',
+        bar: 'bg-blue-500',
+    },
 };
 
-const CLI_ICONS = { claude: ClaudeIcon, codex: CodexIcon };
+const CLI_ICONS = {
+    claude: ClaudeIcon,
+    codex: CodexIcon,
+    antigravity: AntigravityIcon,
+};
 
 const formatNumber = (value: number): string =>
     new Intl.NumberFormat('vi').format(value);

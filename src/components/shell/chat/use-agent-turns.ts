@@ -316,7 +316,11 @@ export function useAgentTurns({
                     break;
                 }
                 case 'speaker':
-                    if (payload === 'claude' || payload === 'codex') {
+                    if (
+                        payload === 'claude' ||
+                        payload === 'codex' ||
+                        payload === 'antigravity'
+                    ) {
                         update(runId, (turn) => withSpeaker(turn, payload));
                     }
 

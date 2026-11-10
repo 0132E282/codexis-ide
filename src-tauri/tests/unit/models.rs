@@ -83,3 +83,14 @@ fn claude_aliases_are_read_from_the_model_answer() {
     );
     assert!(parse_claude_models("Current model: x").is_empty());
 }
+
+#[test]
+fn antigravity_models_are_the_tab_separated_lines() {
+    let output = "Fetching available models...\ngemini-3.8-flash-low\tGemini 3.8 Flash (Low)\nclaude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)\n";
+    let models = parse_antigravity_models(output);
+
+    assert_eq!(models.len(), 2);
+    assert_eq!(models[0].value, "gemini-3.8-flash-low");
+    assert_eq!(models[1].label, "Claude Sonnet 4.6 (Thinking)");
+    assert!(parse_antigravity_models("Error: Please sign in").is_empty());
+}

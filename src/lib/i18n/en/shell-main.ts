@@ -14,6 +14,8 @@ export const shellMainEnglish: Record<string, string> = {
     'accounts.the_claude_command_is': 'The `claude` command is not installed.',
     'accounts.the_codex_command_is': 'The `codex` command is not installed.',
     'accounts.the_gemini_command_is': 'The `gemini` command is not installed.',
+    'accounts.the_antigravity_command_is':
+        'The `agy` command (Antigravity) is not installed.',
     'app.pick_aproject_to': 'Pick a project to get started.',
     'app.resize_terminal_height': 'Resize terminal height',
     'bottom_panel.close': 'Close panel',

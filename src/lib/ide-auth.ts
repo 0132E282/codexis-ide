@@ -1,7 +1,8 @@
 import { translateError } from '@/lib/i18n';
 import { invoke } from '@/lib/invoke';
 
-export type AuthProvider = 'claude' | 'codex' | 'gemini' | 'github';
+export type AuthProvider =
+    'claude' | 'codex' | 'gemini' | 'antigravity' | 'github';
 
 /** Sign-in state of one tool, read from the tool itself. */
 export type AuthStatus = {
