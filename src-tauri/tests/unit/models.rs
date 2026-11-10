@@ -31,6 +31,29 @@ fn codex_models_are_the_listed_ones_in_priority_order() {
 }
 
 #[test]
+fn codex_models_leave_out_those_that_cannot_code() {
+    let dir = tempfile::tempdir().unwrap();
+
+    fs::write(
+        dir.path().join("models_cache.json"),
+        r#"{"models":[
+            {"slug":"coder","visibility":"list","supported_in_api":true,"input_modalities":["text","image"],"shell_type":"unified_exec","priority":1},
+            {"slug":"not-in-api","visibility":"list","supported_in_api":false,"priority":2},
+            {"slug":"audio","visibility":"list","input_modalities":["audio"],"priority":3},
+            {"slug":"no-shell","visibility":"list","shell_type":"disabled","priority":4}
+        ]}"#,
+    )
+    .unwrap();
+
+    let values: Vec<_> = codex_models(dir.path())
+        .into_iter()
+        .map(|option| option.value)
+        .collect();
+
+    assert_eq!(values, ["coder"]);
+}
+
+#[test]
 fn a_missing_or_broken_cache_gives_no_models() {
     let dir = tempfile::tempdir().unwrap();
 

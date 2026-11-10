@@ -24,7 +24,29 @@ pub fn codex_home() -> Option<PathBuf> {
         })
 }
 
-/// The models Codex lists for this account, in its own order; hidden ones (internal review models) are left out. Empty when the cache is missing or unreadable.
+/// Whether a `models_cache.json` entry is a model an agent can code with: listed (not hidden), usable through the API, reads text, and with a shell tool (embedding, audio, image or moderation models lack these). A field the entry does not carry does not exclude it.
+fn is_coding_model(model: &serde_json::Value) -> bool {
+    let is_listed = model
+        .get("visibility")
+        .and_then(|visibility| visibility.as_str())
+        .is_none_or(|visibility| visibility == "list");
+    let is_supported_in_api = model
+        .get("supported_in_api")
+        .and_then(|supported| supported.as_bool())
+        .unwrap_or(true);
+    let reads_text = model
+        .get("input_modalities")
+        .and_then(|modalities| modalities.as_array())
+        .is_none_or(|modalities| modalities.iter().any(|kind| kind == "text"));
+    let has_shell = model
+        .get("shell_type")
+        .and_then(|shell| shell.as_str())
+        .is_none_or(|shell| shell != "disabled");
+
+    is_listed && is_supported_in_api && reads_text && has_shell
+}
+
+/// The models Codex lists for this account that can code (see `is_coding_model`), in its own order. Empty when the cache is missing or unreadable.
 pub fn codex_models(codex_home: &Path) -> Vec<ModelOption> {
     let Ok(text) = fs::read_to_string(codex_home.join("models_cache.json")) else {
         return Vec::new();
@@ -37,12 +59,7 @@ pub fn codex_models(codex_home: &Path) -> Vec<ModelOption> {
         .and_then(|models| models.as_array())
         .into_iter()
         .flatten()
-        .filter(|model| {
-            model
-                .get("visibility")
-                .and_then(|visibility| visibility.as_str())
-                .is_none_or(|visibility| visibility == "list")
-        })
+        .filter(|model| is_coding_model(model))
         .filter_map(|model| {
             let slug = model.get("slug")?.as_str()?;
             let label = model

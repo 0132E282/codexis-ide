@@ -27,6 +27,7 @@ import { useEditorOptions } from './code-viewer/use-editor-options';
 import { EditorOptionsMenu } from './code-viewer/editor-options-menu';
 import { useFileTree } from './code-viewer/use-file-tree';
 import {
+    isOnScreen,
     useQuickOpenShortcut,
     useSaveShortcut,
 } from './code-viewer/use-keyboard-shortcuts';
@@ -244,8 +245,12 @@ export function CodeViewer({
         onChangesUpdate,
     });
 
+    // * Marks where this viewer sits in the page, so its window-wide shortcuts know whether it is on screen.
+    const viewerMarker = useRef<HTMLSpanElement>(null);
+
     // * Cmd/Ctrl+S: applies the AI's edit when one is waiting, else saves now.
     useSaveShortcut(
+        viewerMarker,
         selected,
         () => void (pendingEdit !== undefined ? decideEdit('apply') : save()),
     );
@@ -286,7 +291,7 @@ export function CodeViewer({
     const [quickOpen, setQuickOpen] = useState(false);
     const openQuickOpen = useCallback(() => setQuickOpen(true), []);
 
-    useQuickOpenShortcut(openQuickOpen);
+    useQuickOpenShortcut(viewerMarker, openQuickOpen);
 
     // * Shift+Cmd/Ctrl+Y: shows or hides the file tree (when the host holds its closed state).
     useEffect(() => {
@@ -298,7 +303,8 @@ export function CodeViewer({
             if (
                 (event.metaKey || event.ctrlKey) &&
                 event.shiftKey &&
-                event.key.toLowerCase() === 'y'
+                event.key.toLowerCase() === 'y' &&
+                isOnScreen(viewerMarker)
             ) {
                 event.preventDefault();
                 onTreeClosedChange(treeClosed !== true);
@@ -450,6 +456,7 @@ export function CodeViewer({
 
     return (
         <>
+            <span ref={viewerMarker} hidden />
             {confirmDialog}
             {treePlacement.placement === 'left' && treePanel}
             <RenameDialog

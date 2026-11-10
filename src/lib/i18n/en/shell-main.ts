@@ -324,6 +324,7 @@ export const shellMainEnglish: Record<string, string> = {
     'sidebar.sidebar': 'Sidebar',
     'sidebar.github_signed_in': 'GitHub: {account}',
     'sidebar.sign_in_with_github': 'Sign in with GitHub',
+    'sidebar.switch_account': 'Sign in with another account',
     'sidebar.statistics': 'Statistics',
     'sidebar_toggle.collapse_sidebar': 'Collapse sidebar',
     'sidebar_toggle.open_sidebar': 'Open sidebar',

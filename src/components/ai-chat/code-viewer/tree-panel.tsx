@@ -6,9 +6,7 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { AccountMenu } from '@/components/shell/sidebar-footer';
 import { useFullscreen } from '@/hooks/use-fullscreen';
-import { AccountMenuContext } from '@/contexts/account-menu-context';
 import { ide } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -22,7 +20,7 @@ import {
     X,
 } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -173,7 +171,6 @@ export function TreePanel({
     const [newName, setNewName] = useState('');
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
 
-    const accountMenu = useContext(AccountMenuContext);
     const isFullscreen = useFullscreen();
     const rows = useRef<HTMLDivElement>(null);
     // * Latest values for the drop listener, which is set up once per project.
@@ -521,10 +518,6 @@ export function TreePanel({
                     </Button>
                 )}
                 <span className="ml-auto flex items-center gap-0.5">
-                    {/* * On the left the tree sits next to the sidebar: the account menu of its footer moves up here. */}
-                    {onLeft && accountMenu !== null && (
-                        <AccountMenu {...accountMenu} side="bottom" />
-                    )}
                     <PanelMenu
                         placement={isMaximized ? 'fill' : placement.placement}
                         dockedPlacement={placement.dockedPlacement}

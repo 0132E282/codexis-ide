@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AccountMenuContext } from '@/contexts/account-menu-context';
 import { BottomPanel } from '@/components/shell/bottom-panel';
 import { FloatingFrame } from '@/components/shell/floating-frame';
 import type {
@@ -167,9 +166,6 @@ export default function App() {
     const [phoneOpen, setPhoneOpen] = useState(false);
     // * Sign-in of the AI CLIs and GitHub: the app stays behind the login screen until one AI CLI is signed in.
     const auth = useAuthStatus(false);
-    const github = auth.statuses?.find(
-        (status) => status.provider === 'github',
-    );
 
     // * The chat grids span projects, so they are one list for the whole app, kept in the backend: read at start, read again after each change (it brings the titles). Each chat has its group; a group is shown from two chats on.
     const [grid, setGrid] = useState<GridMember[]>([]);
@@ -383,285 +379,264 @@ export default function App() {
             : [{ root: project.folders[0], name: project.name }],
     );
 
+    // * fixed inset-0, not h-screen: in native fullscreen 100vh can be taller than the visible area (the notch inset) and push the bottom of the layout off the screen.
     return (
-        <AccountMenuContext.Provider
-            value={{
-                github,
-                onOpenSettings: setSettingsTab,
-                onOpenUsage: () => setUsageOpen(true),
-            }}
-        >
-            {/* * fixed inset-0, not h-screen: in native fullscreen 100vh can be taller than the visible area (the notch inset) and push the bottom of the layout off the screen. */}
-            <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-sm text-foreground">
-                <div className="flex min-h-0 flex-1 overflow-clip">
-                    {/* * The sidebar stays mounted at the width the user dragged it to; `inert` keeps the folded one out of focus. */}
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-sm text-foreground">
+            <div className="flex min-h-0 flex-1 overflow-clip">
+                {/* * The sidebar stays mounted at the width the user dragged it to; `inert` keeps the folded one out of focus. */}
+                <div
+                    style={{
+                        width:
+                            sidebarCollapsed || sidebarOverlay
+                                ? 0
+                                : SIDEBAR_OPEN_WIDTH,
+                    }}
+                    className={cn(
+                        // * Folding or unfolding slides the sidebar: the room it takes grows or shrinks, and the sidebar itself stays at its full width, so its content is revealed and not squeezed. Floating over the editor, it slides in from the edge instead.
+                        'group relative flex shrink-0 transition-[width] duration-200 ease-out motion-reduce:transition-none',
+                        !sidebarOverlay && 'overflow-hidden',
+                    )}
+                >
+                    {/* * Click outside the floating sidebar closes it; the backdrop fades in and out with the slide. */}
+                    {sidebarOverlay && (
+                        <div
+                            aria-hidden="true"
+                            data-testid="sidebar-backdrop"
+                            className={cn(
+                                'fixed inset-0 z-[25] bg-black/30 transition-opacity duration-200 ease-out motion-reduce:transition-none',
+                                sidebarOverlayOpen
+                                    ? 'opacity-100'
+                                    : 'pointer-events-none opacity-0',
+                            )}
+                            onClick={toggleSidebar}
+                        />
+                    )}
                     <div
-                        style={{
-                            width:
-                                sidebarCollapsed || sidebarOverlay
-                                    ? 0
-                                    : SIDEBAR_OPEN_WIDTH,
-                        }}
+                        inert={sidebarCollapsed}
+                        style={{ width: SIDEBAR_OPEN_WIDTH }}
                         className={cn(
-                            // * Folding or unfolding slides the sidebar: the room it takes grows or shrinks, and the sidebar itself stays at its full width, so its content is revealed and not squeezed. Floating over the editor, it slides in from the edge instead.
-                            'group relative flex shrink-0 transition-[width] duration-200 ease-out motion-reduce:transition-none',
-                            !sidebarOverlay && 'overflow-hidden',
+                            'flex shrink-0 overflow-hidden',
+                            sidebarOverlay &&
+                                'absolute inset-y-0 left-0 z-30 border-r bg-background shadow-lg transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                            sidebarOverlay &&
+                                sidebarCollapsed &&
+                                'pointer-events-none -translate-x-full shadow-none',
                         )}
                     >
-                        {/* * Click outside the floating sidebar closes it; the backdrop fades in and out with the slide. */}
-                        {sidebarOverlay && (
-                            <div
-                                aria-hidden="true"
-                                data-testid="sidebar-backdrop"
-                                className={cn(
-                                    'fixed inset-0 z-[25] bg-black/30 transition-opacity duration-200 ease-out motion-reduce:transition-none',
-                                    sidebarOverlayOpen
-                                        ? 'opacity-100'
-                                        : 'pointer-events-none opacity-0',
-                                )}
-                                onClick={toggleSidebar}
-                            />
-                        )}
-                        <div
-                            inert={sidebarCollapsed}
-                            style={{ width: SIDEBAR_OPEN_WIDTH }}
-                            className={cn(
-                                'flex shrink-0 overflow-hidden',
-                                sidebarOverlay &&
-                                    'absolute inset-y-0 left-0 z-30 border-r bg-background shadow-lg transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                                sidebarOverlay &&
-                                    sidebarCollapsed &&
-                                    'pointer-events-none -translate-x-full shadow-none',
-                            )}
-                        >
-                            <Sidebar
-                                projects={projects}
-                                activeId={activeId}
-                                startupName={
-                                    workspace.startupHidden
-                                        ? null
-                                        : workspace.name
-                                }
-                                selected={selected}
-                                error={workspace.error}
-                                onSelect={(id) => {
-                                    leaveGrid();
-                                    void workspace.selectProject(id);
-                                }}
-                                onSelectStartup={() => {
-                                    leaveGrid();
-                                    workspace.select();
-                                }}
-                                onCreated={workspace.createdProject}
-                                onRemove={(id) =>
-                                    id === null
-                                        ? workspace.removeStartup()
-                                        : void workspace.removeProject(id)
-                                }
-                                conversations={workspace.conversations}
-                                currentConversation={activeState.conversation}
-                                onOpenConversation={(id) => {
-                                    leaveGrid();
-                                    // * Picking a chat opens the chat pane too, even when a file had folded it away.
-                                    patchPane(activeKey, {
-                                        picked: {
-                                            id,
-                                            n: (activeState.picked?.n ?? 0) + 1,
-                                        },
-                                        chatCollapsed: false,
-                                    });
-                                }}
-                                activeRoot={activeRoot}
-                                grid={grid}
-                                openGroup={showGrid ? openGroup : null}
-                                targetGroup={targetGroup}
-                                maxGrid={MAX_GRID}
-                                onToggleGrid={toggleGrid}
-                                onOpenGroup={showGroup}
-                                onNewGroup={newGroup}
-                                onRemoveGridProject={removeGridProject}
-                                onDeleteConversation={(id) =>
-                                    void ide
-                                        .chatDelete(id, activeRoot ?? undefined)
-                                        .then(() => {
-                                            if (activeRoot !== null) {
-                                                refreshConversations(
-                                                    activeRoot,
-                                                );
-                                                readGrid();
-                                            }
+                        <Sidebar
+                            projects={projects}
+                            activeId={activeId}
+                            startupName={
+                                workspace.startupHidden ? null : workspace.name
+                            }
+                            selected={selected}
+                            error={workspace.error}
+                            onSelect={(id) => {
+                                leaveGrid();
+                                void workspace.selectProject(id);
+                            }}
+                            onSelectStartup={() => {
+                                leaveGrid();
+                                workspace.select();
+                            }}
+                            onCreated={workspace.createdProject}
+                            onRemove={(id) =>
+                                id === null
+                                    ? workspace.removeStartup()
+                                    : void workspace.removeProject(id)
+                            }
+                            conversations={workspace.conversations}
+                            currentConversation={activeState.conversation}
+                            onOpenConversation={(id) => {
+                                leaveGrid();
+                                // * Picking a chat opens the chat pane too, even when a file had folded it away.
+                                patchPane(activeKey, {
+                                    picked: {
+                                        id,
+                                        n: (activeState.picked?.n ?? 0) + 1,
+                                    },
+                                    chatCollapsed: false,
+                                });
+                            }}
+                            activeRoot={activeRoot}
+                            grid={grid}
+                            openGroup={showGrid ? openGroup : null}
+                            targetGroup={targetGroup}
+                            maxGrid={MAX_GRID}
+                            onToggleGrid={toggleGrid}
+                            onOpenGroup={showGroup}
+                            onNewGroup={newGroup}
+                            onRemoveGridProject={removeGridProject}
+                            onDeleteConversation={(id) =>
+                                void ide
+                                    .chatDelete(id, activeRoot ?? undefined)
+                                    .then(() => {
+                                        if (activeRoot !== null) {
+                                            refreshConversations(activeRoot);
+                                            readGrid();
+                                        }
 
-                                            if (
-                                                id === activeState.conversation
-                                            ) {
-                                                patchPane(activeKey, {
-                                                    newChat:
-                                                        activeState.newChat + 1,
-                                                });
-                                            }
-                                        })
-                                        .catch(() => undefined)
-                                }
-                                onNewChat={() => {
-                                    leaveGrid();
-                                    // * A new chat opens the chat pane at once, even when a file had folded it away.
-                                    patchPane(activeKey, {
-                                        newChat: activeState.newChat + 1,
-                                        chatCollapsed: false,
-                                    });
-                                }}
-                                onOpenSettings={setSettingsTab}
-                                onOpenUsage={() => setUsageOpen(true)}
-                                toggle={sidebarToggle}
-                                hasWindowButtons={!isFullscreen}
-                            />
-                        </div>
+                                        if (id === activeState.conversation) {
+                                            patchPane(activeKey, {
+                                                newChat:
+                                                    activeState.newChat + 1,
+                                            });
+                                        }
+                                    })
+                                    .catch(() => undefined)
+                            }
+                            onNewChat={() => {
+                                leaveGrid();
+                                // * A new chat opens the chat pane at once, even when a file had folded it away.
+                                patchPane(activeKey, {
+                                    newChat: activeState.newChat + 1,
+                                    chatCollapsed: false,
+                                });
+                            }}
+                            onOpenSettings={setSettingsTab}
+                            onOpenUsage={() => setUsageOpen(true)}
+                            toggle={sidebarToggle}
+                            hasWindowButtons={!isFullscreen}
+                        />
                     </div>
-                    <main className="flex min-w-0 flex-1 flex-col overflow-clip">
-                        {showGrid && (
-                            <ChatGrid
-                                key={openGroup}
-                                members={openMembers}
-                                focus={focus}
-                                projects={chatProjects}
-                                headerStart={
-                                    sidebarCollapsed
-                                        ? foldedSidebarToggle
-                                        : undefined
-                                }
-                                onChanged={refreshConversations}
-                            />
-                        )}
-                        {!showPanel && !showGrid && (
-                            <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-                                {t('app.pick_aproject_to')}
-                            </div>
-                        )}
-                        {panes.length > 0 && (
-                            <div
-                                className={
-                                    showPanel && !showGrid
-                                        ? 'relative flex min-h-0 min-w-0 flex-1 flex-col'
-                                        : 'hidden'
-                                }
-                            >
-                                <div
-                                    className={cn(
-                                        'min-h-0 min-w-0 flex-1',
-                                        bottomTab !== null &&
-                                            bottomPlacement.placement === 'fill'
-                                            ? 'hidden'
-                                            : 'flex',
-                                    )}
-                                >
-                                    {panes.map((pane) => (
-                                        <div
-                                            key={pane.key}
-                                            className={
-                                                view.includes(pane.key)
-                                                    ? 'flex min-h-0 min-w-0 flex-1'
-                                                    : 'hidden'
-                                            }
-                                        >
-                                            <WorkspacePane
-                                                pane={pane}
-                                                state={
-                                                    paneStates[pane.key] ??
-                                                    FRESH
-                                                }
-                                                active={pane.key === activeKey}
-                                                projects={chatProjects}
-                                                terminalOpen={
-                                                    bottomTab === 'terminal'
-                                                }
-                                                backgroundOpen={
-                                                    bottomTab === 'background'
-                                                }
-                                                plansOpen={
-                                                    bottomTab === 'plans'
-                                                }
-                                                phoneOpen={phoneOpen}
-                                                sidebarCollapsed={
-                                                    sidebarCollapsed
-                                                }
-                                                sidebarToggle={sidebarToggle}
-                                                hasWindowButtons={!isFullscreen}
-                                                bottomPanel={
-                                                    pane.key === activeKey &&
-                                                    bottomPanel !== null &&
-                                                    isBottomDocked ? (
-                                                        <BottomHostSlot
-                                                            host={bottomHost}
-                                                        />
-                                                    ) : null
-                                                }
-                                                onToggleTerminal={() =>
-                                                    toggleBottomTab('terminal')
-                                                }
-                                                onToggleBackground={() =>
-                                                    toggleBottomTab(
-                                                        'background',
-                                                    )
-                                                }
-                                                onTogglePlans={() =>
-                                                    toggleBottomTab('plans')
-                                                }
-                                                onOpenSettings={() =>
-                                                    setSettingsTab('advanced')
-                                                }
-                                                onOpenPhone={() =>
-                                                    setPhoneOpen(true)
-                                                }
-                                                onOpenInVscode={() =>
-                                                    void openInVscode()
-                                                }
-                                                onPatch={patchPane}
-                                                onShowHistory={showFileHistory}
-                                                onRefreshConversations={
-                                                    refreshConversations
-                                                }
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                                {bottomTab !== null &&
-                                    activePane !== null &&
-                                    !isBottomDocked && (
-                                        <FloatingFrame
-                                            storageKey="ide.float.bottom"
-                                            enabled={
-                                                bottomPlacement.placement ===
-                                                'float'
-                                            }
-                                            className={cn(
-                                                'relative',
-                                                bottomPlacement.placement ===
-                                                    'float' &&
-                                                    'absolute right-3 bottom-3 z-30 h-80 max-h-[80%] w-[min(48rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border shadow-xl',
-                                                bottomPlacement.placement ===
-                                                    'fill' && 'min-h-0 flex-1',
-                                            )}
-                                        >
-                                            {bottomPanel}
-                                        </FloatingFrame>
-                                    )}
-                            </div>
-                        )}
-                    </main>
-                    {isBottomDocked &&
-                        bottomPanel !== null &&
-                        createPortal(bottomPanel, bottomHost)}
-                    <DialogsHost
-                        settingsTab={settingsTab}
-                        onSettingsTabChange={setSettingsTab}
-                        usageOpen={usageOpen}
-                        onUsageClose={() => setUsageOpen(false)}
-                        phoneOpen={phoneOpen}
-                        onPhoneClose={() => setPhoneOpen(false)}
-                    />
                 </div>
-                <UpdateBanner />
+                <main className="flex min-w-0 flex-1 flex-col overflow-clip">
+                    {showGrid && (
+                        <ChatGrid
+                            key={openGroup}
+                            members={openMembers}
+                            focus={focus}
+                            projects={chatProjects}
+                            headerStart={
+                                sidebarCollapsed
+                                    ? foldedSidebarToggle
+                                    : undefined
+                            }
+                            onChanged={refreshConversations}
+                        />
+                    )}
+                    {!showPanel && !showGrid && (
+                        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+                            {t('app.pick_aproject_to')}
+                        </div>
+                    )}
+                    {panes.length > 0 && (
+                        <div
+                            className={
+                                showPanel && !showGrid
+                                    ? 'relative flex min-h-0 min-w-0 flex-1 flex-col'
+                                    : 'hidden'
+                            }
+                        >
+                            <div
+                                className={cn(
+                                    'min-h-0 min-w-0 flex-1',
+                                    bottomTab !== null &&
+                                        bottomPlacement.placement === 'fill'
+                                        ? 'hidden'
+                                        : 'flex',
+                                )}
+                            >
+                                {panes.map((pane) => (
+                                    <div
+                                        key={pane.key}
+                                        className={
+                                            view.includes(pane.key)
+                                                ? 'flex min-h-0 min-w-0 flex-1'
+                                                : 'hidden'
+                                        }
+                                    >
+                                        <WorkspacePane
+                                            pane={pane}
+                                            state={
+                                                paneStates[pane.key] ?? FRESH
+                                            }
+                                            active={pane.key === activeKey}
+                                            projects={chatProjects}
+                                            terminalOpen={
+                                                bottomTab === 'terminal'
+                                            }
+                                            backgroundOpen={
+                                                bottomTab === 'background'
+                                            }
+                                            plansOpen={bottomTab === 'plans'}
+                                            phoneOpen={phoneOpen}
+                                            sidebarCollapsed={sidebarCollapsed}
+                                            sidebarToggle={sidebarToggle}
+                                            hasWindowButtons={!isFullscreen}
+                                            bottomPanel={
+                                                pane.key === activeKey &&
+                                                bottomPanel !== null &&
+                                                isBottomDocked ? (
+                                                    <BottomHostSlot
+                                                        host={bottomHost}
+                                                    />
+                                                ) : null
+                                            }
+                                            onToggleTerminal={() =>
+                                                toggleBottomTab('terminal')
+                                            }
+                                            onToggleBackground={() =>
+                                                toggleBottomTab('background')
+                                            }
+                                            onTogglePlans={() =>
+                                                toggleBottomTab('plans')
+                                            }
+                                            onOpenSettings={() =>
+                                                setSettingsTab('advanced')
+                                            }
+                                            onOpenPhone={() =>
+                                                setPhoneOpen(true)
+                                            }
+                                            onOpenInVscode={() =>
+                                                void openInVscode()
+                                            }
+                                            onPatch={patchPane}
+                                            onShowHistory={showFileHistory}
+                                            onRefreshConversations={
+                                                refreshConversations
+                                            }
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            {bottomTab !== null &&
+                                activePane !== null &&
+                                !isBottomDocked && (
+                                    <FloatingFrame
+                                        storageKey="ide.float.bottom"
+                                        enabled={
+                                            bottomPlacement.placement ===
+                                            'float'
+                                        }
+                                        className={cn(
+                                            'relative',
+                                            bottomPlacement.placement ===
+                                                'float' &&
+                                                'absolute right-3 bottom-3 z-30 h-80 max-h-[80%] w-[min(48rem,calc(100%-1.5rem))] overflow-hidden rounded-lg border shadow-xl',
+                                            bottomPlacement.placement ===
+                                                'fill' && 'min-h-0 flex-1',
+                                        )}
+                                    >
+                                        {bottomPanel}
+                                    </FloatingFrame>
+                                )}
+                        </div>
+                    )}
+                </main>
+                {isBottomDocked &&
+                    bottomPanel !== null &&
+                    createPortal(bottomPanel, bottomHost)}
+                <DialogsHost
+                    settingsTab={settingsTab}
+                    onSettingsTabChange={setSettingsTab}
+                    usageOpen={usageOpen}
+                    onUsageClose={() => setUsageOpen(false)}
+                    phoneOpen={phoneOpen}
+                    onPhoneClose={() => setPhoneOpen(false)}
+                />
             </div>
-        </AccountMenuContext.Provider>
+            <UpdateBanner />
+        </div>
     );
 }

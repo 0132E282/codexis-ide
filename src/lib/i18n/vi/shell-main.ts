@@ -321,6 +321,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'sidebar.sidebar': 'Thanh bên',
     'sidebar.github_signed_in': 'GitHub: {account}',
     'sidebar.sign_in_with_github': 'Đăng nhập bằng GitHub',
+    'sidebar.switch_account': 'Đăng nhập tài khoản khác',
     'sidebar.statistics': 'Thống kê',
     'sidebar_toggle.collapse_sidebar': 'Thu gọn thanh bên',
     'sidebar_toggle.open_sidebar': 'Mở thanh bên',
