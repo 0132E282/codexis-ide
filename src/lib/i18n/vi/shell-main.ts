@@ -13,6 +13,7 @@ export const shellMainVietnamese: Record<string, string> = {
     'accounts.sign_in_to_rynox': 'Đăng nhập Codexis',
     'accounts.the_claude_command_is': 'Chưa cài lệnh `claude`.',
     'accounts.the_codex_command_is': 'Chưa cài lệnh `codex`.',
+    'accounts.the_gemini_command_is': 'Chưa cài lệnh `gemini`.',
     'app.pick_aproject_to': 'Chọn một dự án để bắt đầu.',
     'app.resize_terminal_height': 'Đổi chiều cao terminal',
     'bottom_panel.close': 'Đóng bảng dưới',

@@ -4,6 +4,7 @@ use super::*;
 fn parse_knows_every_cli() {
     assert_eq!(CliKind::parse("claude"), Some(CliKind::Claude));
     assert_eq!(CliKind::parse("codex"), Some(CliKind::Codex));
+    assert_eq!(CliKind::parse("gemini"), Some(CliKind::Gemini));
     assert_eq!(CliKind::parse("github"), Some(CliKind::Github));
     assert_eq!(CliKind::parse("gh"), None);
     assert_eq!(CliKind::parse(""), None);
@@ -13,6 +14,7 @@ fn parse_knows_every_cli() {
 fn parse_agent_rejects_github() {
     assert_eq!(CliKind::parse_agent("claude"), Some(CliKind::Claude));
     assert_eq!(CliKind::parse_agent("codex"), Some(CliKind::Codex));
+    assert_eq!(CliKind::parse_agent("gemini"), None);
     assert_eq!(CliKind::parse_agent("github"), None);
 }
 
@@ -20,7 +22,12 @@ fn parse_agent_rejects_github() {
 fn lists_keep_their_order() {
     assert_eq!(
         CliKind::ALL,
-        [CliKind::Claude, CliKind::Codex, CliKind::Github]
+        [
+            CliKind::Claude,
+            CliKind::Codex,
+            CliKind::Gemini,
+            CliKind::Github
+        ]
     );
     assert_eq!(CliKind::AGENTS, [CliKind::Claude, CliKind::Codex]);
 }
@@ -36,6 +43,7 @@ fn names_programs_and_variables_match_the_old_tables() {
         [
             ("claude", "claude", "CLAUDE_CONFIG_DIR"),
             ("codex", "codex", "CODEX_HOME"),
+            ("gemini", "gemini", "GEMINI_CLI_HOME"),
             ("github", "gh", "GH_CONFIG_DIR"),
         ]
     );

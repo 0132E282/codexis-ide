@@ -1,4 +1,4 @@
-//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `gh`): the one place that knows their names, programs and where to find them.
+//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `gemini`, `gh`): the one place that knows their names, programs and where to find them.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -13,20 +13,27 @@ const EXTRA_BIN_DIRS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", ".loca
 pub enum CliKind {
     Claude,
     Codex,
+    Gemini,
     Github,
 }
 
 impl CliKind {
     /// Every CLI, in the order used for listings and statistics.
-    pub const ALL: [CliKind; 3] = [CliKind::Claude, CliKind::Codex, CliKind::Github];
+    pub const ALL: [CliKind; 4] = [
+        CliKind::Claude,
+        CliKind::Codex,
+        CliKind::Gemini,
+        CliKind::Github,
+    ];
 
-    /// The CLIs that can run a chat turn.
+    /// The CLIs that can run a chat turn (Gemini is only connected for now, it does not chat yet).
     pub const AGENTS: [CliKind; 2] = [CliKind::Claude, CliKind::Codex];
 
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
+            "gemini" => Some(Self::Gemini),
             "github" => Some(Self::Github),
             _ => None,
         }
@@ -42,6 +49,7 @@ impl CliKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Gemini => "gemini",
             Self::Github => "github",
         }
     }
@@ -51,6 +59,7 @@ impl CliKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Gemini => "gemini",
             Self::Github => "gh",
         }
     }
@@ -60,6 +69,8 @@ impl CliKind {
         match self {
             Self::Claude => "CLAUDE_CONFIG_DIR",
             Self::Codex => "CODEX_HOME",
+            // * Not the `.gemini` folder itself: the CLI puts `.gemini` inside this home.
+            Self::Gemini => "GEMINI_CLI_HOME",
             Self::Github => "GH_CONFIG_DIR",
         }
     }

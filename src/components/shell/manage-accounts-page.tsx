@@ -26,6 +26,7 @@ const DEFAULT_PROFILE = 0;
 const PROVIDER: Record<ProfileCli, string> = {
     claude: 'Anthropic',
     codex: 'ChatGPT',
+    gemini: 'Google',
     github: 'GitHub',
 };
 
@@ -95,7 +96,7 @@ export function ManageAccountsPage({
                         ),
                     );
                     const used =
-                        cli === 'github'
+                        cli === 'github' || cli === 'gemini'
                             ? []
                             : await Promise.all(
                                   mine.map((profile) =>
@@ -249,7 +250,7 @@ export function ManageAccountsPage({
                                 <th className="px-2 py-2 font-medium whitespace-nowrap">
                                     {t('manage_accounts_page.status')}
                                 </th>
-                                {cli !== 'github' && (
+                                {cli !== 'github' && cli !== 'gemini' && (
                                     <th className="px-2 py-2 font-medium whitespace-nowrap">
                                         Usage
                                     </th>
@@ -358,12 +359,15 @@ export function ManageAccountsPage({
                                                 t('common.not_connected')
                                             )}
                                         </td>
-                                        {cli !== 'github' && (
-                                            <td className="px-2 py-2 text-xs whitespace-nowrap text-muted-foreground">
-                                                {cli === 'claude' &&
-                                                limits[profile.id] !== undefined
-                                                    ? (limits[profile.id]?.map(
-                                                          (limit) => (
+                                        {cli !== 'github' &&
+                                            cli !== 'gemini' && (
+                                                <td className="px-2 py-2 text-xs whitespace-nowrap text-muted-foreground">
+                                                    {cli === 'claude' &&
+                                                    limits[profile.id] !==
+                                                        undefined
+                                                        ? (limits[
+                                                              profile.id
+                                                          ]?.map((limit) => (
                                                               <div
                                                                   key={
                                                                       limit.label
@@ -433,26 +437,28 @@ export function ManageAccountsPage({
                                                                       </span>
                                                                   )}
                                                               </div>
-                                                          ),
-                                                      ) ??
-                                                      t(
-                                                          'manage_accounts_page.unreadable',
-                                                      ))
-                                                    : usages[profile.id] ===
-                                                            undefined ||
-                                                        (cli === 'claude' &&
-                                                            statuses[profile.id]
-                                                                ?.loggedIn)
-                                                      ? '...'
-                                                      : describeUsage(
-                                                            usages[profile.id],
-                                                        ).map((line) => (
-                                                            <div key={line}>
-                                                                {line}
-                                                            </div>
-                                                        ))}
-                                            </td>
-                                        )}
+                                                          )) ??
+                                                          t(
+                                                              'manage_accounts_page.unreadable',
+                                                          ))
+                                                        : usages[profile.id] ===
+                                                                undefined ||
+                                                            (cli === 'claude' &&
+                                                                statuses[
+                                                                    profile.id
+                                                                ]?.loggedIn)
+                                                          ? '...'
+                                                          : describeUsage(
+                                                                usages[
+                                                                    profile.id
+                                                                ],
+                                                            ).map((line) => (
+                                                                <div key={line}>
+                                                                    {line}
+                                                                </div>
+                                                            ))}
+                                                </td>
+                                            )}
                                         <td className="px-2 py-2 whitespace-nowrap">
                                             <div className="flex items-center justify-end gap-1">
                                                 {status?.installed &&

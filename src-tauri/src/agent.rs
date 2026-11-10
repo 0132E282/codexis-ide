@@ -130,7 +130,7 @@ impl CliKind {
         match self {
             Self::Claude => Some(&CLAUDE),
             Self::Codex => Some(&CODEX),
-            Self::Github => None,
+            Self::Gemini | Self::Github => None,
         }
     }
 }

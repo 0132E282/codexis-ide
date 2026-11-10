@@ -11,6 +11,7 @@ fn every_cli_has_its_own_auth_tool() {
 fn login_arguments_start_the_tools_own_flow() {
     assert_eq!(CliKind::Claude.auth().login_args(), ["auth", "login"]);
     assert_eq!(CliKind::Codex.auth().login_args(), ["login"]);
+    assert_eq!(CliKind::Gemini.auth().login_args(), ["--prompt", "hi"]);
     assert!(CliKind::Github.auth().login_args().contains(&"--web"));
 }
 

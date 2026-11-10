@@ -54,9 +54,11 @@ export function useAuthStatus(polling: boolean) {
     return { statuses, error, refresh };
 }
 
-/** Chatting needs at least one AI CLI signed in; GitHub is optional. */
+/** Chatting needs Claude or Codex signed in; Gemini (connect only) and GitHub are optional. */
 export const canChat = (statuses: AuthStatus[]) =>
     statuses.some(
         (status) =>
-            status.provider !== 'github' && status.installed && status.loggedIn,
+            (status.provider === 'claude' || status.provider === 'codex') &&
+            status.installed &&
+            status.loggedIn,
     );

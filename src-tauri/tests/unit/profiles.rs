@@ -22,7 +22,7 @@ fn default_profile_is_always_first_and_active() {
     let (_dir, store) = store();
     let list = store.list().unwrap();
 
-    assert_eq!(list.len(), 3);
+    assert_eq!(list.len(), 4);
     assert!(list
         .iter()
         .all(|profile| profile.id == DEFAULT_PROFILE && profile.active));
@@ -109,7 +109,7 @@ fn an_account_can_be_renamed_but_not_the_default() {
 fn bad_requests_are_refused() {
     let (_dir, store) = store();
 
-    assert_eq!(store.add("gemini", "x"), Err(ProfileError::Invalid));
+    assert_eq!(store.add("unknown", "x"), Err(ProfileError::Invalid));
     assert_eq!(store.add("claude", "  "), Err(ProfileError::Invalid));
     assert_eq!(
         store.add("claude", &"x".repeat(41)),

@@ -1,4 +1,4 @@
-import { Github } from 'lucide-react';
+import { Github, Sparkles } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
@@ -14,12 +14,19 @@ import { t } from '@/lib/i18n';
 const LABEL: Record<AuthProvider, string> = {
     claude: 'Claude',
     codex: 'ChatGPT (Codex)',
+    gemini: 'Gemini',
     github: 'GitHub',
 };
 
 const ICON: Record<AuthProvider, ReactNode> = {
     claude: <ClaudeIcon aria-hidden="true" className="size-5 shrink-0" />,
     codex: <CodexIcon className="size-5 shrink-0 rounded-sm" />,
+    gemini: (
+        <Sparkles
+            aria-hidden="true"
+            className="size-5 shrink-0 text-muted-foreground"
+        />
+    ),
     github: (
         <Github
             aria-hidden="true"
@@ -31,6 +38,7 @@ const ICON: Record<AuthProvider, ReactNode> = {
 const INSTALL_HINT: Record<AuthProvider, string> = {
     claude: 'accounts.the_claude_command_is',
     codex: 'accounts.the_codex_command_is',
+    gemini: 'accounts.the_gemini_command_is',
     github: 'accounts.github_cli_gh_is',
 };
 
