@@ -1,4 +1,4 @@
-//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `gemini`, `agy`, `gh`): the one place that knows their names, programs and where to find them.
+//! Identity of the external CLIs Rynox drives (`claude`, `codex`, `ollama`, `gemini`, `agy`, `gh`): the one place that knows their names, programs and where to find them.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -13,6 +13,7 @@ const EXTRA_BIN_DIRS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", ".loca
 pub enum CliKind {
     Claude,
     Codex,
+    Ollama,
     Gemini,
     Antigravity,
     Github,
@@ -29,12 +30,18 @@ impl CliKind {
     ];
 
     /// The CLIs that can run a chat turn (Gemini is only connected for now, it does not chat yet).
-    pub const AGENTS: [CliKind; 3] = [CliKind::Claude, CliKind::Codex, CliKind::Antigravity];
+    pub const AGENTS: [CliKind; 4] = [
+        CliKind::Claude,
+        CliKind::Codex,
+        CliKind::Ollama,
+        CliKind::Antigravity,
+    ];
 
     pub fn parse(name: &str) -> Option<Self> {
         match name {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
+            "ollama" => Some(Self::Ollama),
             "gemini" => Some(Self::Gemini),
             "antigravity" => Some(Self::Antigravity),
             "github" => Some(Self::Github),
@@ -52,6 +59,7 @@ impl CliKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Ollama => "ollama",
             Self::Gemini => "gemini",
             Self::Antigravity => "antigravity",
             Self::Github => "github",
@@ -63,6 +71,7 @@ impl CliKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+            Self::Ollama => "ollama",
             Self::Gemini => "gemini",
             Self::Antigravity => "agy",
             Self::Github => "gh",
@@ -74,6 +83,7 @@ impl CliKind {
         match self {
             Self::Claude => "CLAUDE_CONFIG_DIR",
             Self::Codex => "CODEX_HOME",
+            Self::Ollama => "OLLAMA_MODELS",
             // * Not the `.gemini` folder itself: the CLI puts `.gemini` inside this home.
             Self::Gemini => "GEMINI_CLI_HOME",
             // * `agy` keeps everything under `$HOME/.gemini`, and has no variable of its own for it.

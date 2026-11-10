@@ -71,6 +71,7 @@ impl ProfileStore {
 
     fn variable(cli: &str) -> Result<&'static str, ProfileError> {
         CliKind::parse(cli)
+            .filter(|kind| CliKind::ALL.contains(kind))
             .map(CliKind::config_variable)
             .ok_or(ProfileError::Invalid)
     }

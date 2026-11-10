@@ -1,16 +1,18 @@
-import { AntigravityIcon, ClaudeIcon, CodexIcon } from '@/icons';
+import { AntigravityIcon, ClaudeIcon, CodexIcon, OllamaIcon } from '@/icons';
 import type { AgentCli } from '@/lib/ide';
 
 // * Just the brand icon, with no tile behind it.
 export const CLI_ICONS = {
     claude: ClaudeIcon,
     codex: CodexIcon,
+    ollama: OllamaIcon,
     antigravity: AntigravityIcon,
 };
 
 export const CLIS: { value: AgentCli; label: string; vendor: string }[] = [
     { value: 'claude', label: 'Claude', vendor: 'anthropic' },
     { value: 'codex', label: 'ChatGPT', vendor: 'openai' },
+    { value: 'ollama', label: 'Ollama', vendor: 'local' },
     { value: 'antigravity', label: 'Antigravity', vendor: 'google' },
 ];
 
@@ -28,6 +30,8 @@ export const MODELS: Record<
         { value: 'gpt-5', label: 'GPT-5' },
         { value: 'gpt-5-codex', label: 'GPT-5 Codex' },
     ],
+    // * No fixed list: only models installed locally and reported by `ollama ls` are offered.
+    ollama: [],
     // * No fixed list: the models are the ones `agy models` lists, and only when it is signed in (empty = not offered).
     antigravity: [],
 };

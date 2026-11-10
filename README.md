@@ -5,7 +5,7 @@
 
 <p align="center">
   <strong>Trình soạn code desktop có AI agent tích hợp.</strong><br />
-  Soạn code, theo dõi Git, chạy terminal và chat với <code>claude</code> / <code>codex</code> ngay trong dự án.
+  Soạn code, theo dõi Git, chạy terminal và chat với <code>claude</code> / <code>codex</code> / <code>ollama</code> ngay trong dự án.
 </p>
 
 <p align="center">
@@ -17,14 +17,14 @@
 
 ## Giới thiệu
 
-Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rust) và React 19. Ứng dụng gom trình soạn code, Git, terminal thật và AI agent vào một cửa sổ. Agent không chạy trong tiến trình của IDE: mỗi lượt chat là một lần gọi CLI `claude` hoặc `codex` đã cài và đăng nhập trên máy, trong thư mục dự án bạn chọn. IDE lo phần giao diện, quyền truy cập tệp, lưu lịch sử và hiển thị luồng sự kiện của CLI.
+Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rust) và React 19. Ứng dụng gom trình soạn code, Git, terminal thật và AI agent vào một cửa sổ. Agent không chạy trong tiến trình của IDE: mỗi lượt chat là một lần gọi CLI `claude`, `codex` hoặc `ollama` đã cài trên máy, trong thư mục dự án bạn chọn. IDE lo phần giao diện, quyền truy cập tệp, lưu lịch sử và hiển thị luồng sự kiện của CLI.
 
 ## Tính năng
 
 - **Trình soạn code**: Monaco, cây thư mục, tab tệp, đổi tên, lưu có kiểm tra xung đột bằng hash nội dung, diff thay đổi, mở nhanh tệp.
 - **Terminal thật**: shell chạy qua PTY ngay trong app.
 - **Git**: tệp thay đổi, commit, hoàn tác, lịch sử commit, lịch sử từng tệp, blame, nhánh (so sánh, checkout, merge, pull). IDE không push.
-- **AI agent**: điều khiển CLI `claude` và `codex`; lịch sử và mã phiên CLI được lưu theo thư mục dự án nên mở lại là tiếp tục đúng hội thoại. Có chế độ quyền, đính kèm ảnh/tệp, tin nhắn đang chờ hiện ngay trong khung chat, từ thẻ "Đã sửa tệp" mở thẳng màn thay đổi, relay giữa hai AI (tối đa 6 lượt), tác vụ nền và sub-agent. CLI `gemini` chưa được hỗ trợ.
+- **AI agent**: điều khiển CLI `claude`, `codex` và `ollama`; lịch sử được lưu theo thư mục dự án. Claude/Codex giữ mã phiên để tiếp tục hội thoại, còn mỗi lượt Ollama độc lập và dùng model cài local từ `ollama ls`. Có chế độ quyền, đính kèm ảnh/tệp, tin nhắn đang chờ hiện ngay trong khung chat, từ thẻ "Đã sửa tệp" mở thẳng màn thay đổi, relay giữa hai AI (tối đa 6 lượt), tác vụ nền và sub-agent. CLI `gemini` chưa được hỗ trợ.
 - **Lưới chat và khung nổi**: đặt tối đa 4 chat cạnh nhau theo nhóm, **Hỏi nhanh** (side chat: các tab hỏi AI chỉ đọc cạnh chat chính), vùng tệp và panel ở chế độ nổi. Mỗi panel đặt được vị trí qua menu, có thể lưu làm mặc định hoặc đặt lại.
 - **Plans**: đọc `docs/plans/` của dự án thành danh sách thẻ (tiêu đề, trạng thái, tiến độ), chỉ đọc; danh sách và chi tiết tự làm mới khi tệp trong `docs/plans/` đổi.
 - **Language server**: dùng lại language server có sẵn trong extension VS Code (VS Code, Insiders, Cursor, VSCodium) đã cài trên máy; IDE chỉ đọc manifest, không chạy script của extension.
@@ -46,7 +46,7 @@ Codexis IDE là IDE desktop độc lập, xây dựng trên Tauri 2 (backend Rus
 
 - [Node.js](https://nodejs.org) và [pnpm](https://pnpm.io).
 - [Rust](https://rustup.rs) (toolchain stable) và các thành phần hệ thống của Tauri 2: xem [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/). Trên macOS cần Xcode Command Line Tools (`xcode-select --install`).
-- Để chat với AI: cài ít nhất một CLI và đăng nhập sẵn, sao cho `claude` hoặc `codex` chạy được từ terminal. App tìm thêm trong `/opt/homebrew/bin`, `/usr/local/bin` và `~/.local/bin`.
+- Để chat với AI: cài ít nhất một CLI. `claude`/`codex` cần đăng nhập sẵn; Ollama cần service đang chạy và ít nhất một model local. App tìm thêm trong `/opt/homebrew/bin`, `/usr/local/bin` và `~/.local/bin`.
 
 **Tải về (macOS)**
 

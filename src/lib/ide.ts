@@ -24,7 +24,7 @@ export type Project = {
 export type NewProject = Omit<Project, 'id'>;
 /** A workspace: its folder name and the full path that addresses it in the other commands. */
 export type ProjectInfo = { name: string; root: string };
-export type AgentCli = 'claude' | 'codex' | 'antigravity';
+export type AgentCli = 'claude' | 'codex' | 'ollama' | 'antigravity';
 /** One step of a turn that is shown live: the AI's words, or a tool call with its result. */
 export type Step =
     | { kind: 'text'; text: string }

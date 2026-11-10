@@ -1,18 +1,19 @@
 use super::*;
 
 #[test]
-fn every_cli_has_its_own_auth_tool() {
+fn listed_auth_clis_have_auth_and_ollama_does_not() {
     for kind in CliKind::ALL {
-        assert_eq!(kind.auth().kind(), kind);
+        assert_eq!(kind.auth().map(AuthTool::kind), Some(kind));
     }
+    assert!(CliKind::Ollama.auth().is_none());
 }
 
 #[test]
 fn login_arguments_start_the_tools_own_flow() {
-    assert_eq!(CliKind::Claude.auth().login_args(), ["auth", "login"]);
-    assert_eq!(CliKind::Codex.auth().login_args(), ["login"]);
-    assert_eq!(CliKind::Gemini.auth().login_args(), ["--prompt", "hi"]);
-    assert!(CliKind::Github.auth().login_args().contains(&"--web"));
+    assert_eq!(ClaudeAuth.login_args(), ["auth", "login"]);
+    assert_eq!(CodexAuth.login_args(), ["login"]);
+    assert_eq!(GeminiAuth.login_args(), ["--prompt", "hi"]);
+    assert!(GithubAuth.login_args().contains(&"--web"));
 }
 
 #[test]

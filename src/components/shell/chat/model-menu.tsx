@@ -28,9 +28,11 @@ function useModels() {
                 .then((listed) =>
                     setModels((current) => ({
                         ...current,
-                        // * Antigravity lists nothing while signed out, so it leaves the menu; the others keep their fixed list.
+                        // * Dynamic-only CLIs leave the menu when they list no available model; the others keep their fixed list.
                         [cli]:
-                            listed.length > 0 || cli === 'antigravity'
+                            listed.length > 0 ||
+                            cli === 'antigravity' ||
+                            cli === 'ollama'
                                 ? listed
                                 : current[cli],
                     })),

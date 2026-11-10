@@ -1,15 +1,17 @@
-//! Chat with an AI CLI (`claude`, `codex` or `agy`): one turn runs the CLI non-interactively in the workspace folder and its JSON lines are turned into events for the chat.
+//! Chat with an AI CLI (`claude`, `codex`, `ollama` or `agy`): one turn runs the CLI non-interactively in the workspace folder and its output lines are turned into events for the chat.
 //! The CLIs keep their default permissions, so a turn can read the project but cannot write to it unasked.
-//! What differs per CLI (arguments, output lines) is behind [`AgentCli`], implemented in `claude.rs` and `codex.rs`.
+//! What differs per CLI (arguments, output lines) is behind [`AgentCli`] in the `agent/` adapters.
 
 mod antigravity;
 mod claude;
 mod claude_background;
 mod codex;
+mod ollama;
 
 pub use antigravity::AntigravityAgent;
 pub use claude::ClaudeAgent;
 pub use codex::CodexAgent;
+pub use ollama::OllamaAgent;
 
 use crate::background::BackgroundChange;
 use crate::cli::{self, CliKind, Environment};
@@ -49,7 +51,7 @@ pub enum Event {
     Plan(String),
     /// The background tasks of the project changed: JSON `{"tasks": [...]}` of [`crate::background::BackgroundTasks::snapshot_json`].
     Background(String),
-    /// The AI that speaks from now on in a relayed turn (`claude`, `codex`): the chat shows it as a label before that AI's steps.
+    /// The AI that speaks from now on in a relayed turn: the chat shows it as a label before that AI's steps.
     Speaker(String),
     /// The main agent finished writing its answer (its message ended the turn), though the CLI may print the `Result` only after the background sub-agents are done. The chat treats the main agent as free from here while it keeps listening.
     Idle(String),
@@ -130,6 +132,7 @@ pub trait AgentCli: Sync {
 
 static CLAUDE: ClaudeAgent = ClaudeAgent;
 static CODEX: CodexAgent = CodexAgent;
+static OLLAMA: OllamaAgent = OllamaAgent;
 static ANTIGRAVITY: AntigravityAgent = AntigravityAgent;
 
 impl CliKind {
@@ -138,6 +141,7 @@ impl CliKind {
         match self {
             Self::Claude => Some(&CLAUDE),
             Self::Codex => Some(&CODEX),
+            Self::Ollama => Some(&OLLAMA),
             Self::Antigravity => Some(&ANTIGRAVITY),
             Self::Gemini | Self::Github => None,
         }

@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn ollama_models_are_read_from_the_name_column() {
+    let output = "NAME             ID              SIZE      MODIFIED\nqwen3:8b         abc123          5.2 GB    2 days ago\nllama3.2:latest  def456          2.0 GB    1 hour ago\n";
+
+    assert_eq!(
+        parse_ollama_models(output),
+        [
+            ModelOption {
+                value: "qwen3:8b".to_string(),
+                label: "qwen3:8b".to_string(),
+            },
+            ModelOption {
+                value: "llama3.2:latest".to_string(),
+                label: "llama3.2:latest".to_string(),
+            },
+        ]
+    );
+}
+
+#[test]
+fn ollama_models_require_the_expected_header_and_skip_empty_or_repeated_headers() {
+    assert!(parse_ollama_models("").is_empty());
+    assert!(parse_ollama_models("NAME ID SIZE MODIFIED\n").is_empty());
+    assert!(parse_ollama_models("MODEL ID SIZE MODIFIED\nqwen3:8b x 5 GB\n").is_empty());
+
+    let output = "notice\nNAME ID SIZE MODIFIED\n\nNAME ID SIZE MODIFIED\nqwen3:8b x 5 GB\n";
+    assert_eq!(
+        parse_ollama_models(output),
+        [ModelOption {
+            value: "qwen3:8b".to_string(),
+            label: "qwen3:8b".to_string(),
+        }]
+    );
+}
+
+#[test]
 fn codex_models_are_the_listed_ones_in_priority_order() {
     let dir = tempfile::tempdir().unwrap();
 

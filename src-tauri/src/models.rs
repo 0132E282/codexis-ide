@@ -1,4 +1,4 @@
-//! The models an AI CLI offers, as its own `/model` command lists them. Codex keeps the list it fetched for the signed-in account in `models_cache.json`; Claude answers `claude -p "/model"` with the aliases it accepts.
+//! The models an AI CLI offers, as its own model-listing command reports them.
 
 use serde::Serialize;
 use std::fs;
@@ -174,6 +174,41 @@ pub fn antigravity_models(program: &Path, environment: &[(&str, String)]) -> Vec
         .ok()
         .filter(|output| output.status.success())
         .map(|output| parse_antigravity_models(&String::from_utf8_lossy(&output.stdout)))
+        .unwrap_or_default()
+}
+
+/// The model names in the first column of `ollama ls`, excluding its heading.
+pub fn parse_ollama_models(output: &str) -> Vec<ModelOption> {
+    let mut lines = output.lines();
+    let has_header = lines.any(|line| {
+        line.split_whitespace()
+            .take(4)
+            .eq(["NAME", "ID", "SIZE", "MODIFIED"])
+    });
+
+    if !has_header {
+        return Vec::new();
+    }
+
+    lines
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| *name != "NAME")
+        .map(|name| ModelOption {
+            value: name.to_string(),
+            label: name.to_string(),
+        })
+        .collect()
+}
+
+/// Asks `ollama ls`; empty when Ollama is unavailable or the command fails.
+pub fn ollama_models(program: &Path) -> Vec<ModelOption> {
+    crate::cli::command(program, &[])
+        .arg("ls")
+        .current_dir(std::env::temp_dir())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| parse_ollama_models(&String::from_utf8_lossy(&output.stdout)))
         .unwrap_or_default()
 }
 

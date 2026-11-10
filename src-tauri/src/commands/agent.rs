@@ -609,6 +609,10 @@ pub async fn agent_send(
         .and_then(CliKind::agent)
         .ok_or("agent.cli_unsupported")?;
 
+    if cli.kind() == CliKind::Ollama && model.is_none() {
+        return Err("agent.model_invalid".to_string());
+    }
+
     // * Chat turns are `run-…`, side-chat turns `side-…`; the prompt and the session (which may come from the saved history) are checked before anything starts.
     let prefix = if run_id.starts_with(agent::SIDE_RUN_PREFIX) {
         agent::SIDE_RUN_PREFIX
@@ -827,6 +831,9 @@ pub async fn agent_models(
                     .map(|program| crate::models::claude_models(&program, &environment))
                     .unwrap_or_default()
             }
+            "ollama" => crate::cli::locate(crate::cli::CliKind::Ollama.program())
+                .map(|program| crate::models::ollama_models(&program))
+                .unwrap_or_default(),
             "antigravity" => {
                 let environment = app
                     .state::<ProfileStore>()

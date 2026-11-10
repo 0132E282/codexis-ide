@@ -1,4 +1,5 @@
 use super::state::AppState;
+use crate::auth::{AuthTool, GithubAuth};
 use crate::cli::{self, CliKind};
 use crate::git::GitRepo;
 use crate::profiles::ProfileStore;
@@ -129,7 +130,7 @@ pub async fn session_rail_github(
         let Some(program) = cli::locate(CliKind::Github.program()) else {
             return Ok(reply);
         };
-        let sign_in = CliKind::Github.auth().status(&environment);
+        let sign_in = GithubAuth.status(&environment);
 
         if !sign_in.logged_in {
             reply.status = GithubStatus::SignedOut;

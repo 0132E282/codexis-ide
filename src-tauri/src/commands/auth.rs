@@ -29,7 +29,10 @@ pub async fn auth_status_profile(
     blocking("auth.status_failed", move || {
         let environment = profile_environment(&app, provider, profile)?;
 
-        Ok(provider.auth().status(&environment))
+        Ok(provider
+            .auth()
+            .ok_or("auth.unsupported")?
+            .status(&environment))
     })
     .await
 }
@@ -72,7 +75,10 @@ pub async fn auth_login(
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        provider.auth().start_login(&environment)
+        provider
+            .auth()
+            .ok_or_else(|| "auth.unsupported".to_string())?
+            .start_login(&environment)
     })
     .await
 }
@@ -91,7 +97,10 @@ pub async fn auth_submit_code(
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        provider.auth().submit_code(&environment, &code)
+        provider
+            .auth()
+            .ok_or_else(|| "auth.unsupported".to_string())?
+            .submit_code(&environment, &code)
     })
     .await
 }
@@ -109,7 +118,10 @@ pub async fn auth_cancel_login(
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        provider.auth().cancel_login(&environment);
+        provider
+            .auth()
+            .ok_or_else(|| "auth.unsupported".to_string())?
+            .cancel_login(&environment);
 
         Ok(())
     })
@@ -129,13 +141,18 @@ pub async fn auth_logout(
         let environment =
             profile_environment(&app, provider, profile.unwrap_or(profiles::DEFAULT_PROFILE))?;
 
-        provider.auth().logout(&environment)
+        provider
+            .auth()
+            .ok_or_else(|| "auth.unsupported".to_string())?
+            .logout(&environment)
     })
     .await
 }
 
 fn parse_provider(name: &str) -> Result<CliKind, String> {
-    CliKind::parse(name).ok_or_else(|| "auth.unsupported".to_string())
+    CliKind::parse(name)
+        .filter(|kind| kind.auth().is_some())
+        .ok_or_else(|| "auth.unsupported".to_string())
 }
 
 /// Environment of the account `profile` for `kind`.

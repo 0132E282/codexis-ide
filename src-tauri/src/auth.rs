@@ -194,13 +194,14 @@ fn login_command<T: AuthTool + ?Sized>(
 
 impl CliKind {
     /// The sign-in side of this CLI.
-    pub fn auth(self) -> &'static dyn AuthTool {
+    pub fn auth(self) -> Option<&'static dyn AuthTool> {
         match self {
-            Self::Claude => &ClaudeAuth,
-            Self::Codex => &CodexAuth,
-            Self::Gemini => &GeminiAuth,
-            Self::Antigravity => &AntigravityAuth,
-            Self::Github => &GithubAuth,
+            Self::Claude => Some(&ClaudeAuth),
+            Self::Codex => Some(&CodexAuth),
+            Self::Gemini => Some(&GeminiAuth),
+            Self::Antigravity => Some(&AntigravityAuth),
+            Self::Github => Some(&GithubAuth),
+            Self::Ollama => None,
         }
     }
 }
@@ -216,7 +217,10 @@ pub fn status_all(environment_of: impl Fn(CliKind) -> Environment) -> Vec<Provid
     std::thread::scope(|scope| {
         let handles: Vec<_> = environments
             .iter()
-            .map(|(kind, environment)| scope.spawn(move || kind.auth().status(environment)))
+            .filter_map(|(kind, environment)| {
+                kind.auth()
+                    .map(|auth| scope.spawn(move || auth.status(environment)))
+            })
             .collect();
 
         handles

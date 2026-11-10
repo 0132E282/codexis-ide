@@ -51,6 +51,10 @@ const nextAccount = async (
     finished: Turn,
     triedAccounts: number[],
 ): Promise<number | null> => {
+    if (finished.cli === 'ollama') {
+        return null;
+    }
+
     const all = await ideProfiles.list();
     const mine = all.filter((profile) => profile.cli === finished.cli);
     const current = mine.find((profile) => profile.active)?.id;
@@ -319,6 +323,7 @@ export function useAgentTurns({
                     if (
                         payload === 'claude' ||
                         payload === 'codex' ||
+                        payload === 'ollama' ||
                         payload === 'antigravity'
                     ) {
                         update(runId, (turn) => withSpeaker(turn, payload));
@@ -638,9 +643,11 @@ export function useAgentTurns({
 
     /** The "Chuyển tài khoản" button: the last message goes again under another signed-in account of the same AI that has not hit a limit. */
     const switchAccount = useStableCallback((finished: Turn) => {
-        if (busy) {
+        if (busy || finished.cli === 'ollama') {
             return;
         }
+
+        const cli = finished.cli;
 
         const triedAccounts = accountChains.current.get(finished.id) ?? [];
 
@@ -661,11 +668,11 @@ export function useAgentTurns({
                     return;
                 }
 
-                await ideProfiles.select(finished.cli, account);
-                delete sessions.current[finished.cli];
+                await ideProfiles.select(cli, account);
+                delete sessions.current[cli];
                 startTurn(
                     finished.prompt,
-                    finished.cli,
+                    cli,
                     chains.current.get(finished.id) ?? [],
                     false,
                     [...triedAccounts, account],
