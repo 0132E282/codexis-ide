@@ -354,7 +354,7 @@ export function WorkspacePane({
                 trailingFirst={treePlacement.placement === 'left'}
                 trailing={
                     <CodeViewer
-                        alwaysShowEditor={!sidebarCollapsed}
+                        alwaysShowEditor
                         treeClosed={treeClosed}
                         onTreeClosedChange={setTreeClosed}
                         chatCollapsed={state.chatCollapsed}
@@ -428,7 +428,7 @@ export function WorkspacePane({
                         fill
                         headerStart={
                             sidebarCollapsed && !filesLeadWindow
-                                ? sidebarToggle
+                                ? windowedSidebarToggle
                                 : null
                         }
                         headerActions={

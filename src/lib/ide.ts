@@ -488,6 +488,14 @@ export const onRemoteConnected = (handler: (count: number) => void) =>
 export const onAgentEvent = (handler: (event: AgentEvent) => void) =>
     listen<AgentEvent>('agent-event', ({ payload }) => handler(payload));
 
+/** Listens to the Terminal menu of the menu bar (`new` or `split`). */
+/** Listens to the File menu of the menu bar (only `open-folder` for now). */
+export const onFileMenu = (handler: (action: 'open-folder') => void) =>
+    listen<'open-folder'>('menu-file', ({ payload }) => handler(payload));
+
+export const onTerminalMenu = (handler: (action: 'new' | 'split') => void) =>
+    listen<'new' | 'split'>('menu-terminal', ({ payload }) => handler(payload));
+
 /** Listens to what the shells of the terminal panel print. */
 export const onTerminalData = (
     handler: (event: { id: string; data: string }) => void,

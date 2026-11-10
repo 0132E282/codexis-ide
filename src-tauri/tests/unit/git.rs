@@ -227,6 +227,20 @@ fn commit_own_files_only() {
 }
 
 #[test]
+fn commit_records_a_deleted_file() {
+    let dir = repo();
+
+    git(dir.path(), &["rm", "-q", "a.txt"]);
+    fs::write(dir.path().join("b.txt"), "b\n").unwrap();
+
+    let ws = Workspace::open(dir.path()).unwrap();
+    let done = GitRepo::new(&ws).commit("delete a").unwrap();
+
+    assert_eq!(done.files, 2);
+    assert!(GitRepo::new(&ws).changes().unwrap().is_empty());
+}
+
+#[test]
 fn branches_list() {
     let dir = repo();
     let ws = Workspace::open(dir.path()).unwrap();
@@ -285,4 +299,67 @@ fn oversized_head_blob_is_refused_before_loading() {
         GitRepo::new(&ws).head_content("big.txt"),
         Err(WorkspaceError::TooLarge)
     );
+}
+
+#[test]
+fn quoted_title_keeps_one_line_and_escapes_shell_characters() {
+    assert_eq!(quoted_title("fix: a \"b\" $c"), "\"fix: a \\\"b\\\" \\$c\"");
+    assert_eq!(quoted_title("first\n\nsecond"), "\"first\"");
+}
+
+#[test]
+fn planned_commit_commands_count_the_files_still_on_disk() {
+    let dir = repo();
+    fs::write(dir.path().join("b.txt"), "new\n").unwrap();
+    fs::write(dir.path().join("a.txt"), "changed\n").unwrap();
+
+    let workspace = Workspace::open(dir.path()).unwrap();
+    let lines = GitRepo::new(&workspace)
+        .planned_commands(PlannedMode::Commit, "my title", "")
+        .unwrap();
+
+    assert_eq!(lines, ["git add -- 2 files", "git commit -m \"my title\""]);
+}
+
+#[test]
+fn planned_pull_request_commands_publish_a_branch_without_upstream() {
+    let dir = repo();
+    let workspace = Workspace::open(dir.path()).unwrap();
+    let lines = GitRepo::new(&workspace)
+        .planned_commands(PlannedMode::PullRequest, "t", "main")
+        .unwrap();
+
+    assert_eq!(
+        lines,
+        [
+            "git push --set-upstream origin main",
+            "gh pr create --base main --title \"t\""
+        ]
+    );
+}
+
+#[test]
+fn pull_fast_forwards_and_reports_the_git_error_otherwise() {
+    let origin = repo();
+    let clone = TempDir::new().unwrap();
+    let target = clone.path().join("c");
+
+    git(
+        clone.path(),
+        &["clone", "-q", origin.path().to_str().unwrap(), "c"],
+    );
+    fs::write(origin.path().join("n.txt"), "n\n").unwrap();
+    git(origin.path(), &["add", "."]);
+    git(origin.path(), &["commit", "-q", "-m", "second"]);
+
+    let workspace = Workspace::open(&target).unwrap();
+
+    assert!(GitRepo::new(&workspace).pull().is_ok());
+    assert!(target.join("n.txt").exists());
+
+    let lone = repo();
+    let lone_workspace = Workspace::open(lone.path()).unwrap();
+    let reason = GitRepo::new(&lone_workspace).pull().unwrap_err();
+
+    assert!(reason.contains("tracking information") || reason.contains("upstream"));
 }

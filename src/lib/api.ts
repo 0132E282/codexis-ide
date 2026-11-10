@@ -113,6 +113,15 @@ export const api = {
                     message: data?.message,
                     root: rootOf(data),
                 });
+            case '/ai-chat/local/pull':
+                return call('local_pull', { root: rootOf(data) });
+            case '/ai-chat/local/git-preview':
+                return call('local_git_preview', {
+                    root: rootOf(data),
+                    mode: data?.mode,
+                    title: data?.title,
+                    base: data?.base,
+                });
             case '/ai-chat/local/rename':
                 return call('workspace_rename', {
                     path: data?.path,

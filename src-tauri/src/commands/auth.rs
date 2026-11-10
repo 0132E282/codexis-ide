@@ -1,7 +1,6 @@
 use super::blocking;
 use crate::auth::{self, ClaudeAuth, GithubAuth, GithubProfile, LimitUsage, ProviderStatus};
 use crate::cli::{CliKind, Environment};
-use crate::models::{self, ModelStore};
 use crate::profiles::{self, ProfileStore};
 use tauri::{AppHandle, Manager};
 
@@ -10,15 +9,10 @@ use tauri::{AppHandle, Manager};
 pub async fn auth_status(app: AppHandle) -> Result<Vec<ProviderStatus>, String> {
     blocking("auth.status_failed", move || {
         let profiles = app.state::<ProfileStore>();
-        let statuses = auth::status_all(|kind| profiles.active_environment(kind.name()));
 
-        for status in statuses.iter().filter(|status| status.logged_in) {
-            let environment = profiles.active_environment(status.provider);
-
-            remember_models(&app, status.provider, &environment);
-        }
-
-        Ok(statuses)
+        Ok(auth::status_all(|kind| {
+            profiles.active_environment(kind.name())
+        }))
     })
     .await
 }
@@ -35,13 +29,7 @@ pub async fn auth_status_profile(
     blocking("auth.status_failed", move || {
         let environment = profile_environment(&app, provider, profile)?;
 
-        let status = provider.auth().status(&environment);
-
-        if status.logged_in {
-            remember_models(&app, provider.name(), &environment);
-        }
-
-        Ok(status)
+        Ok(provider.auth().status(&environment))
     })
     .await
 }
@@ -105,19 +93,6 @@ pub async fn auth_logout(
         provider.auth().logout(&environment)
     })
     .await
-}
-
-/// Saves the models the connected account of `provider` can use, so the model menu lists them; only Codex keeps such a list (the one its `/model` shows).
-fn remember_models(app: &AppHandle, provider: &str, environment: &Environment) {
-    if provider != "codex" {
-        return;
-    }
-
-    if let Some(home) = models::codex_home_of(environment) {
-        let _ = app
-            .state::<ModelStore>()
-            .replace(provider, &models::codex_models(&home));
-    }
 }
 
 fn parse_provider(name: &str) -> Result<CliKind, String> {

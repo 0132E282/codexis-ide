@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod agent;
+pub mod app_menu;
 pub mod app_update;
 pub mod attachments;
 pub mod auth;
@@ -21,8 +22,8 @@ pub mod language_server_install;
 pub mod language_server_protocol;
 pub mod linter;
 pub mod migrations;
-pub mod permission;
 pub mod models;
+pub mod permission;
 pub mod plans;
 pub mod profiles;
 pub mod project_data;
@@ -50,6 +51,8 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .menu(app_menu::build)
+        .on_menu_event(|app, event| app_menu::handle_event(app, &event))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -79,7 +82,6 @@ pub fn run() {
             profiles::setup(app, &database)?;
             usage::setup(app, &database)?;
             settings::setup(app, &database)?;
-            models::setup(app, &database)?;
             activity::setup(app, &database)?;
             tools::setup(app, &database)?;
 
@@ -121,6 +123,8 @@ pub fn run() {
             commands::git::local_discard,
             commands::git::local_commit,
             commands::git::local_commit_message,
+            commands::git::local_pull,
+            commands::git::local_git_preview,
             commands::git::git_log,
             commands::git::git_commit_files,
             commands::git::git_commit_file_diff,

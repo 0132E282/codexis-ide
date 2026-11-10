@@ -640,11 +640,21 @@ export function CodeViewer({
             {showEmpty && (
                 <section
                     aria-label={t('code_viewer.file_content')}
+                    style={{ width: fileWidth.width }}
                     className={cn(
-                        'relative hidden min-h-0 w-96 max-w-full shrink-0 flex-col overflow-hidden lg:flex',
+                        'relative hidden min-h-0 max-w-full shrink-0 flex-col overflow-hidden lg:flex',
                         treePlacement.placement !== 'left' && 'border-l',
                     )}
                 >
+                    <ResizeHandle
+                        label={t('code_viewer.resize_file_panel')}
+                        className={
+                            treePlacement.placement === 'left'
+                                ? 'right-0 left-auto translate-x-0'
+                                : 'translate-x-0'
+                        }
+                        {...fileWidth.handleProps}
+                    />
                     {(tabsStart !== undefined || tabsEnd !== undefined) && (
                         <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">
                             <div className="flex items-center">{tabsStart}</div>

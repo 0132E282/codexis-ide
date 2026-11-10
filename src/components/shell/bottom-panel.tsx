@@ -18,6 +18,12 @@ import type {
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
+/** What the Terminal menu of the menu bar asks of the terminal tab. */
+export type TerminalCommand = {
+    action: 'new' | 'split';
+    isFresh: boolean;
+};
+
 export type BottomTab =
     'background' | 'terminal' | 'history' | 'plans' | 'data';
 
@@ -42,6 +48,7 @@ export function BottomPanel({
     onOpenFile,
     onSendPrompt,
     runningPrompts,
+    terminalCommand,
 }: {
     tab: BottomTab;
     /** Folder of the open project. */
@@ -67,8 +74,23 @@ export function BottomPanel({
     onSendPrompt: (text: string) => void;
     /** Prompts of the turns running in the chat of the open project. */
     runningPrompts: string[];
+    /** A Terminal menu choice to carry out (a new object per choice); `isFresh`: the panel was opened by it, so its first terminal is the new one. */
+    terminalCommand?: TerminalCommand | null;
 }) {
     const sessions = useTerminalSessions(onClose, root);
+    const [doneCommand, setDoneCommand] = useState<TerminalCommand | null>(
+        null,
+    );
+
+    if (terminalCommand != null && terminalCommand !== doneCommand) {
+        setDoneCommand(terminalCommand);
+
+        if (terminalCommand.action === 'split') {
+            sessions.divide();
+        } else if (!terminalCommand.isFresh) {
+            sessions.add();
+        }
+    }
     const { tasks, failed, stopTask, clearFinished } = background;
     const hasFinished = tasks.some((task) => task.state !== 'running');
     // * The shells start with the first visit to the Terminal tab and then stay alive while another tab is shown.

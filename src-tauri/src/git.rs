@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub const MAX_CHANGES: usize = 300;
 
@@ -60,6 +60,7 @@ pub enum GitError {
     NothingToCommit,
     CommitFailed,
     WorktreeFailed,
+    PullFailed,
 }
 
 impl GitError {
@@ -69,6 +70,7 @@ impl GitError {
             Self::NothingToCommit => "git.nothing_to_commit",
             Self::CommitFailed => "git.commit_failed",
             Self::WorktreeFailed => "git.worktree_failed",
+            Self::PullFailed => "git.pull_failed",
         }
     }
 }
@@ -83,7 +85,10 @@ impl std::error::Error for GitError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Workspace(error) => Some(error),
-            Self::NothingToCommit | Self::CommitFailed | Self::WorktreeFailed => None,
+            Self::NothingToCommit
+            | Self::CommitFailed
+            | Self::WorktreeFailed
+            | Self::PullFailed => None,
         }
     }
 }
@@ -92,6 +97,34 @@ impl From<WorkspaceError> for GitError {
     fn from(error: WorkspaceError) -> Self {
         Self::Workspace(error)
     }
+}
+
+/// The arguments of the Pull button, also what the preview shows.
+const PULL_ARGS: [&str; 2] = ["pull", "--ff-only"];
+
+/// Which tab of the Commit / Pull request popup a command preview is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlannedMode {
+    Commit,
+    PullRequest,
+}
+
+/// The title as a double-quoted shell word on one line: only its first line is shown, `"` `\\` `$` and backticks escaped.
+fn quoted_title(title: &str) -> String {
+    let first = title.lines().next().unwrap_or("").trim();
+    let mut quoted = String::from("\"");
+
+    for character in first.chars() {
+        if matches!(character, '"' | '\\' | '$' | '`') {
+            quoted.push('\\');
+        }
+
+        quoted.push(character);
+    }
+
+    quoted.push('"');
+
+    quoted
 }
 
 /// Stdout of `git <args>` in `dir`; None when git is missing or the command fails.
@@ -400,10 +433,19 @@ impl<'a> GitRepo<'a> {
         let mut add = vec!["add", "--"];
         let mut commit = vec!["commit", "-m", message, "--"];
 
-        add.extend(paths.iter().map(String::as_str));
+        // * `add` fails on a deleted path (literal pathspec), `commit --` still records it.
+        add.extend(
+            paths
+                .iter()
+                .filter(|path| root.join(path).symlink_metadata().is_ok())
+                .map(String::as_str),
+        );
         commit.extend(paths.iter().map(String::as_str));
 
-        run(root, &add).ok_or(GitError::CommitFailed)?;
+        if add.len() > 2 {
+            run(root, &add).ok_or(GitError::CommitFailed)?;
+        }
+
         run(root, &commit).ok_or(GitError::CommitFailed)?;
 
         let hash = run(root, &["rev-parse", "--short", "HEAD"])
@@ -414,6 +456,79 @@ impl<'a> GitRepo<'a> {
             hash,
             files: paths.len(),
         })
+    }
+
+    /// Fast-forwards the current branch from its upstream (`git pull --ff-only`): never merges or commits.
+    /// On failure the error is what git printed on stderr, so the user sees the real reason.
+    pub fn pull(&self) -> Result<String, String> {
+        let output = Command::new("git")
+            .args(PULL_ARGS)
+            .current_dir(self.workspace.root())
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|_| "git.not_installed".to_string())?;
+
+        if output.status.success() {
+            return Ok(text(&output.stdout).trim().to_string());
+        }
+
+        let reason = text(&output.stderr).trim().to_string();
+
+        Err(if reason.is_empty() {
+            GitError::PullFailed.message().to_string()
+        } else {
+            reason
+        })
+    }
+
+    /// The git commands the Commit or Pull request tab will run, one per line, in the order they run.
+    pub fn planned_commands(
+        &self,
+        mode: PlannedMode,
+        title: &str,
+        base: &str,
+    ) -> Result<Vec<String>, GitError> {
+        let title = quoted_title(title);
+        let root = self.workspace.root();
+
+        match mode {
+            PlannedMode::Commit => {
+                let files = self
+                    .own_paths()?
+                    .iter()
+                    .filter(|path| root.join(path).symlink_metadata().is_ok())
+                    .count();
+
+                Ok(vec![
+                    format!("git add -- {files} files"),
+                    format!("git commit -m {title}"),
+                ])
+            }
+            PlannedMode::PullRequest => {
+                let branch = run(root, &["rev-parse", "--abbrev-ref", "HEAD"])
+                    .map(|out| text(&out).trim().to_string())
+                    .unwrap_or_default();
+                let has_upstream = run(
+                    root,
+                    &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+                )
+                .is_some();
+                let push = if has_upstream {
+                    "git push".to_string()
+                } else {
+                    format!("git push --set-upstream origin {branch}")
+                };
+                let base = base.trim();
+                let base = if base.is_empty() {
+                    String::new()
+                } else {
+                    format!(" --base {base}")
+                };
+
+                Ok(vec![push, format!("gh pr create{base} --title {title}")])
+            }
+        }
     }
 
     /// The URL of the `origin` remote; None when there is none.

@@ -6,6 +6,9 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { AccountMenu } from '@/components/shell/sidebar-footer';
+import { useFullscreen } from '@/hooks/use-fullscreen';
+import { AccountMenuContext } from '@/contexts/account-menu-context';
 import { ide } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -19,7 +22,7 @@ import {
     X,
 } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -170,6 +173,8 @@ export function TreePanel({
     const [newName, setNewName] = useState('');
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
 
+    const accountMenu = useContext(AccountMenuContext);
+    const isFullscreen = useFullscreen();
     const rows = useRef<HTMLDivElement>(null);
     // * Latest values for the drop listener, which is set up once per project.
     const reloadRef = useRef(onReload);
@@ -435,7 +440,8 @@ export function TreePanel({
             aria-label={t('tree_panel.file_tree_name', { name: sourceName })}
             style={{ width: treeWidth.width }}
             className={cn(
-                'relative hidden min-h-0 max-w-full shrink-0 flex-col md:flex',
+                // * grow: under the bottom panel the column can be wider than the tree's own width; the tree then fills it instead of leaving an empty strip.
+                'relative hidden min-h-0 max-w-full shrink-0 grow flex-col md:flex',
                 // * It slides in when opened again (it is not mounted while closed), and slides back out for a moment when closing.
                 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
                 isLeaving
@@ -459,7 +465,11 @@ export function TreePanel({
             <div
                 role="toolbar"
                 aria-label={t('tree_panel.tools')}
-                className="flex h-12 shrink-0 items-center gap-0.5 border-b px-2"
+                className={cn(
+                    'flex h-12 shrink-0 items-center gap-0.5 border-b px-2',
+                    // * On the left the tree is the leftmost column (the sidebar floats over it), so the window buttons sit over its toolbar: start after them.
+                    onLeft && !isFullscreen && 'pl-20',
+                )}
             >
                 <Button
                     type="button"
@@ -511,6 +521,10 @@ export function TreePanel({
                     </Button>
                 )}
                 <span className="ml-auto flex items-center gap-0.5">
+                    {/* * On the left the tree sits next to the sidebar: the account menu of its footer moves up here. */}
+                    {onLeft && accountMenu !== null && (
+                        <AccountMenu {...accountMenu} side="bottom" />
+                    )}
                     <PanelMenu
                         placement={isMaximized ? 'fill' : placement.placement}
                         dockedPlacement={placement.dockedPlacement}

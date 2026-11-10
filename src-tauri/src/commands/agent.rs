@@ -809,23 +809,26 @@ pub fn agent_stop(registry: State<'_, TurnRegistry>, run_id: String) -> Result<(
 #[path = "../../tests/unit/commands_agent.rs"]
 mod tests;
 
-/// The models an AI CLI offers to the account, as saved when it connected; empty when the CLI keeps no list, so the front end shows its fixed one. Codex is read from its own list now when nothing was saved yet (an account that connected before this was kept).
+/// The models an AI CLI lists for the account, from its own `/model` (`codex`: its model cache; `claude`: its answer to `/model`); empty when the CLI cannot say, so the front end shows its fixed list.
 #[tauri::command]
-pub fn agent_models(
-    store: State<crate::models::ModelStore>,
+pub async fn agent_models(
+    app: AppHandle,
     cli: String,
-) -> Vec<crate::models::ModelOption> {
-    let saved = store.list(&cli).unwrap_or_default();
+) -> Result<Vec<crate::models::ModelOption>, String> {
+    super::blocking("agent.models_failed", move || {
+        Ok(match cli.as_str() {
+            "codex" => crate::models::codex_home()
+                .map(|home| crate::models::codex_models(&home))
+                .unwrap_or_default(),
+            "claude" => {
+                let environment = app.state::<ProfileStore>().active_environment("claude");
 
-    if !saved.is_empty() || cli != "codex" {
-        return saved;
-    }
-
-    let listed = crate::models::codex_home()
-        .map(|home| crate::models::codex_models(&home))
-        .unwrap_or_default();
-
-    let _ = store.replace(&cli, &listed);
-
-    listed
+                crate::cli::locate("claude")
+                    .map(|program| crate::models::claude_models(&program, &environment))
+                    .unwrap_or_default()
+            }
+            _ => Vec::new(),
+        })
+    })
+    .await
 }

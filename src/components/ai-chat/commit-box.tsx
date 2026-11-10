@@ -1,4 +1,10 @@
-import { Check, GitPullRequest, Loader2, Sparkles } from 'lucide-react';
+import {
+    Check,
+    Download,
+    GitPullRequest,
+    Loader2,
+    Sparkles,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Field, Form } from '@/components/form';
@@ -88,9 +94,45 @@ function MessagePopup({
     const form = useAppForm<MessageForm>({
         defaultValues: { title: '', description: '', base: '' },
     });
-    const [busy, setBusy] = useState<'ai' | 'commit' | null>(null);
+    const [busy, setBusy] = useState<'ai' | 'commit' | 'pull' | null>(null);
     const [mode, setMode] = useState<'commit' | 'pr'>('commit');
     const [branches, setBranches] = useState<string[]>([]);
+    const [commands, setCommands] = useState<string[]>([]);
+    const [pullError, setPullError] = useState<string | null>(null);
+    const [title, base] = form.watch(['title', 'base']);
+
+    // * The two git lines come from the backend (the code that runs them), so they cannot drift from what happens.
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            void api
+                .post<string[]>('/ai-chat/local/git-preview', {
+                    root,
+                    mode,
+                    title,
+                    base,
+                })
+                .then(({ data }) => setCommands(data))
+                .catch(() => setCommands([]));
+        }, 250);
+
+        return () => window.clearTimeout(timer);
+    }, [root, mode, title, base]);
+
+    const pull = async () => {
+        setBusy('pull');
+        setPullError(null);
+
+        try {
+            await api.post('/ai-chat/local/pull', { root });
+            toast.success(t('commit_box.pulled'));
+        } catch (caught) {
+            setPullError(
+                requestErrorMessage(caught, t('commit_box.could_not_pull')),
+            );
+        } finally {
+            setBusy(null);
+        }
+    };
 
     // * The target of a pull request is picked from the local branches (the current one first, as the default).
     useEffect(() => {
@@ -257,6 +299,26 @@ function MessagePopup({
                         ))}
                     </Field>
                 )}
+                {commands.length > 0 && (
+                    <pre
+                        aria-label={t('commit_box.commands')}
+                        className="overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground"
+                    >
+                        {commands.map((command) => (
+                            <div key={command} className="truncate">
+                                {command}
+                            </div>
+                        ))}
+                    </pre>
+                )}
+                {pullError !== null && (
+                    <p
+                        role="alert"
+                        className="max-h-32 overflow-auto rounded-md bg-destructive/10 px-2 py-1.5 font-mono text-xs whitespace-pre-wrap text-destructive"
+                    >
+                        {pullError}
+                    </p>
+                )}
                 <div className="flex items-center gap-2">
                     <Button
                         type="button"
@@ -275,6 +337,24 @@ function MessagePopup({
                             <Sparkles aria-hidden="true" />
                         )}
                         {t('commit_box.generate_with_ai')}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => void pull()}
+                        className="gap-1.5"
+                    >
+                        {busy === 'pull' ? (
+                            <Loader2
+                                aria-hidden="true"
+                                className="animate-spin motion-reduce:animate-none"
+                            />
+                        ) : (
+                            <Download aria-hidden="true" />
+                        )}
+                        {t('commit_box.pull')}
                     </Button>
                     <Button
                         type="submit"

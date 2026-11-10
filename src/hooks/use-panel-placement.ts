@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 
 /** Where a dock panel sits: one of the four edges of the work area, filling all of it, or floating over it. */
 export type PanelPlacement =
@@ -14,6 +14,9 @@ const PLACEMENTS: readonly PanelPlacement[] = [
     'fill',
     'float',
 ];
+
+// * Told to whoever only reads a placement (see `useStoredPlacement`) when one is changed.
+const PLACEMENT_EVENT = 'ide-placement-change';
 
 function storageKey(panelId: string) {
     return `ide.placement.${panelId}`;
@@ -76,6 +79,8 @@ export function usePanelPlacement(
             } catch {
                 // * Storage is unavailable: the choice holds for this session only.
             }
+
+            window.dispatchEvent(new Event(PLACEMENT_EVENT));
         },
         [panelId],
     );
@@ -101,4 +106,23 @@ export function usePanelPlacement(
         saveAsDefault,
         resetToDefault,
     };
+}
+
+/** The stored placement of a panel, read only: follows the change when the panel is moved somewhere else in the app. */
+export function useStoredPlacement(
+    panelId: string,
+    defaultPlacement: DockedPlacement,
+): PanelPlacement {
+    return useSyncExternalStore(
+        (notify) => {
+            window.addEventListener(PLACEMENT_EVENT, notify);
+
+            return () => window.removeEventListener(PLACEMENT_EVENT, notify);
+        },
+        () =>
+            readPlacement(
+                panelId,
+                readPlacement(panelId, defaultPlacement, defaultStorageKey),
+            ),
+    );
 }
