@@ -99,33 +99,8 @@ impl From<WorkspaceError> for GitError {
     }
 }
 
-/// The arguments of the Pull button, also what the preview shows.
+/// The arguments of the Pull button.
 const PULL_ARGS: [&str; 2] = ["pull", "--ff-only"];
-
-/// Which tab of the Commit / Pull request popup a command preview is for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlannedMode {
-    Commit,
-    PullRequest,
-}
-
-/// The title as a double-quoted shell word on one line: only its first line is shown, `"` `\\` `$` and backticks escaped.
-fn quoted_title(title: &str) -> String {
-    let first = title.lines().next().unwrap_or("").trim();
-    let mut quoted = String::from("\"");
-
-    for character in first.chars() {
-        if matches!(character, '"' | '\\' | '$' | '`') {
-            quoted.push('\\');
-        }
-
-        quoted.push(character);
-    }
-
-    quoted.push('"');
-
-    quoted
-}
 
 /// Stdout of `git <args>` in `dir`; None when git is missing or the command fails.
 fn run(dir: &Path, args: &[&str]) -> Option<Vec<u8>> {
@@ -480,55 +455,6 @@ impl<'a> GitRepo<'a> {
         } else {
             reason
         })
-    }
-
-    /// The git commands the Commit or Pull request tab will run, one per line, in the order they run.
-    pub fn planned_commands(
-        &self,
-        mode: PlannedMode,
-        title: &str,
-        base: &str,
-    ) -> Result<Vec<String>, GitError> {
-        let title = quoted_title(title);
-        let root = self.workspace.root();
-
-        match mode {
-            PlannedMode::Commit => {
-                let files = self
-                    .own_paths()?
-                    .iter()
-                    .filter(|path| root.join(path).symlink_metadata().is_ok())
-                    .count();
-
-                Ok(vec![
-                    format!("git add -- {files} files"),
-                    format!("git commit -m {title}"),
-                ])
-            }
-            PlannedMode::PullRequest => {
-                let branch = run(root, &["rev-parse", "--abbrev-ref", "HEAD"])
-                    .map(|out| text(&out).trim().to_string())
-                    .unwrap_or_default();
-                let has_upstream = run(
-                    root,
-                    &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
-                )
-                .is_some();
-                let push = if has_upstream {
-                    "git push".to_string()
-                } else {
-                    format!("git push --set-upstream origin {branch}")
-                };
-                let base = base.trim();
-                let base = if base.is_empty() {
-                    String::new()
-                } else {
-                    format!(" --base {base}")
-                };
-
-                Ok(vec![push, format!("gh pr create{base} --title {title}")])
-            }
-        }
     }
 
     /// The URL of the `origin` remote; None when there is none.

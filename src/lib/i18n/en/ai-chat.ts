@@ -68,7 +68,6 @@ export const aiChatEnglish: Record<string, string> = {
     'commit_box.pull': 'Pull',
     'commit_box.pulled': 'Pulled the latest changes.',
     'commit_box.could_not_pull': 'Could not pull.',
-    'commit_box.commands': 'Git commands',
     'commit_box.push_and_create_pr': 'Push and create PR',
     'commit_box.target_branch': 'Target branch',
     'commit_box.title': 'Title',

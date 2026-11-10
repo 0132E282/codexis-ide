@@ -302,43 +302,6 @@ fn oversized_head_blob_is_refused_before_loading() {
 }
 
 #[test]
-fn quoted_title_keeps_one_line_and_escapes_shell_characters() {
-    assert_eq!(quoted_title("fix: a \"b\" $c"), "\"fix: a \\\"b\\\" \\$c\"");
-    assert_eq!(quoted_title("first\n\nsecond"), "\"first\"");
-}
-
-#[test]
-fn planned_commit_commands_count_the_files_still_on_disk() {
-    let dir = repo();
-    fs::write(dir.path().join("b.txt"), "new\n").unwrap();
-    fs::write(dir.path().join("a.txt"), "changed\n").unwrap();
-
-    let workspace = Workspace::open(dir.path()).unwrap();
-    let lines = GitRepo::new(&workspace)
-        .planned_commands(PlannedMode::Commit, "my title", "")
-        .unwrap();
-
-    assert_eq!(lines, ["git add -- 2 files", "git commit -m \"my title\""]);
-}
-
-#[test]
-fn planned_pull_request_commands_publish_a_branch_without_upstream() {
-    let dir = repo();
-    let workspace = Workspace::open(dir.path()).unwrap();
-    let lines = GitRepo::new(&workspace)
-        .planned_commands(PlannedMode::PullRequest, "t", "main")
-        .unwrap();
-
-    assert_eq!(
-        lines,
-        [
-            "git push --set-upstream origin main",
-            "gh pr create --base main --title \"t\""
-        ]
-    );
-}
-
-#[test]
 fn pull_fast_forwards_and_reports_the_git_error_otherwise() {
     let origin = repo();
     let clone = TempDir::new().unwrap();

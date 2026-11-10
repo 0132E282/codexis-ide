@@ -97,26 +97,7 @@ function MessagePopup({
     const [busy, setBusy] = useState<'ai' | 'commit' | 'pull' | null>(null);
     const [mode, setMode] = useState<'commit' | 'pr'>('commit');
     const [branches, setBranches] = useState<string[]>([]);
-    const [commands, setCommands] = useState<string[]>([]);
     const [pullError, setPullError] = useState<string | null>(null);
-    const [title, base] = form.watch(['title', 'base']);
-
-    // * The two git lines come from the backend (the code that runs them), so they cannot drift from what happens.
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            void api
-                .post<string[]>('/ai-chat/local/git-preview', {
-                    root,
-                    mode,
-                    title,
-                    base,
-                })
-                .then(({ data }) => setCommands(data))
-                .catch(() => setCommands([]));
-        }, 250);
-
-        return () => window.clearTimeout(timer);
-    }, [root, mode, title, base]);
 
     const pull = async () => {
         setBusy('pull');
@@ -298,18 +279,6 @@ function MessagePopup({
                             </option>
                         ))}
                     </Field>
-                )}
-                {commands.length > 0 && (
-                    <pre
-                        aria-label={t('commit_box.commands')}
-                        className="max-w-full min-w-0 overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground"
-                    >
-                        {commands.map((command) => (
-                            <div key={command} className="truncate">
-                                {command}
-                            </div>
-                        ))}
-                    </pre>
                 )}
                 {pullError !== null && (
                     <p

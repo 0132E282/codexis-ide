@@ -124,7 +124,6 @@ pub fn run() {
             commands::git::local_commit,
             commands::git::local_commit_message,
             commands::git::local_pull,
-            commands::git::local_git_preview,
             commands::git::git_log,
             commands::git::git_commit_files,
             commands::git::git_commit_file_diff,

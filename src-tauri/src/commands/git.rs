@@ -1,7 +1,7 @@
 use super::state::AppState;
 use crate::agent::{self, ClaudeAgent};
 use crate::cli::CliKind;
-use crate::git::{Branches, Change, Committed, GitRepo, PlannedMode};
+use crate::git::{Branches, Change, Committed, GitRepo};
 use crate::git_history::{
     BlameLine, BranchCompare, BranchesInfo, CommitFile, CommitInfo, FileDiff, GitHistory,
     HistoryCache,
@@ -142,30 +142,6 @@ pub async fn local_pull(
     let workspace = state.workspace_for(root.as_deref())?;
 
     super::blocking("git.pull_failed", move || GitRepo::new(&workspace).pull()).await
-}
-
-/// The git commands the popup will run (`mode` is `commit` or `pr`), for the preview; the same code that decides them runs them.
-#[tauri::command]
-pub async fn local_git_preview(
-    state: State<'_, AppState>,
-    root: Option<String>,
-    mode: String,
-    title: String,
-    base: Option<String>,
-) -> Result<Vec<String>, String> {
-    let mode = match mode.as_str() {
-        "commit" => PlannedMode::Commit,
-        "pr" => PlannedMode::PullRequest,
-        _ => return Err("git.bad_ref".to_string()),
-    };
-    let workspace = state.workspace_for(root.as_deref())?;
-
-    super::blocking("git.changes_failed", move || {
-        GitRepo::new(&workspace)
-            .planned_commands(mode, &title, base.as_deref().unwrap_or(""))
-            .map_err(|error| error.to_string())
-    })
-    .await
 }
 
 /// Has the AI write a commit message from the diff of the listed files; sends that diff to the Claude CLI.

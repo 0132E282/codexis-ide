@@ -67,7 +67,6 @@ export const aiChatVietnamese: Record<string, string> = {
     'commit_box.pull': 'Pull',
     'commit_box.pulled': 'Đã pull thay đổi mới nhất.',
     'commit_box.could_not_pull': 'Không pull được.',
-    'commit_box.commands': 'Lệnh git',
     'commit_box.push_and_create_pr': 'Push và tạo PR',
     'commit_box.target_branch': 'Nhánh đích',
     'commit_box.title': 'Tiêu đề',
