@@ -103,6 +103,11 @@ impl TurnOptions<'_> {
 pub trait AgentCli: Sync {
     fn kind(&self) -> CliKind;
 
+    /// The executable a turn runs; the CLI's own program unless the adapter drives another one.
+    fn program(&self) -> &'static str {
+        self.kind().program()
+    }
+
     /// Arguments of one turn; the prompt itself goes through stdin, so it can never be read as a flag.
     fn turn_args(&self, options: &TurnOptions<'_>) -> Vec<String>;
 
@@ -428,7 +433,7 @@ impl TurnRequest<'_> {
     }
 
     fn spawn(&self) -> Result<Child, String> {
-        let program = self.cli.kind().program();
+        let program = self.cli.program();
         let path =
             cli::locate(program).ok_or_else(|| format!("agent.command_missing|{program}"))?;
 

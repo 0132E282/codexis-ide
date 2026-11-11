@@ -1,26 +1,24 @@
 use super::*;
 
 #[test]
-fn ollama_runs_the_selected_model_without_session_flags() {
+fn ollama_runs_the_claude_cli_with_the_selected_model() {
     let options = TurnOptions {
-        session: Some("ignored"),
+        session: None,
         model: Some("qwen3:8b"),
-        mode: Some("plan"),
-        add_dirs: &["/ignored".to_string()],
-        fork: true,
+        mode: None,
+        add_dirs: &[],
+        fork: false,
     };
+    let args = OllamaAgent.turn_args(&options);
 
-    assert_eq!(
-        OllamaAgent.turn_args(&options),
-        ["run".to_string(), "qwen3:8b".to_string()]
-    );
+    assert_eq!(OllamaAgent.program(), "claude");
+    assert!(args.windows(2).any(|pair| pair == ["--model", "qwen3:8b"]));
 }
 
 #[test]
-fn ollama_output_lines_are_text_events() {
-    assert_eq!(
-        OllamaAgent.parse_line("local answer"),
-        [Event::Text("local answer".to_string())]
-    );
-    assert!(OllamaAgent.parse_line("").is_empty());
+fn ollama_points_the_cli_at_the_local_server() {
+    let environment = OllamaAgent.turn_environment(Vec::new(), false);
+
+    assert!(environment.contains(&("ANTHROPIC_BASE_URL", OLLAMA_URL.to_string())));
+    assert!(environment.contains(&("ANTHROPIC_AUTH_TOKEN", "ollama".to_string())));
 }
