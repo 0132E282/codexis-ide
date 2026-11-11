@@ -243,34 +243,36 @@ fn viewer_reads_any_file_but_the_tools_do_not() {
 }
 
 #[test]
-fn tree_lists_secret_names_but_skips_denied_folders_links_and_deep_files() {
+fn tree_lists_only_the_root_and_folders_are_read_when_opened() {
     let (dir, workspace) = project();
-    let deep = (0..=MAX_DEPTH + 1)
-        .map(|i| format!("d{i}"))
-        .collect::<Vec<_>>()
-        .join("/");
 
-    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::create_dir_all(dir.path().join("src/inner")).unwrap();
     fs::create_dir_all(dir.path().join("node_modules/x")).unwrap();
-    fs::create_dir_all(dir.path().join(&deep)).unwrap();
     fs::write(dir.path().join("src/main.rs"), "").unwrap();
     fs::write(dir.path().join("README.md"), "").unwrap();
     fs::write(dir.path().join(".env"), "").unwrap();
     fs::write(dir.path().join("node_modules/x/i.js"), "").unwrap();
-    fs::write(dir.path().join(&deep).join("too-deep.txt"), "").unwrap();
     symlink(dir.path().join("src"), dir.path().join("linked")).unwrap();
 
-    let tree = workspace.tree();
-
     assert_eq!(
-        tree.paths,
+        workspace.tree().paths,
         vec![
             ".env".to_string(),
             "README.md".to_string(),
-            "src/main.rs".to_string()
+            "node_modules/".to_string(),
+            "src/".to_string()
         ]
     );
-    assert!(!tree.truncated);
+    assert_eq!(
+        workspace.list_directory("src").unwrap().paths,
+        vec!["src/inner/".to_string(), "src/main.rs".to_string()]
+    );
+    assert_eq!(
+        workspace.list_directory("node_modules/x").unwrap().paths,
+        vec!["node_modules/x/i.js".to_string()]
+    );
+    assert!(workspace.list_directory("../x").is_err());
+    assert!(workspace.list_directory("README.md").is_err());
 }
 
 #[test]

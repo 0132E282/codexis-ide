@@ -34,6 +34,8 @@ export const shellChatVietnamese: Record<string, string> = {
     'composer_tools.optimize': 'Tối ưu',
     'context_panel.title': 'Ngữ cảnh',
     'context_panel.trigger': 'Mức dùng ngữ cảnh',
+    'context_panel.compact': 'Nén ngữ cảnh',
+    'context_panel.clear': 'Xóa ngữ cảnh',
     'context_panel.empty': 'Chưa có số liệu',
     'context_panel.used_of': '{used} / {window}',
     'context_panel.used_only': '{used} token đã dùng',

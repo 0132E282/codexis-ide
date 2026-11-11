@@ -108,6 +108,7 @@ pub fn run() {
             commands::projects::projects_remove,
             commands::projects::projects_select,
             commands::files::workspace_tree,
+            commands::files::workspace_list_directory,
             commands::files::workspace_read,
             commands::files::workspace_read_media,
             commands::files::workspace_write,

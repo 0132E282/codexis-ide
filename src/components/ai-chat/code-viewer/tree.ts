@@ -12,11 +12,13 @@ export function buildTree(paths: string[]): TreeNode[] {
 
     for (const path of paths) {
         let node = root;
-        const parts = path.split('/');
+        // * `dir/` is a folder whose content is not read yet: it shows as a closed folder.
+        const isFolderEntry = path.endsWith('/');
+        const parts = (isFolderEntry ? path.slice(0, -1) : path).split('/');
         let nodePath = '';
 
         parts.forEach((name, index) => {
-            const isFile = index === parts.length - 1;
+            const isFile = !isFolderEntry && index === parts.length - 1;
 
             nodePath = index === 0 ? name : `${nodePath}/${name}`;
 
@@ -37,7 +39,6 @@ export function buildTree(paths: string[]): TreeNode[] {
 
             node = child;
         });
-
     }
 
     const sort = (nodes: TreeNode[]) => {

@@ -457,6 +457,12 @@ export function ChatPanel({
                             cli={cli}
                             open={contextOpen}
                             onOpenChange={setContextOpen}
+                            onCompact={
+                                cli === 'claude'
+                                    ? () => runCommand('compact')
+                                    : undefined
+                            }
+                            onClear={() => runCommand('clear')}
                         />
                         {headerActions}
                     </span>

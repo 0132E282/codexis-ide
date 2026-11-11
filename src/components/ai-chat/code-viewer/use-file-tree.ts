@@ -4,10 +4,12 @@ import {
     useDeferredValue,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 import { useLocalChanges } from '@/components/ai-chat/local-changes';
 import { api } from '@/lib/api';
+import { ide } from '@/lib/ide';
 import { cachedRequest, forgetRequest } from '@/lib/ai-chat-cache';
 import { requestErrorMessage } from '@/lib/ai-error';
 import type { AiChatProposal } from '@/types';
@@ -31,6 +33,38 @@ export function useFileTree({
     // * Bumped to read the tree again (after a file was renamed).
     const [reloads, setReloads] = useState(0);
     const [openDirs, setOpenDirs] = useState<Set<string>>(new Set());
+    // * Folders already read from disk (cleared whenever the root is read again).
+    const loadedRef = useRef(new Set<string>());
+    const openDirsRef = useRef(openDirs);
+
+    useEffect(() => {
+        openDirsRef.current = openDirs;
+    }, [openDirs]);
+
+    // * Every folder is read from disk the first time it is opened (its row is a `dir/` entry until then).
+    const loadFolder = useCallback(
+        (folder: string) => {
+            if (!localRoot || loadedRef.current.has(folder)) {
+                return Promise.resolve();
+            }
+
+            loadedRef.current.add(folder);
+
+            return ide
+                .listDirectory(folder, localRoot)
+                .then((children) =>
+                    setPaths((current) =>
+                        (current ?? [])
+                            .filter((path) => path !== `${folder}/`)
+                            .concat(children),
+                    ),
+                )
+                .catch(() => {
+                    loadedRef.current.delete(folder);
+                });
+        },
+        [localRoot],
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -52,7 +86,22 @@ export function useFileTree({
         );
 
         request
-            .then((rows) => !cancelled && setPaths(rows))
+            .then((rows) => {
+                if (cancelled) {
+                    return;
+                }
+
+                // * The root was read again: folders that are open are read again too, parents first.
+                loadedRef.current.clear();
+                setPaths(rows);
+                [...openDirsRef.current]
+                    .sort((a, b) => a.length - b.length)
+                    .reduce<Promise<void>>(
+                        (chain, folder) => chain.then(() => loadFolder(folder)),
+                        Promise.resolve(),
+                    )
+                    .catch(() => undefined);
+            })
             .catch((caught) => {
                 if (!cancelled) {
                     setPaths([]);
@@ -68,7 +117,7 @@ export function useFileTree({
         return () => {
             cancelled = true;
         };
-    }, [repo, localRoot, branch, reloads]);
+    }, [repo, localRoot, branch, reloads, loadFolder]);
 
     const changed = useMemo(
         () =>
@@ -129,7 +178,9 @@ export function useFileTree({
     );
 
     const toggleDir = useCallback(
-        (path: string) =>
+        (path: string) => {
+            void loadFolder(path);
+
             setOpenDirs((current) => {
                 const next = new Set(current);
 
@@ -138,8 +189,9 @@ export function useFileTree({
                 }
 
                 return next;
-            }),
-        [],
+            });
+        },
+        [loadFolder],
     );
 
     /** Closes every folder of the tree. */
@@ -151,17 +203,27 @@ export function useFileTree({
         setReloads((count) => count + 1);
     }, [repo, branch]);
 
-    /** Opens every folder above `path`, so the file shows in the tree. */
+    /** Opens every folder above `path`, reading the ones not read yet, so the file shows in the tree. */
     const revealPath = useCallback(
-        (path: string) =>
-            setOpenDirs((current) => {
-                const folders = [...parentDirectories([path])];
+        (path: string) => {
+            const folders = [...parentDirectories([path])].sort(
+                (a, b) => a.length - b.length,
+            );
 
-                return folders.every((folder) => current.has(folder))
+            // * Parents first: a folder's row only exists once its parent was read.
+            void folders
+                .reduce<Promise<void>>(
+                    (chain, folder) => chain.then(() => loadFolder(folder)),
+                    Promise.resolve(),
+                )
+                .then(() => undefined);
+            setOpenDirs((current) =>
+                folders.every((folder) => current.has(folder))
                     ? current
-                    : new Set([...current, ...folders]);
-            }),
-        [],
+                    : new Set([...current, ...folders]),
+            );
+        },
+        [loadFolder],
     );
 
     return {

@@ -25,16 +25,6 @@ const MAX_SEGMENT_BYTES: usize = 255;
 /// Folder names (any level) nobody may read or write: repo internals and dependencies.
 const DENIED_DIRECTORIES: [&str; 4] = [".git", "storage", "vendor", "node_modules"];
 
-/// Folders and files left out of the tree listing only (generated output, OS litter). They stay readable and do not eat the entry cap.
-const HIDDEN_FROM_TREE: [&str; 6] = [
-    "dist",
-    "target",
-    ".next",
-    "__pycache__",
-    ".turbo",
-    ".DS_Store",
-];
-
 /// Shell-style patterns (`*` only) matched against the lower-cased file name: secrets and keys.
 const DENIED_NAMES: [&str; 18] = [
     ".env",
@@ -252,71 +242,62 @@ impl Workspace {
         }
     }
 
-    /// File paths under the root (no links followed, denied folders skipped), capped in count and depth.
+    /// What lies directly in the project root, for the tree's first paint: files as `name`, folders as `name/`. Folders are read when the person opens them (`list_directory`), so a huge project costs nothing up front.
     pub fn tree(&self) -> Tree {
-        let mut paths = Vec::new();
-        let mut truncated = false;
-
-        self.walk(self.root(), "", 0, &mut paths, &mut truncated);
-        paths.sort();
+        let (paths, truncated) = self.list_in(self.root(), "");
 
         Tree { paths, truncated }
     }
 
-    fn walk(
-        &self,
-        dir: &Path,
-        prefix: &str,
-        depth: usize,
-        paths: &mut Vec<String>,
-        truncated: &mut bool,
-    ) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        let mut entries: Vec<_> = entries.flatten().collect();
+    /// What lies directly in one folder: files as `dir/name`, sub-folders as `dir/name/`. Links are skipped; secret files are listed by name only. Folders such as `.git` or `node_modules` can be listed (never read).
+    pub fn list_directory(&self, path: &str) -> Result<Tree> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+        let full =
+            fs::canonicalize(self.root().join(&relative)).map_err(|_| WorkspaceError::NotFound)?;
 
-        entries.sort_by_key(|entry| entry.file_name());
-
-        for entry in entries {
-            if *truncated {
-                return;
-            }
-
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let relative = if prefix.is_empty() {
-                name.clone()
-            } else {
-                format!("{prefix}/{name}")
-            };
-
-            // * Secret files (`.env`, keys) are listed by name so the tree shows the whole project; they stay unreadable (`read` and `write` still refuse them).
-            if in_denied_directory(&relative) || HIDDEN_FROM_TREE.contains(&name.as_str()) {
-                continue;
-            }
-
-            let Ok(kind) = entry.file_type() else {
-                continue;
-            };
-
-            if kind.is_symlink() {
-                continue;
-            }
-
-            if kind.is_dir() {
-                if depth < MAX_DEPTH {
-                    self.walk(&entry.path(), &relative, depth + 1, paths, truncated);
-                }
-            } else if kind.is_file() {
-                if paths.len() >= MAX_TREE_ENTRIES {
-                    *truncated = true;
-
-                    return;
-                }
-
-                paths.push(relative);
-            }
+        if !full.is_dir() {
+            return Err(WorkspaceError::NotFound);
         }
+
+        if !self.sandbox.contains(&full) {
+            return Err(WorkspaceError::BadPath);
+        }
+
+        let (paths, truncated) = self.list_in(&full, &relative);
+
+        Ok(Tree { paths, truncated })
+    }
+
+    fn list_in(&self, dir: &Path, prefix: &str) -> (Vec<String>, bool) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return (Vec::new(), false);
+        };
+        let mut paths: Vec<String> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let kind = entry.file_type().ok()?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let relative = if prefix.is_empty() {
+                    name
+                } else {
+                    format!("{prefix}/{name}")
+                };
+
+                if kind.is_dir() {
+                    Some(format!("{relative}/"))
+                } else if kind.is_file() {
+                    Some(relative)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let truncated = paths.len() > MAX_TREE_ENTRIES;
+
+        paths.sort();
+        paths.truncate(MAX_TREE_ENTRIES);
+
+        (paths, truncated)
     }
 
     /// Text of a file for the viewer only: like `read`, but secret files (`.env`, keys) can be opened to look at; folders such as `.git` stay closed. The AI's tools keep using `read`.

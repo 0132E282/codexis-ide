@@ -220,6 +220,9 @@ export const ide = {
         invoke<{ paths: string[]; truncated: boolean }>('workspace_tree', {
             root,
         }),
+    /** What lies directly in one folder: files as `dir/name`, sub-folders as `dir/name/`. */
+    listDirectory: (path: string, root?: string) =>
+        invoke<string[]>('workspace_list_directory', { path, root }),
     read: (path: string, root?: string) =>
         invoke<FileContent>('workspace_read', { path, root }),
     /** The ESLint problems of `content` as the project's own ESLint finds them (none when it cannot be checked). */

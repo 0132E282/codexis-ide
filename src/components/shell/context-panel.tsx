@@ -19,6 +19,10 @@ type ContextPanelProps = {
     /** Controlled state, so a command (`/context`) can open the popover. */
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    /** Compacts the session (shown only when given: the Claude CLI has `/compact`). */
+    onCompact?: () => void;
+    /** Starts a new chat without the old history. */
+    onClear?: () => void;
 };
 
 /** * Compact count: 203900 → `203.9k`, 400000 → `400k`. Only formats; the backend does the maths. */
@@ -149,14 +153,21 @@ function ContextRing({ percent }: { percent: number | null }) {
     );
 }
 
-/** * Button that opens a popover with how much of the model's context the chat has used. Display only: it gets the numbers by props. */
+/** * Button that opens a popover with how much of the model's context the chat has used. It gets the numbers and the actions by props. */
 export function ContextPanel({
     usage,
     cli,
     className,
     open,
     onOpenChange,
+    onCompact,
+    onClear,
 }: ContextPanelProps) {
+    const run = (action: () => void) => () => {
+        onOpenChange?.(false);
+        action();
+    };
+
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
@@ -181,6 +192,32 @@ export function ContextPanel({
                     </p>
                 ) : (
                     <Details usage={usage} cli={cli} />
+                )}
+                {(onCompact || onClear) && (
+                    <div className="mt-3 flex gap-2 border-t pt-3">
+                        {onCompact && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={run(onCompact)}
+                            >
+                                {t('context_panel.compact')}
+                            </Button>
+                        )}
+                        {onClear && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={run(onClear)}
+                            >
+                                {t('context_panel.clear')}
+                            </Button>
+                        )}
+                    </div>
                 )}
             </PopoverContent>
         </Popover>

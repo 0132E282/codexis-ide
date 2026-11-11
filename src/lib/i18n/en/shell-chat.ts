@@ -34,6 +34,8 @@ export const shellChatEnglish: Record<string, string> = {
     'composer_tools.optimize': 'Optimize',
     'context_panel.title': 'Context',
     'context_panel.trigger': 'Context usage',
+    'context_panel.compact': 'Compact context',
+    'context_panel.clear': 'Clear context',
     'context_panel.empty': 'No data yet',
     'context_panel.used_of': '{used} / {window}',
     'context_panel.used_only': '{used} tokens used',

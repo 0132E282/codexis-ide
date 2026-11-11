@@ -63,6 +63,24 @@ pub async fn workspace_tree(
     .await
 }
 
+/// One folder's direct content, read when the tree opens a closed folder (`node_modules`, `.git`...).
+#[tauri::command]
+pub async fn workspace_list_directory(
+    state: State<'_, AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<Vec<String>, String> {
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    super::blocking("files.tree_failed", move || {
+        workspace
+            .list_directory(&path)
+            .map(|tree| tree.paths)
+            .map_err(|error| error.to_string())
+    })
+    .await
+}
+
 #[tauri::command]
 pub fn workspace_read(
     state: State<AppState>,
