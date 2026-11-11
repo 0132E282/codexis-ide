@@ -6,3 +6,8 @@ src-tauri/gen
 .agents/storage
 .env
 .playwright-mcp
+
+# graphify: local cache and machine-specific files; the graph itself is committed
+docs/graphify-out/cache/
+docs/graphify-out/.graphify_python
+docs/graphify-out/.graphify_root
