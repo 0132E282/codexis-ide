@@ -17,6 +17,9 @@ export const sessionRailEnglish: Record<string, string> = {
     'session_rail.used_of': '{used} / {window}',
     'session_rail.context_empty': 'No usage reported yet',
     'session_rail.context_bar': 'Context window use',
+    'session_rail.context_warning':
+        'Context is {percent}% used: answers get slower and cost more tokens. Consider a new chat.',
+    'session_rail.clear_context': 'Clear context (new chat)',
     'session_rail.fresh_input': 'Input (not cached)',
     'session_rail.cache_read': 'Cache read',
     'session_rail.cache_creation': 'Cache creation',
@@ -36,8 +39,6 @@ export const sessionRailEnglish: Record<string, string> = {
     'session_rail.usage_model_default': 'Default of the {cli} CLI',
     'session_rail.usage_sent': 'Sent (estimated)',
     'session_rail.usage_received': 'Received (estimated)',
-    'session_rail.usage_today': 'Last 24 hours (all projects)',
-    'session_rail.usage_today_value': '{turns} turns, ~{tokens}',
     'session_rail.usage_note':
         'Tokens are estimated from text length; the CLI reports no cost or duration.',
     'session_rail.github': 'GitHub',

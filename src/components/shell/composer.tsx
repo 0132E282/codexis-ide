@@ -12,6 +12,10 @@ import {
 } from '@/components/shell/chat/attachment';
 import { AttachmentList } from '@/components/shell/chat/attachment-list';
 import { MODES } from '@/components/shell/chat/cli-options';
+import {
+    builtinCommandOf,
+    type BuiltinCommand,
+} from '@/components/shell/chat/builtin-commands';
 import { ComposerTools } from '@/components/shell/chat/composer-tools';
 import { Inert } from '@/components/shell/chat/inert-button';
 import { ModelMenu } from '@/components/shell/chat/model-menu';
@@ -38,6 +42,7 @@ export const Composer = memo(function Composer({
     onSubmit,
     busy,
     onStop,
+    onCommand,
     cli,
     model,
     onChoose,
@@ -63,6 +68,8 @@ export const Composer = memo(function Composer({
     /** Messages sent while a turn runs that wait for it (shown above the box), and the button that drops them. */
     /** Ctrl+C while a turn runs: stops it. */
     onStop: () => void;
+    /** A message that is just a built-in command (`/clear`) runs it instead of being sent. */
+    onCommand: (command: BuiltinCommand) => void;
     cli: AgentCli;
     /** Model of the chosen CLI (null: its default). */
     model: string | null;
@@ -158,6 +165,16 @@ export const Composer = memo(function Composer({
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
+
+        const command =
+            attachments.length === 0 ? builtinCommandOf(value) : null;
+
+        if (command !== null) {
+            onChange('');
+            onCommand(command);
+
+            return;
+        }
 
         if (value.trim() !== '' || attachments.length > 0) {
             dictation.stop();

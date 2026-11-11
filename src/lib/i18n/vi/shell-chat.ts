@@ -1,5 +1,11 @@
 /** Vietnamese texts of the group `shell-chat`: key → Vietnamese. */
 export const shellChatVietnamese: Record<string, string> = {
+    'builtin_commands.clear': 'Mở chat mới, không mang lịch sử cũ',
+    'builtin_commands.compact':
+        'Tóm tắt hội thoại để giải phóng ngữ cảnh (Claude)',
+    'builtin_commands.stop': 'Dừng các lượt đang chạy',
+    'builtin_commands.cost': 'Mở thống kê mức dùng',
+    'builtin_commands.context': 'Xem đã dùng bao nhiêu ngữ cảnh',
     'assistant_avatar.amber': 'Hổ phách',
     'assistant_avatar.blue': 'Xanh dương',
     'assistant_avatar.brain': 'Bộ não',

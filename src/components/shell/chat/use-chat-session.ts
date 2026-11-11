@@ -108,16 +108,10 @@ export function useChatSession({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [openConversation]);
 
-    useEffect(() => {
-        if (newChat === handledNewChat.current) {
-            return;
-        }
-
-        handledNewChat.current = newChat;
-
-        // * Not while a turn is being answered: it would be saved into the new conversation.
+    /** Opens an empty conversation: the next turn has no session, so none of the old history is sent. Not while a turn is being answered (it would be saved into the new conversation); returns whether it started. */
+    const startNewChat = useStableCallback((): boolean => {
         if (busy || workspace.current === null) {
-            return;
+            return false;
         }
 
         void ide
@@ -132,6 +126,17 @@ export function useChatSession({
                 notifyChanged();
             })
             .catch(() => undefined);
+
+        return true;
+    });
+
+    useEffect(() => {
+        if (newChat === handledNewChat.current) {
+            return;
+        }
+
+        handledNewChat.current = newChat;
+        startNewChat();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [newChat]);
 
@@ -147,5 +152,6 @@ export function useChatSession({
         workspace,
         conversation,
         notifyChanged,
+        startNewChat,
     };
 }

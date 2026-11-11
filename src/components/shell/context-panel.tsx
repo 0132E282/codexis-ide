@@ -16,6 +16,9 @@ type ContextPanelProps = {
     /** * CLI in use (`claude` or `codex`), shown beside the model. */
     cli?: string;
     className?: string;
+    /** Controlled state, so a command (`/context`) can open the popover. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 };
 
 /** * Compact count: 203900 → `203.9k`, 400000 → `400k`. Only formats; the backend does the maths. */
@@ -147,9 +150,15 @@ function ContextRing({ percent }: { percent: number | null }) {
 }
 
 /** * Button that opens a popover with how much of the model's context the chat has used. Display only: it gets the numbers by props. */
-export function ContextPanel({ usage, cli, className }: ContextPanelProps) {
+export function ContextPanel({
+    usage,
+    cli,
+    className,
+    open,
+    onOpenChange,
+}: ContextPanelProps) {
     return (
-        <Popover>
+        <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
                 <Button
                     type="button"

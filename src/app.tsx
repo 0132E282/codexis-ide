@@ -8,6 +8,7 @@ import type {
 } from '@/components/shell/bottom-panel';
 import { ChatGrid } from '@/components/shell/chat-grid';
 import { LoginScreen } from '@/components/shell/accounts';
+import { OPEN_USAGE_EVENT } from '@/components/shell/chat/builtin-commands';
 import { DialogsHost } from '@/components/shell/dialogs-host';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Sidebar } from '@/components/shell/sidebar';
@@ -250,6 +251,15 @@ export default function App() {
     const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
     const [usageOpen, setUsageOpen] = useState(false);
     const [phoneOpen, setPhoneOpen] = useState(false);
+
+    // * `/cost` in a chat asks for the statistics dialog.
+    useEffect(() => {
+        const open = () => setUsageOpen(true);
+
+        window.addEventListener(OPEN_USAGE_EVENT, open);
+
+        return () => window.removeEventListener(OPEN_USAGE_EVENT, open);
+    }, []);
     // * Sign-in of the AI CLIs and GitHub: the app stays behind the login screen until one AI CLI is signed in.
     const auth = useAuthStatus(false);
 

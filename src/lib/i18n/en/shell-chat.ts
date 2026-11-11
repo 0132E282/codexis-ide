@@ -1,5 +1,11 @@
 /** English texts of the group `shell-chat`: key → English. */
 export const shellChatEnglish: Record<string, string> = {
+    'builtin_commands.clear': 'Start a new chat without the old history',
+    'builtin_commands.compact':
+        'Summarise the conversation to free context (Claude)',
+    'builtin_commands.stop': 'Stop the running turns',
+    'builtin_commands.cost': 'Open the usage statistics',
+    'builtin_commands.context': 'Show how much of the context is used',
     'assistant_avatar.amber': 'Amber',
     'assistant_avatar.blue': 'Blue',
     'assistant_avatar.brain': 'Brain',

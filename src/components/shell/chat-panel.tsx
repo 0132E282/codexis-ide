@@ -19,6 +19,10 @@ import { useStableCallback } from '@/components/shell/chat/use-stable-callback';
 import { useFreshAnswer } from '@/components/shell/chat/use-fresh-answer';
 import { useTooNarrow } from '@/components/shell/chat/use-too-narrow';
 import {
+    OPEN_USAGE_EVENT,
+    type BuiltinCommand,
+} from '@/components/shell/chat/builtin-commands';
+import {
     ContextPanel,
     type ContextUsage,
 } from '@/components/shell/context-panel';
@@ -235,6 +239,35 @@ export function ChatPanel({
         },
     });
 
+    const [contextOpen, setContextOpen] = useState(false);
+    const runCommand = useStableCallback((command: BuiltinCommand) => {
+        switch (command) {
+            case 'clear':
+                session.startNewChat();
+
+                break;
+            case 'compact':
+                // * The Claude CLI compacts the session it resumes; another AI has no such command.
+                if (cli === 'claude') {
+                    sendPrompt('/compact');
+                }
+
+                break;
+            case 'stop':
+                stopTurns();
+
+                break;
+            case 'cost':
+                window.dispatchEvent(new Event(OPEN_USAGE_EVENT));
+
+                break;
+            case 'context':
+                setContextOpen(true);
+
+                break;
+        }
+    });
+
     // * The list follows the answer only while the person is at (or near) the bottom: scrolling up to read stays where it is instead of being pulled down on every new word. Sending a message goes back to the bottom.
     const followEnd = useRef(true);
     const turnCount = useRef(0);
@@ -419,7 +452,12 @@ export function ChatPanel({
                         )}
                     </div>
                     <span className="flex shrink-0 items-center gap-0.5">
-                        <ContextPanel usage={context} cli={cli} />
+                        <ContextPanel
+                            usage={context}
+                            cli={cli}
+                            open={contextOpen}
+                            onOpenChange={setContextOpen}
+                        />
                         {headerActions}
                     </span>
                 </header>
@@ -445,6 +483,7 @@ export function ChatPanel({
                 onSubmit={send}
                 busy={busy}
                 onStop={stopTurns}
+                onCommand={runCommand}
                 cli={cli}
                 model={models[cli] ?? null}
                 onChoose={chooseModel}

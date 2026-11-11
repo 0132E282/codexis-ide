@@ -2,8 +2,10 @@ import {
     GitBranch,
     GitPullRequest,
     History,
+    MessageSquarePlus,
     Plug,
     Settings,
+    TriangleAlert,
     X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -105,7 +107,17 @@ function segmentsOf(usage: ContextUsage): Segment[] {
     ];
 }
 
-function ContextBlock({ usage }: { usage: ContextUsage | null }) {
+/** From this share of the window the context is reported as large: answers get slower and cost more. */
+const CONTEXT_WARNING_PERCENT = 60;
+
+function ContextBlock({
+    usage,
+    onClear,
+}: {
+    usage: ContextUsage | null;
+    /** Opens a new chat, which starts without the history of this one. */
+    onClear: () => void;
+}) {
     if (usage === null) {
         return <Muted>{t('session_rail.context_empty')}</Muted>;
     }
@@ -152,6 +164,21 @@ function ContextBlock({ usage }: { usage: ContextUsage | null }) {
             <p className="text-xs text-muted-foreground tabular-nums">
                 {summary}
             </p>
+            {usage.percent !== null &&
+                usage.percent >= CONTEXT_WARNING_PERCENT && (
+                    <p
+                        role="alert"
+                        className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+                    >
+                        <TriangleAlert
+                            aria-hidden="true"
+                            className="mt-0.5 size-3.5 shrink-0"
+                        />
+                        {t('session_rail.context_warning', {
+                            percent: Math.round(usage.percent),
+                        })}
+                    </p>
+                )}
             <ul className="flex flex-col gap-1">
                 {segments.map((segment) => (
                     <li
@@ -182,6 +209,16 @@ function ContextBlock({ usage }: { usage: ContextUsage | null }) {
                     </span>
                 </li>
             </ul>
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={onClear}
+            >
+                <MessageSquarePlus aria-hidden="true" />
+                {t('session_rail.clear_context')}
+            </Button>
         </div>
     );
 }
@@ -249,6 +286,7 @@ export function SessionRail({
     onOpenSettings,
     onOpenFile,
     onShowHistory,
+    onClearContext,
     onClose,
 }: {
     root: string;
@@ -263,6 +301,8 @@ export function SessionRail({
     onOpenFile: (path: string) => void;
     /** Opens the git history tab of the bottom panel. */
     onShowHistory: () => void;
+    /** Starts a new chat so the next turn does not carry the context of the open one. */
+    onClearContext: () => void;
     onClose: () => void;
 }) {
     const { environment, connectors, outputs, usage, github } = useSessionRail({
@@ -343,7 +383,7 @@ export function SessionRail({
                     )}
                 </Block>
                 <Block title={t('session_rail.context')}>
-                    <ContextBlock usage={context} />
+                    <ContextBlock usage={context} onClear={onClearContext} />
                 </Block>
                 <Block title={t('session_rail.connectors')}>
                     {connectors.failed && connectors.data === null ? (
@@ -460,15 +500,6 @@ export function SessionRail({
                                     />
                                 </>
                             )}
-                            <Row
-                                label={t('session_rail.usage_today')}
-                                value={t('session_rail.usage_today_value', {
-                                    turns: usage.data.today.turns,
-                                    tokens: formatTokens(
-                                        usage.data.today.tokens,
-                                    ),
-                                })}
-                            />
                             <Muted>{t('session_rail.usage_note')}</Muted>
                         </div>
                     )}

@@ -17,6 +17,9 @@ export const sessionRailVietnamese: Record<string, string> = {
     'session_rail.used_of': '{used} / {window}',
     'session_rail.context_empty': 'Chưa có số liệu sử dụng',
     'session_rail.context_bar': 'Mức dùng cửa sổ ngữ cảnh',
+    'session_rail.context_warning':
+        'Ngữ cảnh đã dùng {percent}%: AI trả lời chậm và tốn token hơn. Nên mở chat mới.',
+    'session_rail.clear_context': 'Xóa ngữ cảnh (chat mới)',
     'session_rail.fresh_input': 'Đầu vào (không cache)',
     'session_rail.cache_read': 'Đọc từ cache',
     'session_rail.cache_creation': 'Tạo cache',
@@ -36,8 +39,6 @@ export const sessionRailVietnamese: Record<string, string> = {
     'session_rail.usage_model_default': 'Mặc định của CLI {cli}',
     'session_rail.usage_sent': 'Đã gửi (ước tính)',
     'session_rail.usage_received': 'Đã nhận (ước tính)',
-    'session_rail.usage_today': '24 giờ qua (mọi dự án)',
-    'session_rail.usage_today_value': '{turns} lượt, ~{tokens}',
     'session_rail.usage_note':
         'Token ước tính theo độ dài văn bản; CLI không báo chi phí hay thời gian.',
     'session_rail.github': 'GitHub',

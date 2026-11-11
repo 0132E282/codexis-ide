@@ -297,6 +297,14 @@ export function WorkspacePane({
                         }))
                     }
                     onShowHistory={() => onShowHistory()}
+                    onClearContext={() => {
+                        // * A new chat starts without the history, so the old context is no longer sent; the old chat stays in the list.
+                        onPatch(pane.key, {
+                            newChat: state.newChat + 1,
+                            chatCollapsed: false,
+                        });
+                        setRailOpen(false);
+                    }}
                     onClose={() => setRailOpen(false)}
                 />
             </RailPopup>

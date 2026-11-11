@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ideTools } from '@/lib/ide-tools';
 import type { ToolEntry } from '@/lib/ide-tools';
+import { builtinEntries } from '@/components/shell/chat/builtin-commands';
 
 const MAX_SUGGESTIONS = 8;
 
@@ -47,7 +48,23 @@ export function useCommandSuggestions(value: string) {
     const mention = /(?:^|\s)@([\w-]*)$/.exec(value)?.[1].toLowerCase() ?? null;
     const prefix = query !== null ? '/' : '@';
     const suggestions = useMemo(() => {
-        const source = query !== null ? skills : mention !== null ? agents : [];
+        // * The built-in commands come first and hide a skill of the same name.
+        const builtins = builtinEntries();
+        const source =
+            query !== null
+                ? [
+                      ...builtins,
+                      ...skills.filter(
+                          (skill) =>
+                              !builtins.some(
+                                  (builtin) =>
+                                      builtin.name === skill.name.toLowerCase(),
+                              ),
+                      ),
+                  ]
+                : mention !== null
+                  ? agents
+                  : [];
         const needle = query ?? mention;
 
         return needle === null
