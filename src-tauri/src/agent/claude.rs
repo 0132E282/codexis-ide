@@ -42,6 +42,8 @@ impl AgentCli for ClaudeAgent {
             } else {
                 CHAT_ROLE.to_string()
             },
+            // * Without this the CLI loads every MCP server of the user's settings on each turn (their tool lists are sent with every request).
+            "--strict-mcp-config".to_string(),
         ];
 
         if let Some(id) = options.session {
@@ -253,6 +255,10 @@ impl ClaudeAgent {
             .ok_or_else(|| "agent.claude_missing".to_string())?;
         let mut child = cli::command(&program, environment)
             .arg("-p")
+            // * One plain question: the text is in the prompt, so no tools, MCP servers, skills, project settings (`CLAUDE.md`) or saved session are loaded, and the cheapest model answers.
+            .args(["--model", "haiku", "--tools", ""])
+            .args(["--strict-mcp-config", "--disable-slash-commands"])
+            .args(["--setting-sources", "", "--no-session-persistence"])
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

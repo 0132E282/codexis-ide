@@ -11,6 +11,10 @@ export type CliUsage = {
     models: string[];
     tokens24h: number;
     tokens7d: number;
+    /** Estimated tokens of each of the last 7 days, oldest first; the last entry is the 24 hours up to now. */
+    dailyTokens: number[];
+    /** Estimated tokens of each of the last 24 hours, oldest first; the last entry is the hour up to now. */
+    hourlyTokens: number[];
     /** The last limit error is newer than the last successful turn. */
     limitReached: boolean;
     /** Unix seconds of the last limit error. */

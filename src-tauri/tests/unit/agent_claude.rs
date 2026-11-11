@@ -33,8 +33,9 @@ fn claude_arguments_follow_the_documented_order() {
         ]
     );
     assert_eq!(args[5], "--append-system-prompt");
+    assert_eq!(args[7], "--strict-mcp-config");
     assert_eq!(
-        args[7..],
+        args[8..],
         [
             "--resume",
             "s",

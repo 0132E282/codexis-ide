@@ -1,1 +1,0 @@
-When a code block is the content or a part of a specific file, write the file path relative to the repo on the block opening line in the form ```yaml title="path/to/file.yml"; a code block that belongs to no file gets only the language.

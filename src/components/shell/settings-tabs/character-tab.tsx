@@ -61,16 +61,8 @@ export function CharacterTab({
     // * First time the tab opens with no picture and no name, they are taken from the signed-in GitHub account (kept only when saved).
     const autoFilled = useRef(false);
     const githubAccount = github?.loggedIn ? github.account : null;
-    // * The email of the GitHub profile when it is public, else the one of the signed-in Claude or Codex account (those are named by their email).
-    const email =
-        (githubEmail ||
-            statuses?.find(
-                (status) =>
-                    status.provider !== 'github' &&
-                    status.loggedIn &&
-                    status.account?.includes('@'),
-            )?.account) ??
-        null;
+    // * Only the email of the GitHub profile (empty when it is private): the email of another account, such as Claude's, is not the person's GitHub email.
+    const email = githubEmail || null;
 
     useEffect(() => {
         if (

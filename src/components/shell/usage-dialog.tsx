@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Dialog,
     DialogContent,
@@ -102,7 +103,9 @@ export function UsageDialog({
             .then(async (all) => {
                 const accounts = all.filter(
                     (profile) =>
-                        profile.cli === 'claude' || profile.cli === 'codex',
+                        profile.cli === 'claude' ||
+                        profile.cli === 'codex' ||
+                        profile.cli === 'antigravity',
                 );
                 const entries = await Promise.all(
                     accounts.map(async (profile) => ({
@@ -124,6 +127,8 @@ export function UsageDialog({
                 const connected = entries.filter(
                     ({ status }) => status === null || status.loggedIn,
                 );
+                // * Ollama runs locally: it has no account or sign-in, so its numbers are read for the CLI itself (profile 0).
+                const ollamaUsage = await ideUsage.statsProfile('ollama', 0);
 
                 if (cancelled) {
                     return;
@@ -152,6 +157,13 @@ export function UsageDialog({
                     },
                 );
 
+                next.push({
+                    key: 'ollama:0',
+                    id: 0,
+                    label: CLI_LABELS.ollama,
+                    usage: ollamaUsage,
+                    limits: null,
+                });
                 setRows(next);
 
                 // * Each Claude account is read with its own login.
@@ -210,22 +222,76 @@ export function UsageDialog({
                             {t('usage_dialog.no_ai_account_connected')}
                         </p>
                     ) : (
-                        <ul className="flex flex-col gap-4">
-                            {rows.map((row) => (
-                                <UsageRow
-                                    key={row.key}
-                                    label={row.label}
-                                    usage={row.usage}
-                                    share={
-                                        total === 0
-                                            ? 0
-                                            : row.usage.turns7d / total
-                                    }
-                                    limits={row.limits}
-                                    limitsPending={row.limits === undefined}
-                                />
-                            ))}
-                        </ul>
+                        <Tabs defaultValue="accounts">
+                            <TabsList variant="line">
+                                <TabsTrigger value="accounts">
+                                    {t('usage_dialog.accounts_tab')}
+                                </TabsTrigger>
+                                <TabsTrigger value="charts">
+                                    {t('usage_dialog.charts_tab')}
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="accounts">
+                                <ul className="flex min-w-0 flex-col gap-4 pt-2">
+                                    {rows.map((row) => (
+                                        <UsageRow
+                                            key={row.key}
+                                            label={row.label}
+                                            usage={row.usage}
+                                            share={
+                                                total === 0
+                                                    ? 0
+                                                    : row.usage.turns7d / total
+                                            }
+                                            limits={row.limits}
+                                            limitsPending={
+                                                row.limits === undefined
+                                            }
+                                        />
+                                    ))}
+                                </ul>
+                            </TabsContent>
+                            <TabsContent value="charts">
+                                <div className="min-w-0 rounded-lg border p-4 text-sm">
+                                    <Tabs defaultValue="24h">
+                                        <TabsList variant="line">
+                                            <TabsTrigger value="24h">
+                                                {t('usage_dialog.24_hours')}
+                                            </TabsTrigger>
+                                            <TabsTrigger value="7d">
+                                                {t('usage_dialog.7_days')}
+                                            </TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="24h">
+                                            <TokenChart
+                                                title={t(
+                                                    'usage_dialog.token_chart_24_hours',
+                                                )}
+                                                rows={rows}
+                                                series={(usage) =>
+                                                    usage.hourlyTokens
+                                                }
+                                                formatLabel={formatChartHour}
+                                                labelEvery={6}
+                                            />
+                                        </TabsContent>
+                                        <TabsContent value="7d">
+                                            <TokenChart
+                                                title={t(
+                                                    'usage_dialog.token_chart_7_days',
+                                                )}
+                                                rows={rows}
+                                                series={(usage) =>
+                                                    usage.dailyTokens
+                                                }
+                                                formatLabel={formatChartDay}
+                                                labelEvery={1}
+                                            />
+                                        </TabsContent>
+                                    </Tabs>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     )}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -238,6 +304,150 @@ export function UsageDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+const CHART_WIDTH = 600;
+const CHART_HEIGHT = 160;
+const CHART_PADDING = 8;
+
+/** Short day label (`dd/MM`) of the entry `index` of a 7-day series that ends today. */
+const formatChartDay = (index: number, length: number): string =>
+    new Date(
+        Date.now() - (length - 1 - index) * 24 * 60 * 60 * 1000,
+    ).toLocaleDateString('vi', { day: '2-digit', month: '2-digit' });
+
+/** Hour label (`HH:00`) of the entry `index` of a 24-hour series that ends in the current hour. */
+const formatChartHour = (index: number, length: number): string =>
+    new Date(
+        Date.now() - (length - 1 - index) * 60 * 60 * 1000,
+    ).toLocaleTimeString('vi', { hour: '2-digit', minute: '2-digit' });
+
+/** Line chart of the estimated tokens of each account over time (one series per account), all on one scale. */
+function TokenChart({
+    title,
+    rows,
+    series,
+    formatLabel,
+    labelEvery,
+}: {
+    title: string;
+    rows: AccountRow[];
+    series: (usage: CliUsage) => number[];
+    /** Label of the point `index` of a series of `length` points. */
+    formatLabel: (index: number, length: number) => string;
+    /** Only every n-th point gets a label under the chart. */
+    labelEvery: number;
+}) {
+    const length = rows[0] ? series(rows[0].usage).length : 0;
+    const largest = Math.max(1, ...rows.flatMap((row) => series(row.usage)));
+    const pointX = (index: number) =>
+        CHART_PADDING +
+        (index / Math.max(1, length - 1)) * (CHART_WIDTH - 2 * CHART_PADDING);
+    const pointY = (tokens: number) =>
+        CHART_HEIGHT -
+        CHART_PADDING -
+        (tokens / largest) * (CHART_HEIGHT - 2 * CHART_PADDING);
+
+    return (
+        <div className="flex flex-col gap-3 pt-3">
+            <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-semibold">{title}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                    {t('usage_dialog.chart_peak', {
+                        count: formatNumber(largest),
+                    })}
+                </span>
+            </div>
+            <svg
+                role="img"
+                aria-label={title}
+                viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                className="h-40 w-full"
+            >
+                {[0, 0.5, 1].map((fraction) => (
+                    <line
+                        key={fraction}
+                        x1={CHART_PADDING}
+                        x2={CHART_WIDTH - CHART_PADDING}
+                        y1={pointY(largest * fraction)}
+                        y2={pointY(largest * fraction)}
+                        className="stroke-border"
+                        strokeWidth={1}
+                    />
+                ))}
+                {rows.map((row) => (
+                    <g
+                        key={row.key}
+                        className={cn(CLI_COLORS[row.usage.cli].text)}
+                    >
+                        <polyline
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                            points={series(row.usage)
+                                .map(
+                                    (tokens, index) =>
+                                        `${pointX(index)},${pointY(tokens)}`,
+                                )
+                                .join(' ')}
+                        />
+                        {series(row.usage).map((tokens, index) => (
+                            <circle
+                                key={index}
+                                cx={pointX(index)}
+                                cy={pointY(tokens)}
+                                r={3}
+                                fill="currentColor"
+                            >
+                                <title>
+                                    {`${row.label} · ${formatLabel(index, length)}: ${formatNumber(tokens)}`}
+                                </title>
+                            </circle>
+                        ))}
+                    </g>
+                ))}
+            </svg>
+            <div className="relative h-4 text-xs text-muted-foreground tabular-nums">
+                {Array.from({ length }, (_, index) => index)
+                    .filter((index) => (length - 1 - index) % labelEvery === 0)
+                    .map((index) => (
+                        <span
+                            key={index}
+                            className="absolute top-0 whitespace-nowrap"
+                            style={{
+                                left: `${(pointX(index) / CHART_WIDTH) * 100}%`,
+                                // * The first and last labels stay inside the chart instead of sticking out of the dialog.
+                                transform: `translateX(${index === 0 ? '0' : index === length - 1 ? '-100%' : '-50%'})`,
+                            }}
+                        >
+                            {formatLabel(index, length)}
+                        </span>
+                    ))}
+            </div>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {rows.map((row) => (
+                    <li
+                        key={row.key}
+                        className={cn(
+                            'flex items-center gap-1.5 font-medium',
+                            CLI_COLORS[row.usage.cli].text,
+                        )}
+                    >
+                        <span
+                            aria-hidden="true"
+                            className={cn(
+                                'size-2 rounded-full',
+                                CLI_COLORS[row.usage.cli].bar,
+                            )}
+                        />
+                        {row.label}
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 

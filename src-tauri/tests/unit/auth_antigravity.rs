@@ -91,15 +91,44 @@ fn code_without_a_waiting_login_is_refused() {
 }
 
 #[test]
-fn tmp_cancel_kills() {
-    let home = tempfile::tempdir().unwrap();
-    let environment = vec![("HOME", home.path().display().to_string())];
-    assert!(AntigravityAuth.start_login(&environment).unwrap().is_some());
+fn cancel_without_a_waiting_login_is_accepted() {
+    let environment = vec![("HOME", "/no/such/login/home".to_string())];
+
     AntigravityAuth.cancel_login(&environment);
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    let out = std::process::Command::new("pgrep")
-        .args(["-f", home.path().to_str().unwrap()])
-        .output()
-        .unwrap();
-    eprintln!("pgrep: {:?}", String::from_utf8_lossy(&out.stdout));
+}
+
+#[test]
+fn cancel_stops_a_waiting_login() {
+    #[derive(Debug, Clone)]
+    struct DummyKiller(Arc<AtomicBool>);
+
+    impl ChildKiller for DummyKiller {
+        fn kill(&mut self) -> Result<(), std::io::Error> {
+            self.0.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+            Box::new(self.clone())
+        }
+    }
+
+    let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+    let killed = Arc::new(AtomicBool::new(false));
+    let key = "/test/cancel/home".to_string();
+    let login = Login {
+        writer: Box::new(std::io::sink()),
+        terminator: Terminator {
+            killer: Box::new(DummyKiller(Arc::clone(&killed))),
+            process_id: None,
+        },
+        state: Arc::new(LoginState::default()),
+        _master: pair.master,
+    };
+
+    LOGINS.replace(key.clone(), login);
+    let environment = vec![("HOME", key)];
+    AntigravityAuth.cancel_login(&environment);
+
+    assert!(killed.load(Ordering::SeqCst));
 }

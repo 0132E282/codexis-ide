@@ -16,6 +16,9 @@ use tauri::State;
 
 const DAY_SECONDS: i64 = 24 * 60 * 60;
 const WEEK_SECONDS: i64 = 7 * DAY_SECONDS;
+const HOUR_SECONDS: i64 = 60 * 60;
+const DAYS_IN_WEEK: usize = 7;
+const HOURS_IN_DAY: usize = 24;
 /// Estimated tokens: one token is about this many characters.
 const CHARACTERS_PER_TOKEN: i64 = 4;
 const MAX_MODEL_CHARACTERS: usize = 100;
@@ -56,6 +59,10 @@ pub struct CliUsage {
     pub models: Vec<String>,
     pub tokens_24h: i64,
     pub tokens_7d: i64,
+    /// Estimated tokens of each of the last 7 days, oldest first: the last entry is the 24 hours up to now.
+    pub daily_tokens: Vec<i64>,
+    /// Estimated tokens of each of the last 24 hours, oldest first: the last entry is the hour up to now.
+    pub hourly_tokens: Vec<i64>,
     /// The last limit error is newer than the last successful turn.
     pub limit_reached: bool,
     /// Unix seconds of the last limit error.
@@ -190,6 +197,42 @@ impl UsageStore {
             .map(|clis| UsageStats { clis })
     }
 
+    /// Estimated tokens in `count` consecutive periods of `period_seconds`, oldest first: the last one ends at `now`.
+    fn token_series(
+        &self,
+        cli: &str,
+        profile: i64,
+        now: i64,
+        period_seconds: i64,
+        count: usize,
+    ) -> rusqlite::Result<Vec<i64>> {
+        let mut series = vec![0; count];
+        let since = now - period_seconds * i64::try_from(count).unwrap_or(0);
+        let mut statement = self.connection.prepare(
+            "SELECT (?2 - at) / ?5, SUM(prompt_characters + answer_characters)
+             FROM usage_events WHERE cli = ?1 AND at >= ?3 AND profile = ?4
+             GROUP BY 1",
+        )?;
+        let periods = statement
+            .query_map(params![cli, now, since, profile, period_seconds], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+            })?;
+
+        for period in periods {
+            let (periods_ago, characters) = period?;
+
+            // * A turn stamped in the future (clock change) has a negative age and is left out.
+            if let Some(slot) = usize::try_from(periods_ago)
+                .ok()
+                .and_then(|ago| (count - 1).checked_sub(ago))
+            {
+                series[slot] = characters / CHARACTERS_PER_TOKEN;
+            }
+        }
+
+        Ok(series)
+    }
+
     fn cli_stats(&self, cli: &str, profile: i64, now: i64) -> rusqlite::Result<CliUsage> {
         let day_start = now - DAY_SECONDS;
         let week_start = now - WEEK_SECONDS;
@@ -231,6 +274,9 @@ impl UsageStore {
             |row| row.get(0),
         )?;
 
+        let daily_tokens = self.token_series(cli, profile, now, DAY_SECONDS, DAYS_IN_WEEK)?;
+        let hourly_tokens = self.token_series(cli, profile, now, HOUR_SECONDS, HOURS_IN_DAY)?;
+
         Ok(CliUsage {
             cli: cli.to_string(),
             turns_24h,
@@ -239,6 +285,8 @@ impl UsageStore {
             models,
             tokens_24h: characters_24h / CHARACTERS_PER_TOKEN,
             tokens_7d: characters_7d / CHARACTERS_PER_TOKEN,
+            daily_tokens,
+            hourly_tokens,
             limit_reached: limit_at
                 .is_some_and(|at| last_success.is_none_or(|success| at > success)),
             limit_at,

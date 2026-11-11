@@ -463,7 +463,7 @@ export function ExtensionsTab() {
                                             <button
                                                 type="button"
                                                 aria-expanded={open}
-                                                className="font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                className="text-left font-medium whitespace-nowrap underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                             >
                                                 {info.name}
                                             </button>

@@ -201,3 +201,85 @@ fn huge_sizes_are_clamped_so_the_sums_do_not_overflow() {
         2 * 2 * MAX_CHARACTERS / CHARACTERS_PER_TOKEN
     );
 }
+
+#[test]
+fn splits_tokens_into_the_last_seven_days() {
+    let store = store();
+    let now = 10 * DAY_SECONDS;
+
+    record(&store, "claude", 0, 400, 0, None, None, now - 10).unwrap();
+    record(
+        &store,
+        "claude",
+        0,
+        0,
+        800,
+        None,
+        None,
+        now - DAY_SECONDS - 10,
+    )
+    .unwrap();
+    record(
+        &store,
+        "claude",
+        0,
+        1200,
+        0,
+        None,
+        None,
+        now - 6 * DAY_SECONDS - 10,
+    )
+    .unwrap();
+    record(
+        &store,
+        "claude",
+        0,
+        4000,
+        0,
+        None,
+        None,
+        now - 7 * DAY_SECONDS - 10,
+    )
+    .unwrap();
+
+    let usage = store.cli_stats("claude", 0, now).unwrap();
+
+    assert_eq!(usage.daily_tokens, vec![300, 0, 0, 0, 0, 200, 100]);
+}
+
+#[test]
+fn splits_tokens_into_the_last_twenty_four_hours() {
+    let store = store();
+    let now = 10 * DAY_SECONDS;
+
+    record(&store, "claude", 0, 400, 0, None, None, now - 10).unwrap();
+    record(
+        &store,
+        "claude",
+        0,
+        0,
+        800,
+        None,
+        None,
+        now - 3 * HOUR_SECONDS - 10,
+    )
+    .unwrap();
+    record(
+        &store,
+        "claude",
+        0,
+        4000,
+        0,
+        None,
+        None,
+        now - 24 * HOUR_SECONDS - 10,
+    )
+    .unwrap();
+
+    let usage = store.cli_stats("claude", 0, now).unwrap();
+
+    assert_eq!(usage.hourly_tokens.len(), 24);
+    assert_eq!(usage.hourly_tokens[23], 100);
+    assert_eq!(usage.hourly_tokens[20], 200);
+    assert_eq!(usage.hourly_tokens.iter().sum::<i64>(), 300);
+}

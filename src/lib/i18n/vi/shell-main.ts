@@ -353,9 +353,12 @@ export const shellMainVietnamese: Record<string, string> = {
     'usage_dialog.24_hours': '24 giờ',
     'usage_dialog.7_days': '7 ngày',
     'usage_dialog.7_day_usage_of': 'Mức sử dụng 7 ngày của {name}',
+    'usage_dialog.accounts_tab': 'Tài khoản',
+    'usage_dialog.charts_tab': 'Biểu đồ',
     'usage_dialog.ai_statistics': 'Thống kê AI',
     'usage_dialog.calls_are_counted_on':
         'Lượt gọi tính trên máy này trong 24 giờ và 7 ngày qua (không lưu nội dung, chỉ lưu độ dài). "Đạt limit" hiện khi lỗi hạn mức mới hơn lượt thành công gần nhất; CLI không cho biết hạn mức còn lại. Token chỉ là ước lượng (~4 ký tự một token).',
+    'usage_dialog.chart_peak': 'Cao nhất {count} token',
     'usage_dialog.count_turns': '{count} lượt',
     'usage_dialog.last_used': 'Dùng cuối',
     'usage_dialog.loading': 'Đang tải…',
@@ -363,6 +366,8 @@ export const shellMainVietnamese: Record<string, string> = {
         'Chưa có tài khoản AI nào được kết nối.',
     'usage_dialog.percent_of7_day': '{percent}% lượt 7 ngày',
     'usage_dialog.reading_usage': 'Đang đọc /usage…',
+    'usage_dialog.token_chart_24_hours': 'Token 24 giờ qua (ước lượng)',
+    'usage_dialog.token_chart_7_days': 'Token 7 ngày qua (ước lượng)',
     'usage_dialog.which_clis_are_in':
         'CLI nào đang dùng và CLI nào đã dừng vì hạn mức.',
     'workspace_pane.open_chat_panel': 'Mở khung chat',
