@@ -11,6 +11,31 @@ fn account_is_the_last_signed_in_email_of_the_log() {
 }
 
 #[test]
+fn account_ignores_log_text_after_the_email_on_the_same_line() {
+    let log = "OAuth: authenticated successfully as me@x.y 13:29:31 server_oauth.go:235] Failed to refresh cache\n";
+
+    assert_eq!(account_in_log(log), Some("me@x.y".to_string()));
+}
+
+#[test]
+fn account_falls_back_to_the_earlier_marker_when_the_last_is_invalid() {
+    let log = "authenticated successfully as good@x.y\n\
+               authenticated successfully as @broken\n";
+    let one_line = "authenticated successfully as a@b.c authenticated successfully as nope";
+
+    assert_eq!(account_in_log(log), Some("good@x.y".to_string()));
+    assert_eq!(account_in_log(one_line), Some("a@b.c".to_string()));
+}
+
+#[test]
+fn account_without_an_at_sign_is_none() {
+    assert_eq!(
+        account_in_log("authenticated successfully as notanemail rest\n"),
+        None
+    );
+}
+
+#[test]
 fn sign_in_follows_the_models_command() {
     use std::os::unix::process::ExitStatusExt;
 

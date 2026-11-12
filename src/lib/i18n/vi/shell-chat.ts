@@ -38,6 +38,12 @@ export const shellChatVietnamese: Record<string, string> = {
     'limit_usage.session': 'Phiên',
     'limit_usage.week': 'Tuần',
     'limit_usage.week_model': 'Tuần ({model})',
+    'limit_usage.remaining': 'còn {duration}',
+    'limit_usage.near_limit': 'Sắp hết hạn mức, đặt lại lúc {time}',
+    'limit_usage.near_limit_no_time': 'Sắp hết hạn mức',
+    'limit_usage.unit_day': ' ngày',
+    'limit_usage.unit_hour': 'g',
+    'limit_usage.unit_minute': 'p',
     'message_list.send_amessage_to':
         'Nhắn tin để làm việc với AI trong dự án này.',
     'model_menu.choose_ai_and_model': 'Chọn AI và model',

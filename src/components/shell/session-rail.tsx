@@ -261,7 +261,7 @@ function ContextBlock({
     );
 }
 
-function GithubBlock({ github, root }: { github: RailGithub; root: string }) {
+function GithubBlock({ github }: { github: RailGithub }) {
     const message = {
         ok: null,
         no_cli: t('session_rail.github_no_cli'),
@@ -284,11 +284,6 @@ function GithubBlock({ github, root }: { github: RailGithub; root: string }) {
                     title={github.repo.url}
                 />
             )}
-            <Row
-                icon={<GitBranch aria-hidden="true" className="size-3.5" />}
-                label={t('session_rail.branch')}
-                value={<LocalBranchPopover root={root} inRow />}
-            />
             {github.status === 'ok' &&
                 (github.pullRequest === null ? (
                     <Muted>{t('session_rail.github_no_pull_request')}</Muted>
@@ -413,11 +408,6 @@ export function SessionRail({
                     ) : (
                         <div className="flex flex-col gap-1.5">
                             <Row
-                                label={t('session_rail.folder')}
-                                value={environment.data?.folder ?? ''}
-                                title={environment.data?.folder}
-                            />
-                            <Row
                                 icon={
                                     <GitBranch
                                         aria-hidden="true"
@@ -426,11 +416,19 @@ export function SessionRail({
                                 }
                                 label={t('session_rail.branch')}
                                 value={
-                                    environment.data === null
-                                        ? ''
-                                        : (environment.data.branch ??
-                                          t('session_rail.no_branch'))
+                                    environment.data === null ? (
+                                        ''
+                                    ) : environment.data.branch === null ? (
+                                        t('session_rail.no_branch')
+                                    ) : (
+                                        <LocalBranchPopover root={root} inRow />
+                                    )
                                 }
+                            />
+                            <Row
+                                label={t('session_rail.folder')}
+                                value={environment.data?.folder ?? ''}
+                                title={environment.data?.folder}
                             />
                         </div>
                     )}
@@ -650,7 +648,7 @@ export function SessionRail({
                                 <Muted>{t('session_rail.load_failed')}</Muted>
                             )
                         ) : (
-                            <GithubBlock github={github.data} root={root} />
+                            <GithubBlock github={github.data} />
                         )}
                     </Block>
                 )}

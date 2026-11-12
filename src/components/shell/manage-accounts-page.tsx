@@ -14,7 +14,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorText, type AgentCli } from '@/lib/ide';
 import { ideAuth, type AuthStatus, type LimitUsage } from '@/lib/ide-auth';
-import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
+import {
+    formatResetTitle,
+    formatReset,
+    limitColor,
+    limitLabel,
+} from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { ideProfiles, type Profile, type ProfileCli } from '@/lib/ide-profiles';
 import type { ReactNode } from 'react';
@@ -404,13 +409,8 @@ export function ManageAccountsPage({
                                                                       limit.resets ===
                                                                       null
                                                                           ? undefined
-                                                                          : t(
-                                                                                'common.resets_time',
-                                                                                {
-                                                                                    time: formatReset(
-                                                                                        limit.resets,
-                                                                                    ),
-                                                                                },
+                                                                          : formatResetTitle(
+                                                                                limit.resets,
                                                                             )
                                                                   }
                                                               >

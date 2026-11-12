@@ -13,7 +13,12 @@ import { AntigravityIcon, ClaudeIcon, CodexIcon, OllamaIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type LimitUsage } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
-import { formatReset, limitColor, limitLabel } from '@/lib/limit-usage';
+import {
+    formatRemaining,
+    formatReset,
+    limitColor,
+    limitLabel,
+} from '@/lib/limit-usage';
 import { ideUsage, type CliUsage } from '@/lib/ide-usage';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -516,41 +521,66 @@ function UsageRow({
             </dl>
             {limits !== undefined && limits !== null ? (
                 <div className="flex flex-col gap-3 border-t pt-4 text-xs">
-                    {limits.map((limit) => (
-                        <div
-                            key={limit.label}
-                            className="flex flex-col gap-1.5"
-                        >
-                            <div className="flex items-baseline justify-between gap-3">
-                                <span className="min-w-0 font-medium">
-                                    {limitLabel(limit.label)}
-                                </span>
-                                <span className="shrink-0 text-muted-foreground tabular-nums">
-                                    <span className="font-medium text-foreground">
-                                        {limit.percent}%
-                                    </span>
-                                    {limit.resets !== null &&
-                                        ` · ${t('common.resets_time', { time: formatReset(limit.resets) })}`}
-                                </span>
-                            </div>
+                    {limits.map((limit) => {
+                        const remaining =
+                            limit.resets === null
+                                ? null
+                                : formatRemaining(limit.resets);
+
+                        return (
                             <div
-                                role="progressbar"
-                                aria-label={limit.label}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={limit.percent}
-                                className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                                key={limit.label}
+                                className="flex flex-col gap-1.5"
                             >
+                                <div className="flex items-baseline justify-between gap-3">
+                                    <span className="min-w-0 font-medium">
+                                        {limitLabel(limit.label)}
+                                    </span>
+                                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                                        <span className="font-medium text-foreground">
+                                            {limit.percent}%
+                                        </span>
+                                        {limit.resets !== null &&
+                                            ` · ${t('common.resets_time', { time: formatReset(limit.resets) })}`}
+                                        {remaining !== null &&
+                                            ` · ${t('limit_usage.remaining', { duration: remaining })}`}
+                                    </span>
+                                </div>
                                 <div
-                                    className={cn(
-                                        'h-full rounded-full',
-                                        limitColor(limit.percent),
-                                    )}
-                                    style={{ width: `${limit.percent}%` }}
-                                />
+                                    role="progressbar"
+                                    aria-label={limit.label}
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                    aria-valuenow={limit.percent}
+                                    className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                                >
+                                    <div
+                                        className={cn(
+                                            'h-full rounded-full',
+                                            limitColor(limit.percent),
+                                        )}
+                                        style={{ width: `${limit.percent}%` }}
+                                    />
+                                </div>
+                                {limit.percent >= 90 && (
+                                    <p
+                                        role="status"
+                                        className="text-xs text-red-500"
+                                    >
+                                        {limit.resets === null
+                                            ? t(
+                                                  'limit_usage.near_limit_no_time',
+                                              )
+                                            : t('limit_usage.near_limit', {
+                                                  time: formatReset(
+                                                      limit.resets,
+                                                  ),
+                                              })}
+                                    </p>
+                                )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : limitsPending ? (
                 <p className="text-xs text-muted-foreground">

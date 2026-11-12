@@ -38,6 +38,12 @@ export const shellChatEnglish: Record<string, string> = {
     'limit_usage.session': 'Session',
     'limit_usage.week': 'Week',
     'limit_usage.week_model': 'Week ({model})',
+    'limit_usage.remaining': '{duration} left',
+    'limit_usage.near_limit': 'Almost out, resets at {time}',
+    'limit_usage.near_limit_no_time': 'Almost out',
+    'limit_usage.unit_day': 'd',
+    'limit_usage.unit_hour': 'h',
+    'limit_usage.unit_minute': 'm',
     'message_list.send_amessage_to':
         'Send a message to work with the AI in this project.',
     'model_menu.choose_ai_and_model': 'Choose AI and model',

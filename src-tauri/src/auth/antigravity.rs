@@ -392,13 +392,36 @@ fn latest_account(environment: &[(&'static str, String)]) -> Option<String> {
     account_in_log(&std::fs::read_to_string(newest.path()).ok()?)
 }
 
-/// The email after the last `authenticated successfully as` in `log`.
+/// The email after the last `authenticated successfully as` in `log` that is followed by a valid email.
 fn account_in_log(log: &str) -> Option<String> {
-    log.lines()
-        .rev()
-        .find_map(|line| line.split_once(SIGNED_IN_MARKER))
-        .map(|(_, email)| email.trim().to_string())
-        .filter(|email| !email.is_empty())
+    log.lines().rev().find_map(email_in_line)
+}
+
+/// The email after the last marker of `line` that is followed by one; later text on the line is ignored.
+fn email_in_line(line: &str) -> Option<String> {
+    line.rmatch_indices(SIGNED_IN_MARKER).find_map(|(start, marker)| {
+        email_at_start(&line[start + marker.len()..])
+    })
+}
+
+/// The first token of `text` when it looks like an email: one `@`, a local part, and a dotted domain.
+fn email_at_start(text: &str) -> Option<String> {
+    let token = text
+        .trim_start()
+        .split(|character: char| !is_email_character(character))
+        .next()?
+        .trim_end_matches('.');
+    let (local, domain) = token.split_once('@')?;
+    let is_email = !local.is_empty()
+        && !domain.contains('@')
+        && domain.contains('.')
+        && domain.split('.').all(|label| !label.is_empty());
+
+    is_email.then(|| token.to_string())
+}
+
+fn is_email_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || "._%+-@".contains(character)
 }
 
 #[cfg(test)]
