@@ -1,9 +1,20 @@
-import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import {
+    LayoutGrid,
+    ListChecks,
+    PanelLeftOpen,
+    PanelRightOpen,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CodeViewer } from '@/components/ai-chat/code-viewer';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
+import { ChatHeaderActions } from '@/components/shell/chat-header-actions';
+import { ContextPanel } from '@/components/shell/context-panel';
+import type { ContextUsage } from '@/components/shell/context-panel';
+import { PanelsMenu } from '@/components/shell/panels-menu';
+import { RailPopup } from '@/components/shell/rail-popup';
+import { SessionRail } from '@/components/shell/session-rail';
 import { ProjectRow } from '@/components/shell/chat/project-row';
 import { ChatPanel } from '@/components/shell/chat-panel';
 import { Button } from '@/components/ui/button';
@@ -19,6 +30,14 @@ const ignore = () => undefined;
 // * The narrowest a chat may get: the files give way before the chats are squeezed below it.
 const CHAT_CELL_MIN_WIDTH = 288;
 const FILES_MIN_WIDTH = 320;
+// * Up to six cells share one screen: 1, 2 and 3 cells are one row; 4 is 2 × 2; 5 and 6 are 3 × 2. Beyond six, rows of three are added, keep a readable height and the area scrolls.
+const GRID_ONE_SCREEN_CELLS = 6;
+const columnsOf = (count: number) => (count === 4 ? 2 : Math.min(count, 3));
+// * The rows split the height equally while everything fits on one screen; past that each keeps a minimum.
+const rowsClass = (count: number) =>
+    count > GRID_ONE_SCREEN_CELLS
+        ? 'auto-rows-[minmax(22rem,1fr)] overflow-y-auto'
+        : 'auto-rows-fr overflow-y-hidden';
 
 // * The viewer's "Hỏi AI về đoạn này" box: the Claude CLI answers about the picked lines, run in the project's folder.
 const askAssistant =
@@ -65,6 +84,17 @@ export function ChatGrid({
     projects,
     headerStart,
     focus,
+    codeDetachedRoots = [],
+    onOpenInVscode,
+    onFocusCodeWindow,
+    terminalOpen = false,
+    backgroundOpen = false,
+    plansOpen = false,
+    onToggleTerminal,
+    onToggleBackground,
+    onTogglePlans,
+    onOpenSettings,
+    onShowHistory,
     onChanged,
 }: {
     members: GridMember[];
@@ -72,6 +102,22 @@ export function ChatGrid({
     focus?: { root: string; n: number } | null;
     /** Saved projects (folder + name). */
     projects: { root: string; name: string }[];
+    /** Project folders whose code side is in a window of its own: the files of those are not drawn here. */
+    codeDetachedRoots?: string[];
+    /** Opens the folder of the picked chat in VS Code. */
+    onOpenInVscode?: (root: string) => void;
+    /** Brings forward the window that holds the code of that folder. */
+    onFocusCodeWindow?: (root: string) => void;
+    /** The bottom panel tabs open now, and what toggles them (the panel is drawn by the app under the grid). */
+    terminalOpen?: boolean;
+    backgroundOpen?: boolean;
+    plansOpen?: boolean;
+    onToggleTerminal?: () => void;
+    onToggleBackground?: () => void;
+    onTogglePlans?: () => void;
+    onOpenSettings?: () => void;
+    /** Opens the git history tab of the bottom panel. */
+    onShowHistory?: () => void;
     /** The button that unfolds the sidebar, shown while it is folded away. */
     headerStart?: ReactNode;
     /** Told when a turn of a chat was saved, with the project folder, so its conversation list is read again. */
@@ -102,15 +148,24 @@ export function ChatGrid({
     const [attach, setAttach] = useState<{ path: string; n: number } | null>(
         null,
     );
+    // * The context usage each chat reports (for the ring in the header), the session rail popup of the picked chat, and the file the rail asked the viewer to open.
+    const [contexts, setContexts] = useState<
+        Record<number, ContextUsage | null>
+    >({});
+    const [railOpen, setRailOpen] = useState(false);
+    const [railRefresh, setRailRefresh] = useState(0);
+    const [openRequest, setOpenRequest] = useState<{
+        repo: string;
+        path: string;
+        id: number;
+    } | null>(null);
+    const toggleRail = () => setRailOpen((open) => !open);
     const treePlacement = usePanelPlacement('file-tree', 'right');
     // * The file tree closed with its X: the button that opens it again sits in the header, at the side of the tree.
     const [treeClosed, setTreeClosed] = useState(false);
     // * Whether a file (or the list of changes) is open next to the tree: then the width of the chats is the person's to drag.
-    const [editorVisible, setEditorVisible] = useState(false);
+    const [editorOpen, setEditorVisible] = useState(false);
     const filesOnLeft = treePlacement.placement === 'left';
-    // * The tree is the leftmost column when it is on the left and open: the sidebar toggle goes at the start of its toolbar, not in the chat header.
-    const toggleInTree =
-        filesOnLeft && !treeClosed && headerStart !== undefined;
     // * The width the floating files really get: the overlay is clamped to the grid, so the handle must report that, not the stored width.
     const gridArea = useRef<HTMLDivElement>(null);
     const [areaWidth, setAreaWidth] = useState(Infinity);
@@ -171,10 +226,20 @@ export function ChatGrid({
     const picked =
         members.find((member) => member.conversation === pickedId) ??
         members[0];
-    // * One project: its chats sit side by side. Several: one column (or cell) per project, its chats stacked.
+    // * The picked project's code is in a window of its own: no files here, so the chats keep the room.
+    const codeDetached =
+        picked !== undefined && codeDetachedRoots.includes(picked.workspace);
+    const editorVisible = editorOpen && !codeDetached;
+    // * The tree is the leftmost column when it is on the left and open (and drawn here): the sidebar toggle goes at the start of its toolbar, not in the chat header. With the code in a window of its own there is no tree, so the header keeps the toggle (and the room for the window buttons).
+    const toggleInTree =
+        filesOnLeft &&
+        !treeClosed &&
+        !codeDetached &&
+        headerStart !== undefined;
+    // * One project: its chats sit in rows of up to three. Several: the projects sit in rows of up to three, each with its chats stacked.
     const single = groups.length === 1;
-    // * Chats side by side in the widest row, and the room the files may take while each keeps its minimum width.
-    const chatColumns = single && members.length === 1 ? 1 : 2;
+    // * Cells side by side in the widest row, and the room the files may take while each keeps its minimum width.
+    const chatColumns = columnsOf(single ? members.length : groups.length);
     const filesRoom = Math.max(
         FILES_MIN_WIDTH,
         areaWidth - chatColumns * CHAT_CELL_MIN_WIDTH,
@@ -219,9 +284,12 @@ export function ChatGrid({
                     className="relative flex min-h-0 min-w-0 max-w-full flex-1"
                 >
                     <div
+                        style={{
+                            gridTemplateColumns: `repeat(${single ? 1 : columnsOf(groups.length)}, minmax(0, 1fr))`,
+                        }}
                         className={cn(
-                            'grid min-h-0 min-w-0 flex-1 auto-rows-fr gap-px overflow-hidden bg-border',
-                            single ? 'grid-cols-1' : 'grid-cols-2',
+                            'grid min-h-0 min-w-0 flex-1 gap-px overflow-x-hidden bg-border',
+                            rowsClass(single ? 1 : groups.length),
                         )}
                     >
                         {groups.map((group, groupIndex) => (
@@ -286,13 +354,96 @@ export function ChatGrid({
                                         treePlacement.placement !== 'left' &&
                                         groupIndex === groups.length - 1 &&
                                         openTreeButton(PanelRightOpen)}
+                                    {/* * The same buttons as the header of a single chat, for the picked chat's project. */}
+                                    {groupIndex === groups.length - 1 &&
+                                        picked !== undefined && (
+                                            <span className="ml-auto flex items-center gap-0.5">
+                                                <ContextPanel
+                                                    usage={
+                                                        contexts[
+                                                            picked.conversation
+                                                        ] ?? null
+                                                    }
+                                                    onClick={toggleRail}
+                                                />
+                                                <ChatHeaderActions
+                                                    onOpenInVscode={() =>
+                                                        onOpenInVscode?.(
+                                                            picked.workspace,
+                                                        )
+                                                    }
+                                                    terminalOpen={terminalOpen}
+                                                    onToggleTerminal={() =>
+                                                        codeDetached
+                                                            ? onFocusCodeWindow?.(
+                                                                  picked.workspace,
+                                                              )
+                                                            : onToggleTerminal?.()
+                                                    }
+                                                    railOpen={railOpen}
+                                                    onToggleRail={toggleRail}
+                                                    filesLabel={t(
+                                                        treeClosed &&
+                                                            !codeDetached
+                                                            ? 'workspace_pane.show_files'
+                                                            : 'workspace_pane.hide_files',
+                                                    )}
+                                                    filesShown={
+                                                        !codeDetached &&
+                                                        !treeClosed
+                                                    }
+                                                    onToggleFiles={() =>
+                                                        codeDetached
+                                                            ? onFocusCodeWindow?.(
+                                                                  picked.workspace,
+                                                              )
+                                                            : setTreeClosed(
+                                                                  (closed) =>
+                                                                      !closed,
+                                                              )
+                                                    }
+                                                    menu={
+                                                        <PanelsMenu
+                                                            items={[
+                                                                {
+                                                                    id: 'background',
+                                                                    icon: ListChecks,
+                                                                    label: t(
+                                                                        'background_tasks.title',
+                                                                    ),
+                                                                    open: backgroundOpen,
+                                                                    onToggle:
+                                                                        () =>
+                                                                            onToggleBackground?.(),
+                                                                },
+                                                                {
+                                                                    id: 'plans',
+                                                                    icon: LayoutGrid,
+                                                                    label: t(
+                                                                        'plans.title',
+                                                                    ),
+                                                                    open: plansOpen,
+                                                                    onToggle:
+                                                                        () =>
+                                                                            onTogglePlans?.(),
+                                                                },
+                                                            ]}
+                                                        />
+                                                    }
+                                                />
+                                            </span>
+                                        )}
                                 </div>
                                 <div
+                                    style={{
+                                        gridTemplateColumns: `repeat(${single ? columnsOf(group.chats.length) : 1}, minmax(0, 1fr))`,
+                                    }}
                                     className={cn(
-                                        'grid min-h-0 min-w-0 flex-1 auto-rows-fr gap-px overflow-hidden bg-border',
-                                        single && group.chats.length > 1
-                                            ? 'grid-cols-2'
-                                            : 'grid-cols-1',
+                                        'grid min-h-0 min-w-0 flex-1 gap-px overflow-x-hidden bg-border',
+                                        // * Alone in the area the chats are laid out in rows; stacked in a project's cell they share its height.
+                                        single
+                                            ? rowsClass(group.chats.length)
+                                            : 'auto-rows-fr overflow-y-hidden',
                                     )}
                                 >
                                     {group.chats.map((member) => (
@@ -328,10 +479,91 @@ export function ChatGrid({
                                                     ) ?? null
                                                 }
                                                 onConversation={ignore}
-                                                onChanged={() =>
-                                                    onChanged(member.workspace)
-                                                }
+                                                onChanged={() => {
+                                                    onChanged(member.workspace);
+                                                    setRailRefresh(
+                                                        (count) => count + 1,
+                                                    );
+                                                }}
                                                 onSubagents={ignore}
+                                                onContext={(usage) =>
+                                                    setContexts((current) => ({
+                                                        ...current,
+                                                        [member.conversation]:
+                                                            usage,
+                                                    }))
+                                                }
+                                                onOpenRail={toggleRail}
+                                                popup={
+                                                    railOpen &&
+                                                    member.conversation ===
+                                                        picked?.conversation ? (
+                                                        <RailPopup
+                                                            onClose={() =>
+                                                                setRailOpen(
+                                                                    false,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SessionRail
+                                                                root={
+                                                                    member.workspace
+                                                                }
+                                                                projectName={nameOf(
+                                                                    projects,
+                                                                    member.workspace,
+                                                                )}
+                                                                conversation={
+                                                                    member.conversation
+                                                                }
+                                                                context={
+                                                                    contexts[
+                                                                        member
+                                                                            .conversation
+                                                                    ] ?? null
+                                                                }
+                                                                refreshKey={
+                                                                    railRefresh
+                                                                }
+                                                                placementMenu={
+                                                                    null
+                                                                }
+                                                                onOpenSettings={() =>
+                                                                    onOpenSettings?.()
+                                                                }
+                                                                onOpenFile={(
+                                                                    path,
+                                                                ) =>
+                                                                    setOpenRequest(
+                                                                        (
+                                                                            current,
+                                                                        ) => ({
+                                                                            repo: `local:${member.workspace}`,
+                                                                            path,
+                                                                            id:
+                                                                                (current?.id ??
+                                                                                    0) +
+                                                                                1,
+                                                                        }),
+                                                                    )
+                                                                }
+                                                                onShowHistory={() =>
+                                                                    onShowHistory?.()
+                                                                }
+                                                                onClearContext={() =>
+                                                                    setRailOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                                onClose={() =>
+                                                                    setRailOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </RailPopup>
+                                                    ) : null
+                                                }
                                             />
                                         </div>
                                     ))}
@@ -340,7 +572,7 @@ export function ChatGrid({
                         ))}
                     </div>
                 </div>
-                {picked !== undefined && (
+                {picked !== undefined && !codeDetached && (
                     // * The files sit on the side the person put the file tree on (left or right), as in a single chat. With a file open, the file and the tree take that side from the very top, so the header of the files is the one header of that side, at a width the person drags.
                     <div
                         role={editorVisible ? 'complementary' : undefined}
@@ -396,6 +628,7 @@ export function ChatGrid({
                         )}
                         <CodeViewer
                             key={picked.workspace}
+                            openRequest={openRequest}
                             treePlacement={treePlacement}
                             treeClosed={treeClosed}
                             toolbarStart={

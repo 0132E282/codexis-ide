@@ -56,10 +56,20 @@ pub fn run() {
         .on_window_event(|window, event| {
             // * A closed window takes its shells with it, so no shell is left running without a screen.
             if let tauri::WindowEvent::Destroyed = event {
-                window
-                    .app_handle()
-                    .state::<terminal::Terminals>()
-                    .close_owned(window.label());
+                let terminals = window.app_handle().state::<terminal::Terminals>();
+                // * Read before the shells are closed, which also forgets the folder of the window.
+                let code_root = window
+                    .label()
+                    .starts_with("project-code-")
+                    .then(|| terminals.window_root(window.label()).ok().flatten())
+                    .flatten();
+
+                terminals.close_owned(window.label());
+
+                // * The main window shows the code side of that folder again.
+                if let Some(root) = code_root {
+                    let _ = window.app_handle().emit("code-window-closed", root);
+                }
 
                 // * The main window takes the bottom panel back.
                 if window.label() == commands::terminal::WINDOW_LABEL {
@@ -107,6 +117,7 @@ pub fn run() {
             commands::projects::projects_add,
             commands::projects::projects_remove,
             commands::projects::projects_select,
+            commands::projects::project_code_window_open,
             commands::files::workspace_tree,
             commands::files::workspace_list_directory,
             commands::files::workspace_read,

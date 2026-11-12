@@ -71,7 +71,6 @@ export function Sidebar({
     grid,
     openGroup,
     targetGroup,
-    maxGrid,
     onToggleGrid,
     onOpenGroup,
     onNewGroup,
@@ -108,7 +107,6 @@ export function Sidebar({
     openGroup: number | null;
     /** The group a chat is added to next. */
     targetGroup: number;
-    maxGrid: number;
     /** Adds the chat to a group, or takes it out when it is in one. */
     onToggleGrid: (root: string, conversation: number, group: number) => void;
     /** Shows a group (it needs two chats). */
@@ -240,7 +238,6 @@ export function Sidebar({
                         projects={projects}
                         openGroup={openGroup}
                         targetGroup={targetGroup}
-                        maxGrid={maxGrid}
                         onOpenGroup={onOpenGroup}
                         onNewGroup={onNewGroup}
                         onRemoveGridProject={onRemoveGridProject}
@@ -370,7 +367,6 @@ export function Sidebar({
                                                         targetGroup={
                                                             targetGroup
                                                         }
-                                                        maxGrid={maxGrid}
                                                         gridGroups={gridGroups}
                                                         nextGroup={nextGroup}
                                                         onOpenConversation={

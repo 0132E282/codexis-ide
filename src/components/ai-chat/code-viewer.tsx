@@ -65,6 +65,7 @@ export function CodeViewer({
     alwaysShowEditor = false,
     onAttachFile,
     onMarkedFiles,
+    hasWindowButtons = true,
 }: {
     /** * The project whose files are shown. */
     repo: string;
@@ -117,8 +118,11 @@ export function CodeViewer({
     onAttachFile?: (path: string) => void;
     /** * Files picked together with Cmd/Ctrl+click (empty: none): the chat tags all of them. */
     onMarkedFiles?: (paths: string[]) => void;
+    /** The native window buttons overlay the top-left of the window (the main window); false in a window with the standard frame, so no room is kept for them. */
+    hasWindowButtons?: boolean;
 }) {
-    const isFullscreen = useFullscreen();
+    // * No room is kept for the window buttons in fullscreen, nor where they are not over the window.
+    const isFullscreen = useFullscreen() || !hasWindowButtons;
     const { copy: copyPath } = useCopyToClipboard();
     const { fileWidth, changesWidth, treeWidth } = usePanelWidths(
         chatCollapsed,
@@ -468,13 +472,13 @@ export function CodeViewer({
     // * File tree: the explorer column, on the right of the editor unless moved to the left.
     const treePanel = (
         <TreePanel
-            onQuickOpen={openQuickOpen}
             placement={treePlacement}
             closed={treeClosed}
             onClosedChange={onTreeClosedChange}
             createRequest={createRequest}
             sourceName={sourceName}
             treeWidth={treeWidth}
+            hasWindowButtons={hasWindowButtons}
             hasAdjacentPanel={editorVisible}
             repo={repo}
             repos={repos}

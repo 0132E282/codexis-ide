@@ -414,8 +414,9 @@ fn chat_grids_span_projects_keep_groups_and_forget_deleted_conversations() {
         member("/c", c1),
         member("/a", a3),
     ];
-    assert_eq!(store.save_grid(&five), Err(ChatError::Invalid));
-    // * Several groups are allowed, each with its own four; the order and the group are kept.
+    // * A group has no fixed size limit.
+    assert_eq!(store.save_grid(&five), Ok(()));
+    // * Several groups are allowed; the order and the group are kept.
     let in_group = |group: i64, workspace: &str, conversation: i64| GridMember {
         group,
         ..member(workspace, conversation)

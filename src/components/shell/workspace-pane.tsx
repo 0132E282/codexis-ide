@@ -1,17 +1,14 @@
 import {
-    Code2,
-    Files,
     LayoutGrid,
     ListChecks,
     MessageSquare,
     MessagesSquare,
-    SquareMenu,
-    Terminal,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CodeViewer } from '@/components/ai-chat/code-viewer';
 import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
+import { ChatHeaderActions } from '@/components/shell/chat-header-actions';
 import { ChatPanel } from '@/components/shell/chat-panel';
 import { useSideChat } from '@/components/shell/chat/use-side-chat';
 import { DockLayout } from '@/components/shell/dock-layout';
@@ -68,6 +65,8 @@ export function WorkspacePane({
     sidebarToggle,
     hasWindowButtons,
     bottomPanel,
+    codeDetached,
+    onFocusCodeWindow,
     onToggleTerminal,
     onToggleBackground,
     onTogglePlans,
@@ -93,6 +92,9 @@ export function WorkspacePane({
     hasWindowButtons: boolean;
     /** The bottom panel when it sits under the work area: drawn under the file area only, never under the main chat. */
     bottomPanel: ReactNode;
+    /** The code side of this project is in a window of its own: the file buttons bring that window forward instead of showing files here. */
+    codeDetached: boolean;
+    onFocusCodeWindow: () => void;
     /** The account menu button for the file tree header. */
     onToggleTerminal: () => void;
     onToggleBackground: () => void;
@@ -140,14 +142,20 @@ export function WorkspacePane({
     }
 
     // * The whole file area (tree and editor) is folded away: it stays mounted, so its tabs and unsaved edits come back as they were.
-    const filesHidden = state.filesHidden;
+    // * The code side in a window of its own counts as hidden here, whatever the stored flag says.
+    const filesHidden = state.filesHidden || codeDetached;
     // * The tree is closed from its own header: no strip is left for it, the file button (or Cmd/Ctrl+Shift+Y) opens it again.
     const [treeClosed, setTreeClosed] = useState(false);
-    const FilesIcon = Files;
     const filesLabel = t(
         filesHidden ? 'workspace_pane.show_files' : 'workspace_pane.hide_files',
     );
     const toggleFiles = () => {
+        if (codeDetached) {
+            onFocusCodeWindow();
+
+            return;
+        }
+
         if (treeClosed && !filesHidden) {
             setTreeClosed(false);
 
@@ -169,6 +177,12 @@ export function WorkspacePane({
         state.editorVisible;
     const changesViewer = {
         open: () => {
+            if (codeDetached) {
+                onFocusCodeWindow();
+
+                return;
+            }
+
             setChangesRequest((count) => count + 1);
 
             if (filesHidden) {
@@ -451,86 +465,17 @@ export function WorkspacePane({
                                 : null
                         }
                         headerActions={
-                            <>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label={t('common.open_in_vs_code')}
-                                    title={t('common.open_in_vs_code')}
-                                    onClick={onOpenInVscode}
-                                    className="text-muted-foreground"
-                                >
-                                    <Code2
-                                        aria-hidden="true"
-                                        className="size-4"
-                                    />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label="Terminal"
-                                    aria-pressed={terminalOpen}
-                                    onClick={onToggleTerminal}
-                                    className={cn(
-                                        'text-muted-foreground',
-                                        terminalOpen &&
-                                            'bg-accent text-accent-foreground',
-                                    )}
-                                >
-                                    <Terminal
-                                        aria-hidden="true"
-                                        className="size-4"
-                                    />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label={t(
-                                        railOpen
-                                            ? 'session_rail.hide'
-                                            : 'session_rail.show',
-                                    )}
-                                    title={t(
-                                        railOpen
-                                            ? 'session_rail.hide'
-                                            : 'session_rail.show',
-                                    )}
-                                    aria-expanded={railOpen}
-                                    aria-haspopup="dialog"
-                                    data-rail-toggle=""
-                                    onClick={toggleRail}
-                                    className={cn(
-                                        'text-muted-foreground',
-                                        railOpen &&
-                                            'bg-accent text-accent-foreground',
-                                    )}
-                                >
-                                    {/* * A box fills its whole square, so it is drawn smaller (14px against 16px) to look as big as the open icons beside it. */}
-                                    <SquareMenu
-                                        aria-hidden="true"
-                                        className="size-3.5"
-                                    />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    aria-label={filesLabel}
-                                    title={filesLabel}
-                                    aria-pressed={!filesHidden}
-                                    onClick={toggleFiles}
-                                    className="text-muted-foreground"
-                                >
-                                    <FilesIcon
-                                        aria-hidden="true"
-                                        className="size-4"
-                                    />
-                                </Button>
-                                {panelsMenu}
-                            </>
+                            <ChatHeaderActions
+                                onOpenInVscode={onOpenInVscode}
+                                terminalOpen={terminalOpen}
+                                onToggleTerminal={onToggleTerminal}
+                                railOpen={railOpen}
+                                onToggleRail={toggleRail}
+                                filesLabel={filesLabel}
+                                filesShown={!filesHidden}
+                                onToggleFiles={toggleFiles}
+                                menu={panelsMenu}
+                            />
                         }
                         canCollapse={!filesHidden}
                         onTooNarrow={() =>

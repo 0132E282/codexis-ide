@@ -55,7 +55,6 @@ export function SidebarGridGroups({
     projects,
     openGroup,
     targetGroup,
-    maxGrid,
     onOpenGroup,
     onNewGroup,
     onRemoveGridProject,
@@ -65,7 +64,6 @@ export function SidebarGridGroups({
     projects: Project[];
     openGroup: number | null;
     targetGroup: number;
-    maxGrid: number;
     onOpenGroup: (group: number, root?: string) => void;
     onNewGroup: () => void;
     onRemoveGridProject: (root: string, group: number) => void;
@@ -117,7 +115,7 @@ export function SidebarGridGroups({
                             />
                         )}
                         <span className="shrink-0 text-muted-foreground tabular-nums">
-                            {entry.count}/{maxGrid}
+                            {entry.count}
                         </span>
                     </button>
                     <ul className="flex flex-col gap-0.5">

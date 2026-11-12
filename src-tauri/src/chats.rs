@@ -13,8 +13,6 @@ use std::path::PathBuf;
 
 /// Oldest turns beyond this many per workspace are dropped.
 pub const MAX_TURNS: i64 = 500;
-/// Most conversations the chat grid shows at once (2 × 2).
-pub const MAX_GROUP: usize = 4;
 const MAX_ANSWER_BYTES: usize = 2_000_000;
 
 /// Sizes of the saved turns of one conversation (see `ChatStore::size_of`).
@@ -132,7 +130,7 @@ pub struct Conversation {
 /// One chat of the grid: a conversation and the workspace (project folder) it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GridMember {
-    /// The grid (group) this chat is in; a group holds at most four chats.
+    /// The grid (group) this chat is in; a group has no fixed limit (the grid lays them out in rows of three).
     pub group: i64,
     pub workspace: String,
     pub conversation: i64,
@@ -471,7 +469,7 @@ impl ChatStore {
     /// Replaces the chat grids with `members` (in order; each carries its group). One member is kept too: it is a pick waiting for a second chat, and the interface shows the grid from two on.
     ///
     /// # Errors
-    /// Fails on more than four members in one group, a repeated conversation, a conversation that is not in its workspace, or when the database cannot be written.
+    /// Fails on a repeated conversation, a conversation that is not in its workspace, or when the database cannot be written.
     pub fn save_grid(&mut self, members: &[GridMember]) -> Result<()> {
         let repeated = members.iter().enumerate().any(|(index, member)| {
             members[..index]
@@ -479,16 +477,7 @@ impl ChatStore {
                 .any(|seen| seen.conversation == member.conversation)
         });
 
-        let too_big = members.iter().any(|member| {
-            members
-                .iter()
-                .filter(|other| other.group == member.group)
-                .count()
-                > MAX_GROUP
-        });
-
-        if too_big
-            || repeated
+        if repeated
             || !members
                 .iter()
                 .all(|member| self.owns(&member.workspace, member.conversation))

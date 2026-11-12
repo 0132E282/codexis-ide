@@ -80,7 +80,6 @@ export const codeViewerEnglish: Record<string, string> = {
     'tree_panel.toggle_view': 'Switch between Files and Changes',
     'tree_panel.maximize': 'Maximize the file tree',
     'tree_panel.restore': 'Restore the file tree size',
-    'tree_panel.close': 'Close the file tree',
     'tree_panel.open': 'Open the file tree',
     'tree_panel.reload': 'Reload files',
     'tree_panel.tools': 'File tree tools',

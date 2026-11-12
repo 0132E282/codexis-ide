@@ -19,7 +19,6 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
     inGrid,
     activeRoot,
     targetGroup,
-    maxGrid,
     gridGroups,
     nextGroup,
     onOpenConversation,
@@ -31,7 +30,6 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
     inGrid: boolean;
     activeRoot: string | null;
     targetGroup: number;
-    maxGrid: number;
     gridGroups: GridGroup[];
     /** Number of a group that does not exist yet. */
     nextGroup: number;
@@ -96,7 +94,6 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
                             {gridGroups.map((entry, index) => (
                                 <DropdownMenuItem
                                     key={entry.group}
-                                    disabled={entry.count >= maxGrid}
                                     onSelect={() => {
                                         if (activeRoot !== null) {
                                             onToggleGrid(
@@ -111,7 +108,7 @@ export const SidebarConversationItem = memo(function SidebarConversationItem({
                                         {t('sidebar.group_section')} {index + 1}
                                     </span>
                                     <span className="text-xs text-muted-foreground tabular-nums">
-                                        {entry.count}/{maxGrid}
+                                        {entry.count}
                                     </span>
                                 </DropdownMenuItem>
                             ))}

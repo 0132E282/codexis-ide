@@ -283,6 +283,9 @@ export const ide = {
     terminalResize: (id: string, columns: number, rows: number) =>
         invoke<void>('terminal_resize', { id, columns, rows }),
     terminalClose: (id: string) => invoke<void>('terminal_close', { id }),
+    /** Opens the code side of the project folder (files, editor, terminal) in a window of its own (an open one is brought to the front); resolves to the folder as the backend holds it, which `onCodeWindowClosed` reports back. */
+    projectCodeWindowOpen: (root?: string) =>
+        invoke<string>('project_code_window_open', { root }),
     /** Opens the separate operating-system window that holds the whole bottom panel on `tab` (an open one is brought to the front). */
     terminalWindowOpen: (root?: string, tab?: string, sessions?: string[]) =>
         invoke<void>('terminal_window_open', { root, tab, sessions }),
@@ -556,6 +559,10 @@ export const onBottomState = (
 /** Listens to the separate bottom-panel window being closed. */
 export const onTerminalWindowClosed = (handler: () => void) =>
     listen<null>('terminal-window-closed', () => handler());
+
+/** Listens to a separate code window being closed (the handler gets its project folder). */
+export const onCodeWindowClosed = (handler: (root: string) => void) =>
+    listen<string>('code-window-closed', ({ payload }) => handler(payload));
 
 /** Listens to shells that ended (the id of each). */
 export const onTerminalExit = (handler: (id: string) => void) =>

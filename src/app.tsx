@@ -18,6 +18,8 @@ import type {
 } from '@/components/shell/bottom-panel';
 import { ChatGrid } from '@/components/shell/chat-grid';
 import { LoginScreen } from '@/components/shell/accounts';
+import { OPEN_PROJECT_WINDOW_EVENT } from '@/lib/project-window';
+import { toast } from 'sonner';
 import { OPEN_USAGE_EVENT } from '@/components/shell/chat/builtin-commands';
 import { DialogsHost } from '@/components/shell/dialogs-host';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
@@ -41,6 +43,7 @@ import {
     onBottomAction,
     onFileMenu,
     onTerminalMenu,
+    onCodeWindowClosed,
     onTerminalWindowClosed,
     pickFolders,
 } from '@/lib/ide';
@@ -59,8 +62,6 @@ const BOTTOM_PANEL_PREFETCH_MILLISECONDS = 1500;
 // * The sidebar is either this wide or folded away; only the edge button changes it.
 const SIDEBAR_OPEN_WIDTH = 320;
 const SIDEBAR_MIN_WIDTH = 120;
-// * The chat grid shows at most this many chats (2 × 2); the backend refuses more.
-const MAX_GRID = 4;
 
 /** Where the active pane holds the shared bottom panel: the panel's own node is put in here, and taken along when another pane shows it. */
 function BottomHostSlot({ host }: { host: HTMLElement }) {
@@ -170,10 +171,19 @@ export default function App() {
             void stop.then((unlisten) => unlisten());
         };
     }, []);
+    // * The code side of a folder is in a window of its own: the terminal and files buttons bring that window forward instead of opening them here.
+    const isCodeDetached = (root: string | null) =>
+        root !== null && detachedRoots.includes(root);
+    const focusCodeWindow = (root: string | null) =>
+        void ide
+            .projectCodeWindowOpen(root ?? undefined)
+            .catch((caught) => toast.error(errorText(caught)));
     const toggleBottomTab = (tab: BottomTab) =>
-        detachedTab === null
-            ? setBottomTab((current) => (current === tab ? null : tab))
-            : showBottomTab(tab, activeRoot ?? undefined);
+        tab === 'terminal' && isCodeDetached(activeRoot)
+            ? focusCodeWindow(activeRoot)
+            : detachedTab === null
+              ? setBottomTab((current) => (current === tab ? null : tab))
+              : showBottomTab(tab, activeRoot ?? undefined);
     // * The file whose history the Lịch sử tab shows (null: the whole project).
     const [historyPath, setHistoryPath] = useState<string | null>(null);
     const showFileHistory = (path: string | null = null) => {
@@ -286,6 +296,57 @@ export default function App() {
     const [usageOpen, setUsageOpen] = useState(false);
     const [phoneOpen, setPhoneOpen] = useState(false);
 
+    // * The file tree's menu asks for the open folder in a window of its own (a project or the startup folder alike). The pane then hides its code side until that window is closed; `detachedPanes` remembers which panes were hidden this way, so one the person hid with the Files button stays as it was.
+    const detachedPanes = useRef(
+        new Map<string, { key: string; root: string | undefined }>(),
+    );
+    // * The same folders as state, so the chat grid draws again without their files.
+    const [detachedRoots, setDetachedRoots] = useState<string[]>([]);
+
+    useEffect(() => {
+        const open = () => {
+            const root = activeRootRef.current;
+            const { patchPane: patch, activeKey: key } = windowBridge.current;
+
+            void ide
+                .projectCodeWindowOpen(root)
+                .then((folder) => {
+                    // * Keyed by the folder the backend answers with: the closing event carries that same text (the path the pane holds may be written differently).
+                    if (detachedPanes.current.has(folder)) {
+                        return;
+                    }
+                    detachedPanes.current.set(folder, { key, root });
+                    // * The grid compares with the pane's own folder text.
+                    setDetachedRoots((roots) =>
+                        root === undefined ? roots : [...roots, root],
+                    );
+                    patch(key, { filesHidden: true, chatCollapsed: false });
+                    setBottomTab(null);
+                })
+                .catch((caught) => toast.error(errorText(caught)));
+        };
+        const stopClosed = onCodeWindowClosed((folder) => {
+            const detached = detachedPanes.current.get(folder);
+
+            if (detached !== undefined) {
+                detachedPanes.current.delete(folder);
+                setDetachedRoots((roots) =>
+                    roots.filter((root) => root !== detached.root),
+                );
+                windowBridge.current.patchPane(detached.key, {
+                    filesHidden: false,
+                });
+            }
+        });
+
+        window.addEventListener(OPEN_PROJECT_WINDOW_EVENT, open);
+
+        return () => {
+            window.removeEventListener(OPEN_PROJECT_WINDOW_EVENT, open);
+            void stopClosed.then((unlisten) => unlisten());
+        };
+    }, []);
+
     // * `/cost` in a chat asks for the statistics dialog.
     useEffect(() => {
         const open = () => setUsageOpen(true);
@@ -365,7 +426,7 @@ export default function App() {
             );
 
             saveGrid(rest, stillOpen(rest));
-        } else if (countIn(grid, group) < MAX_GRID) {
+        } else {
             setTargetGroup(group);
 
             const next = [
@@ -416,12 +477,14 @@ export default function App() {
     const openMembers = grid.filter((member) => member.group === openGroup);
     const showGrid = openGroup !== null && openMembers.length >= 2;
 
-    const openInVscode = () =>
+    const openInVscode = (root: string | null = activeRoot) =>
         ide
             .openInVscode(
-                activeState.activeFile ?? undefined,
+                root === activeRoot
+                    ? (activeState.activeFile ?? undefined)
+                    : undefined,
                 undefined,
-                activeRoot ?? undefined,
+                root ?? undefined,
             )
             .catch((caught) => console.error(errorText(caught)));
 
@@ -625,7 +688,6 @@ export default function App() {
                             grid={grid}
                             openGroup={showGrid ? openGroup : null}
                             targetGroup={targetGroup}
-                            maxGrid={MAX_GRID}
                             onToggleGrid={toggleGrid}
                             onOpenGroup={showGroup}
                             onNewGroup={newGroup}
@@ -662,6 +724,19 @@ export default function App() {
                             key={openGroup}
                             members={openMembers}
                             focus={focus}
+                            codeDetachedRoots={detachedRoots}
+                            onOpenInVscode={(root) => void openInVscode(root)}
+                            onFocusCodeWindow={focusCodeWindow}
+                            terminalOpen={bottomTab === 'terminal'}
+                            backgroundOpen={bottomTab === 'background'}
+                            plansOpen={bottomTab === 'plans'}
+                            onToggleTerminal={() => toggleBottomTab('terminal')}
+                            onToggleBackground={() =>
+                                toggleBottomTab('background')
+                            }
+                            onTogglePlans={() => toggleBottomTab('plans')}
+                            onOpenSettings={() => setSettingsTab('advanced')}
+                            onShowHistory={() => showFileHistory()}
                             projects={chatProjects}
                             headerStart={
                                 sidebarCollapsed
@@ -670,6 +745,12 @@ export default function App() {
                             }
                             onChanged={refreshConversations}
                         />
+                    )}
+                    {/* * The grid has no pane to hold the bottom panel, so it is taken in here, under the grid. */}
+                    {showGrid && isBottomDocked && bottomPanel !== null && (
+                        <div className="h-72 shrink-0 border-t">
+                            <BottomHostSlot host={bottomHost} />
+                        </div>
                     )}
                     {!showPanel && !showGrid && (
                         <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -722,12 +803,19 @@ export default function App() {
                                             hasWindowButtons={!isFullscreen}
                                             bottomPanel={
                                                 pane.key === activeKey &&
+                                                !showGrid &&
                                                 bottomPanel !== null &&
                                                 isBottomDocked ? (
                                                     <BottomHostSlot
                                                         host={bottomHost}
                                                     />
                                                 ) : null
+                                            }
+                                            codeDetached={isCodeDetached(
+                                                pane.root,
+                                            )}
+                                            onFocusCodeWindow={() =>
+                                                focusCodeWindow(pane.root)
                                             }
                                             onToggleTerminal={() =>
                                                 toggleBottomTab('terminal')

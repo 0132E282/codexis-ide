@@ -30,6 +30,16 @@ const TerminalWindow = lazy(() =>
     })),
 );
 
+// * The separate code window (files, editor, terminal) is a light page of its own too, chosen by `?view=code`.
+const CodeWindow = lazy(() =>
+    import('@/components/shell/code-window').then((module) => ({
+        default: module.CodeWindow,
+    })),
+);
+
+const isCodeWindow =
+    new URLSearchParams(window.location.search).get('view') === 'code';
+
 // * The separate terminal window loads the same page with `?terminal`.
 const isTerminalWindow = new URLSearchParams(window.location.search).has(
     'terminal',
@@ -45,6 +55,10 @@ function Root() {
             {isTerminalWindow ? (
                 <Suspense fallback={null}>
                     <TerminalWindow key={language} />
+                </Suspense>
+            ) : isCodeWindow ? (
+                <Suspense fallback={null}>
+                    <CodeWindow key={language} />
                 </Suspense>
             ) : (
                 <App key={language} />

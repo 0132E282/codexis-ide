@@ -78,7 +78,6 @@ export const codeViewerVietnamese: Record<string, string> = {
     'tree_panel.toggle_view': 'Chuyển giữa Tệp và Thay đổi',
     'tree_panel.maximize': 'Phóng to cây thư mục',
     'tree_panel.restore': 'Thu nhỏ cây thư mục',
-    'tree_panel.close': 'Đóng cây thư mục',
     'tree_panel.open': 'Mở cây thư mục',
     'tree_panel.reload': 'Tải lại tệp',
     'tree_panel.tools': 'Công cụ cây thư mục',

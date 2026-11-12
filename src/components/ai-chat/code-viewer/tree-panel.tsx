@@ -9,15 +9,14 @@ import {
 import { useFullscreen } from '@/hooks/use-fullscreen';
 import { ide } from '@/lib/ide';
 import { t } from '@/lib/i18n';
+import { OPEN_PROJECT_WINDOW_EVENT } from '@/lib/project-window';
 import { cn } from '@/lib/utils';
 import {
     Check,
     ChevronDown,
     ChevronsDownUp,
-    FileSearch,
     List,
     PanelRightOpen,
-    X,
 } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEffect, useRef, useState } from 'react';
@@ -54,6 +53,7 @@ export function TreePanel({
     sourceName,
     treeWidth,
     hasAdjacentPanel,
+    hasWindowButtons = true,
     placement,
     repo,
     repos,
@@ -65,7 +65,6 @@ export function TreePanel({
     changedFileCount,
     filter,
     onFilterChange,
-    onQuickOpen,
     onCollapseAll,
     onReload,
     paths,
@@ -98,6 +97,8 @@ export function TreePanel({
     treeWidth: ReturnType<typeof useResizableWidth>;
     /** Keep the tree at its dragged width while an editor or changes panel uses the remaining space. */
     hasAdjacentPanel: boolean;
+    /** The native window buttons overlay the top-left of the window; false where they do not. */
+    hasWindowButtons?: boolean;
     /** Left or right of the editor (the Move menu); Fill is the maximize below. */
     placement: ReturnType<typeof usePanelPlacement>;
     repo: string;
@@ -112,7 +113,6 @@ export function TreePanel({
     changedFileCount: number;
     filter: string;
     onFilterChange: (filter: string) => void;
-    onQuickOpen: () => void;
     onCollapseAll: () => void;
     onReload: () => void;
     /** * The project's paths, null while the tree is loading. */
@@ -190,7 +190,7 @@ export function TreePanel({
         setCopiedPath(null);
     }
 
-    const isFullscreen = useFullscreen();
+    const isFullscreen = useFullscreen() || !hasWindowButtons;
     const rows = useRef<HTMLDivElement>(null);
     // * Latest values for the drop listener, which is set up once per project.
     const reloadRef = useRef(onReload);
@@ -585,17 +585,6 @@ export function TreePanel({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="text-muted-foreground"
-                    aria-label={t('quick_open.find_file')}
-                    title={t('quick_open.find_file')}
-                    onClick={onQuickOpen}
-                >
-                    <FileSearch aria-hidden="true" />
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
                     aria-label={t('tree_panel.collapse_all')}
                     title={t('tree_panel.collapse_all')}
                     onClick={onCollapseAll}
@@ -636,18 +625,15 @@ export function TreePanel({
                         dockedPlacement={placement.dockedPlacement}
                         edges={TREE_EDGES}
                         onPlacementChange={changePlacement}
+                        openWindowLabelKey="tree_panel.open_window"
+                        onOpenWindow={() =>
+                            window.dispatchEvent(
+                                new CustomEvent(OPEN_PROJECT_WINDOW_EVENT, {
+                                    detail: 'code',
+                                }),
+                            )
+                        }
                     />
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('tree_panel.close')}
-                        title={t('tree_panel.close')}
-                        onClick={() => setIsClosed(true)}
-                        className="text-muted-foreground"
-                    >
-                        <X aria-hidden="true" />
-                    </Button>
                 </span>
             </div>
             {(repos.length > 1 || headerActions) && (

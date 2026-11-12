@@ -88,6 +88,7 @@ export function PanelMenu({
     edges,
     onPlacementChange,
     onOpenWindow,
+    openWindowLabelKey = 'bottom_panel.open_window',
 }: {
     placement: PanelPlacement;
     /** The edge to return to when the panel leaves `fill`. */
@@ -99,6 +100,8 @@ export function PanelMenu({
     onPlacementChange: (placement: PanelPlacement) => void;
     /** Offers "Open in new window": moves the whole panel into a separate window. */
     onOpenWindow?: () => void;
+    /** Text of that item (default: the bottom panel's). */
+    openWindowLabelKey?: string;
 }) {
     const filled = placement === 'fill';
     const floating = placement === 'float';
@@ -205,7 +208,7 @@ export function PanelMenu({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={onOpenWindow}>
                             <ExternalLink aria-hidden="true" />
-                            {t('bottom_panel.open_window')}
+                            {t(openWindowLabelKey)}
                         </DropdownMenuItem>
                     </>
                 )}

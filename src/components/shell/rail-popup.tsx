@@ -88,8 +88,14 @@ export function RailPopup({
         const measure = () => {
             const anchor = popup.current?.offsetParent;
             const top = anchor?.getBoundingClientRect().top ?? 0;
-            const section = anchor?.closest('section')?.getBoundingClientRect();
+            const sectionElement = anchor?.closest('section');
+            const section = sectionElement?.getBoundingClientRect();
             const area = section?.top ?? 0;
+            // * Only a chat that draws its own header keeps that much room at the top (the chat grid has one bar for all the chats instead).
+            const headerHeight =
+                sectionElement?.querySelector(':scope > header') === null
+                    ? 0
+                    : HEADER_HEIGHT;
             setEdgeGap(
                 Math.max(
                     0,
@@ -97,13 +103,33 @@ export function RailPopup({
                         (anchor?.getBoundingClientRect().right ?? 0),
                 ),
             );
-            setHeight(Math.max(160, top - area - HEADER_HEIGHT - POPUP_GAP));
+            // * Never taller than what is above the message box inside the chat and the window, so the last button is not cut off; the rail scrolls inside.
+            setHeight(
+                Math.max(
+                    160,
+                    Math.min(
+                        top - area - headerHeight - POPUP_GAP,
+                        top - POPUP_GAP,
+                    ),
+                ),
+            );
         };
 
         measure();
         window.addEventListener('resize', measure);
 
-        return () => window.removeEventListener('resize', measure);
+        // * The chat may change size after the popup opens (a grid row settling, the message box growing).
+        const section = popup.current?.offsetParent?.closest('section');
+        const observer = new ResizeObserver(measure);
+
+        if (section instanceof Element) {
+            observer.observe(section);
+        }
+
+        return () => {
+            window.removeEventListener('resize', measure);
+            observer.disconnect();
+        };
     }, []);
 
     // * When the window shrinks, pull a popup that now sticks out back inside by adjusting the current offset.
