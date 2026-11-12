@@ -24,6 +24,8 @@ export type FileActions = {
     /** * Pastes the marked entry into `folder` (empty: the project root). */
     paste?: (folder: string) => void;
     canPaste?: boolean;
+    /** * Deletes the file or folder for good (the caller asks first); missing where nothing can be deleted (a GitHub repo). */
+    remove?: (path: string, isFolder: boolean) => void;
     /** * Missing when the chat cannot take a file reference. */
     ask?: (path: string) => void;
 };
@@ -139,6 +141,17 @@ export function FileContextMenu({
                     >
                         {t('common.add_file_to_chat')}
                     </ContextMenuItem>
+                )}
+                {actions.remove !== undefined && (
+                    <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                            variant="destructive"
+                            onSelect={() => actions.remove?.(path, folder)}
+                        >
+                            {t('common.delete')}
+                        </ContextMenuItem>
+                    </>
                 )}
             </ContextMenuContent>
         </ContextMenu>

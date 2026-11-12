@@ -69,6 +69,8 @@ export const codeViewerVietnamese: Record<string, string> = {
     'tree_panel.filter_files': 'Lọc tệp',
     'tree_panel.filter_files2': 'Lọc tệp...',
     'tree_panel.imported': 'Đã sao chép {count} mục vào dự án',
+    'tree_panel.imported_partial':
+        'Đã sao chép {count} mục vào dự án, bỏ qua {skipped} mục (liên kết, thư mục bị chặn hoặc quá lớn)',
     'tree_panel.no_files': 'Không có tệp nào.',
     'tree_panel.resize_file_tree': 'Đổi độ rộng cây thư mục',
     'tree_panel.search': 'Đến ô lọc',

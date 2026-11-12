@@ -10,10 +10,26 @@ export type CodeColors = 'auto' | CodeScheme;
 
 type ThemeState = { appearance: Appearance; codeColors: CodeColors };
 
+// * The look is cached in the browser (like the language) so the next start paints in it at once; `index.html` reads the same key before the first paint, and the settings file still has the last word.
+const APPEARANCE_STORAGE_KEY = 'codexis.appearance';
+
 const query = window.matchMedia('(prefers-color-scheme: dark)');
 const listeners = new Set<() => void>();
 
-let state: ThemeState = { appearance: 'system', codeColors: 'auto' };
+function readCachedAppearance(): Appearance {
+    try {
+        const cached = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+
+        return cached === 'light' || cached === 'dark' ? cached : 'system';
+    } catch {
+        return 'system';
+    }
+}
+
+let state: ThemeState = {
+    appearance: readCachedAppearance(),
+    codeColors: 'auto',
+};
 
 function applyClass() {
     const dark =
@@ -47,6 +63,13 @@ export function startTheme(saved: Partial<ThemeState> = {}) {
 
 export function setAppearance(appearance: Appearance) {
     state = { ...state, appearance };
+
+    try {
+        localStorage.setItem(APPEARANCE_STORAGE_KEY, appearance);
+    } catch {
+        // * The look is only remembered for this run when storage is blocked.
+    }
+
     notify();
 }
 

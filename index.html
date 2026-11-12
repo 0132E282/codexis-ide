@@ -4,6 +4,19 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Codexis IDE</title>
+        <script>
+            // * Sets the look before the first paint (same rule as src/lib/system-theme.ts: the cached choice, else the system), so a light start does not flash dark.
+            try {
+                var appearance = localStorage.getItem('codexis.appearance');
+                var isDark =
+                    appearance === 'light' || appearance === 'dark'
+                        ? appearance === 'dark'
+                        : window.matchMedia('(prefers-color-scheme: dark)')
+                              .matches;
+
+                document.documentElement.classList.toggle('dark', isDark);
+            } catch (ignored) {}
+        </script>
     </head>
     <body>
         <div id="root"></div>

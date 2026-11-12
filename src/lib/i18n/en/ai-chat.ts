@@ -93,6 +93,11 @@ export const aiChatEnglish: Record<string, string> = {
     'file_context_menu.copy_file': 'Copy file',
     'file_context_menu.copy_folder': 'Copy folder',
     'file_context_menu.paste': 'Paste',
+    'file_context_menu.delete_title': 'Delete "{name}"?',
+    'file_context_menu.delete_file_description':
+        'This file will be permanently deleted and cannot be restored.',
+    'file_context_menu.delete_folder_description':
+        'This folder and everything inside it will be permanently deleted and cannot be restored.',
     'file_context_menu.copy_name': 'Copy name',
     'inline_ask.accept': 'Accept',
     'inline_ask.ai_edited_the_file':

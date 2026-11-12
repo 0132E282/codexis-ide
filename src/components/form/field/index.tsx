@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Field as BaseField, FieldLabel } from '@/components/ui/field';
 import type { InputSelectOption } from '@/components/ui/input-select';
@@ -9,7 +9,6 @@ import CheckboxGroupField from './checkbox-group-field';
 import type { CheckboxGroupOption } from './checkbox-group-field';
 import ChoiceCardsField from './choice-cards-field';
 import type { ChoiceCardOption } from './choice-cards-field';
-import EditorField from './editor-field';
 import InputField from './input-field';
 import OtpField from './otp-field';
 import type { RepeaterColumn } from './repeater-field';
@@ -54,9 +53,13 @@ export interface FieldProps extends React.InputHTMLAttributes<
     showError?: boolean;
 }
 
+// * The rich text editor (Tiptap, ProseMirror) is only fetched when a form actually shows an `editor` field.
+const EditorField = lazy(() => import('./editor-field'));
+
 const FIELD_COMPONENTS: Record<
     NonNullable<FieldProps['ui']>,
-    React.ComponentType<any>
+    | React.ComponentType<any>
+    | React.LazyExoticComponent<React.ComponentType<any>>
 > = {
     input: InputField,
     checkbox: InputField,
@@ -101,15 +104,17 @@ export default function Field({
         const Component = FIELD_COMPONENTS[ui] ?? InputField;
 
         return (
-            <Component
-                name={name}
-                fieldProps={fieldProps}
-                maxLength={maxLength}
-                autoComplete={autoComplete}
-                control={context?.control}
-                aria-invalid={!!error}
-                {...props}
-            />
+            <Suspense fallback={null}>
+                <Component
+                    name={name}
+                    fieldProps={fieldProps}
+                    maxLength={maxLength}
+                    autoComplete={autoComplete}
+                    control={context?.control}
+                    aria-invalid={!!error}
+                    {...props}
+                />
+            </Suspense>
         );
     };
 

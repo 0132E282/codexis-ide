@@ -574,3 +574,113 @@ fn files_from_outside_the_project_are_imported_under_a_free_name() {
         Err(WorkspaceError::BadPath)
     );
 }
+
+#[test]
+fn a_file_is_deleted() {
+    let (dir, workspace) = project();
+
+    fs::write(dir.path().join("a.txt"), "x").unwrap();
+
+    assert_eq!(workspace.delete_for_viewer("a.txt"), Ok(()));
+    assert!(!dir.path().join("a.txt").exists());
+}
+
+#[test]
+fn a_folder_is_deleted_with_what_it_holds() {
+    let (dir, workspace) = project();
+
+    fs::create_dir_all(dir.path().join("src/inner/deep")).unwrap();
+    fs::write(dir.path().join("src/a.txt"), "x").unwrap();
+    fs::write(dir.path().join("src/inner/deep/b.txt"), "y").unwrap();
+    fs::write(dir.path().join("keep.txt"), "z").unwrap();
+
+    assert_eq!(workspace.delete_for_viewer("src"), Ok(()));
+    assert!(!dir.path().join("src").exists());
+    assert!(dir.path().join("keep.txt").exists());
+}
+
+#[test]
+fn deleting_the_root_or_nothing_is_refused() {
+    let (dir, workspace) = project();
+
+    for bad in ["", ".", "/", "../x"] {
+        assert_eq!(
+            workspace.delete_for_viewer(bad),
+            Err(WorkspaceError::BadPath),
+            "{bad:?}"
+        );
+    }
+
+    assert!(dir.path().exists());
+}
+
+#[test]
+fn denied_folders_are_not_deleted() {
+    let (dir, workspace) = project();
+
+    fs::create_dir_all(dir.path().join(".git")).unwrap();
+    fs::create_dir_all(dir.path().join("node_modules")).unwrap();
+    fs::write(dir.path().join(".git/config"), "x").unwrap();
+    fs::write(dir.path().join("node_modules/x"), "x").unwrap();
+
+    for denied in [".git/config", ".git", "node_modules/x", "node_modules"] {
+        assert_eq!(
+            workspace.delete_for_viewer(denied),
+            Err(WorkspaceError::Denied),
+            "{denied:?}"
+        );
+    }
+
+    assert!(dir.path().join(".git/config").exists());
+    assert!(dir.path().join("node_modules/x").exists());
+}
+
+#[test]
+fn deleting_a_link_leaves_its_target_alone() {
+    let (dir, workspace) = project();
+    let outside = tempfile::tempdir().unwrap();
+
+    fs::write(outside.path().join("secret.txt"), "x").unwrap();
+    symlink(
+        outside.path().join("secret.txt"),
+        dir.path().join("file-link"),
+    )
+    .unwrap();
+    symlink(outside.path(), dir.path().join("folder-link")).unwrap();
+
+    assert_eq!(workspace.delete_for_viewer("file-link"), Ok(()));
+    assert_eq!(workspace.delete_for_viewer("folder-link"), Ok(()));
+
+    assert!(fs::symlink_metadata(dir.path().join("file-link")).is_err());
+    assert!(fs::symlink_metadata(dir.path().join("folder-link")).is_err());
+    assert!(outside.path().join("secret.txt").exists());
+}
+
+#[test]
+fn a_path_through_a_link_out_of_the_root_is_refused() {
+    let (dir, workspace) = project();
+    let outside = tempfile::tempdir().unwrap();
+
+    fs::write(outside.path().join("secret.txt"), "x").unwrap();
+    symlink(outside.path(), dir.path().join("out")).unwrap();
+
+    assert_eq!(
+        workspace.delete_for_viewer("out/secret.txt"),
+        Err(WorkspaceError::BadPath)
+    );
+    assert!(outside.path().join("secret.txt").exists());
+}
+
+#[test]
+fn deleting_a_missing_path_is_not_found() {
+    let (_dir, workspace) = project();
+
+    assert_eq!(
+        workspace.delete_for_viewer("nope.txt"),
+        Err(WorkspaceError::NotFound)
+    );
+    assert_eq!(
+        workspace.delete_for_viewer("no/such/file.txt"),
+        Err(WorkspaceError::NotFound)
+    );
+}

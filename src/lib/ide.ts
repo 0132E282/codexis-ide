@@ -256,6 +256,9 @@ export const ide = {
     /** Copies a file or folder into `folder` (empty: the project root) under a free name (`a copy.txt`); resolves to the new path. */
     workspaceCopy: (path: string, folder: string, root?: string) =>
         invoke<string>('workspace_copy', { root, path, folder }),
+    /** Deletes a file or a folder (with everything in it) for good; a link is only unlinked. */
+    workspaceDelete: (path: string, root?: string) =>
+        invoke<void>('workspace_delete', { root, path }),
     projects: () =>
         invoke<{ projects: Project[]; selected: string | null }>(
             'projects_list',

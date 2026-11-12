@@ -1,16 +1,22 @@
 import { Github } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import logo from '@/assets/logo.png';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiKeySection } from '@/components/shell/settings-tabs/api-key-section';
-import { ManageAccountsPage } from '@/components/shell/manage-accounts-page';
 import { AntigravityIcon, ClaudeIcon, CodexIcon, GeminiIcon } from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type AuthStatus } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
 import { LoginCodeDialog } from '@/components/shell/login-code-dialog';
 import { t } from '@/lib/i18n';
+
+// * The manage page only opens from a row's "Manage" button, so it is fetched then.
+const ManageAccountsPage = lazy(() =>
+    import('@/components/shell/manage-accounts-page').then((module) => ({
+        default: module.ManageAccountsPage,
+    })),
+);
 
 const LABEL: Record<AuthProvider, string> = {
     claude: 'Claude',
@@ -253,13 +259,17 @@ export function AccountList({
 
     if (managing !== null) {
         return (
-            <ManageAccountsPage
-                cli={managing}
-                title={LABEL[managing]}
-                onBack={() => setManaging(null)}
-                onChanged={onChanged}
-                apiKey={managing === 'claude' ? <ApiKeySection /> : undefined}
-            />
+            <Suspense fallback={null}>
+                <ManageAccountsPage
+                    cli={managing}
+                    title={LABEL[managing]}
+                    onBack={() => setManaging(null)}
+                    onChanged={onChanged}
+                    apiKey={
+                        managing === 'claude' ? <ApiKeySection /> : undefined
+                    }
+                />
+            </Suspense>
         );
     }
 

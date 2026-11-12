@@ -31,14 +31,6 @@ export default defineConfig({
                         return undefined;
                     }
 
-                    if (
-                        /node_modules\/(@tiptap|prosemirror-|linkifyjs|orderedmap|rope-sequence|w3c-keyname|markdown-it|entities|mdurl|uc\.micro|linkify-it)/.test(
-                            id,
-                        )
-                    ) {
-                        return 'vendor-editor';
-                    }
-
                     if (id.includes('node_modules/@radix-ui')) {
                         return 'vendor-radix';
                     }

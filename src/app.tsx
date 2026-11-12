@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    lazy,
+    Suspense,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
     listShellIds,
     markShellsHandedOff,
 } from '@/components/ai-chat/activity-terminal';
-import { BottomPanel } from '@/components/shell/bottom-panel';
 import { FloatingFrame } from '@/components/shell/floating-frame';
 import type {
     BottomTab,
@@ -42,8 +48,16 @@ import type { GridMember } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
+// * The bottom panel (terminal, history, plans, data) is closed at start-up: its code is fetched on the first open, and quietly a moment after the first screen so that open is still instant.
+const loadBottomPanel = () =>
+    import('@/components/shell/bottom-panel').then((module) => ({
+        default: module.BottomPanel,
+    }));
+const BottomPanel = lazy(loadBottomPanel);
+const BOTTOM_PANEL_PREFETCH_MILLISECONDS = 1500;
+
 // * The sidebar is either this wide or folded away; only the edge button changes it.
-const SIDEBAR_OPEN_WIDTH = 256;
+const SIDEBAR_OPEN_WIDTH = 320;
 const SIDEBAR_MIN_WIDTH = 120;
 // * The chat grid shows at most this many chats (2 × 2); the backend refuses more.
 const MAX_GRID = 4;
@@ -169,14 +183,23 @@ export default function App() {
     // * Where the bottom panel sits: under the work area, filling it, or floating over it.
     const bottomPlacement = usePanelPlacement('bottom-panel', 'bottom');
 
+    useEffect(() => {
+        const timer = window.setTimeout(
+            () => void loadBottomPanel(),
+            BOTTOM_PANEL_PREFETCH_MILLISECONDS,
+        );
+
+        return () => window.clearTimeout(timer);
+    }, []);
+
     useFileDropGuard();
     useActivityEvents();
     const isFullscreen = useFullscreen();
 
-    // * Open (256) or folded (1) state of the sidebar, kept between visits; the hook only stores it.
+    // * Open (320) or folded (1) state of the sidebar, kept between visits; the hook only stores it.
     const sidebarWidth = useResizableWidth(
         'ide.width.sidebar',
-        256,
+        SIDEBAR_OPEN_WIDTH,
         0,
         480,
         'x',
@@ -414,56 +437,64 @@ export default function App() {
     const isBottomDocked = bottomPlacement.placement === 'bottom';
     const bottomPanel =
         bottomTab !== null && activePane !== null ? (
-            <BottomPanel
-                tab={bottomTab}
-                root={activePane.root}
-                background={background}
-                placement={bottomPlacement.placement}
-                dockedPlacement={bottomPlacement.dockedPlacement}
-                onPlacementChange={bottomPlacement.setPlacement}
-                historyPath={historyPath}
-                onClearHistoryPath={() => setHistoryPath(null)}
-                onTabChange={setBottomTab}
-                onClose={() => setBottomTab(null)}
-                onDetach={() => {
-                    const tab = bottomTab;
+            <Suspense fallback={null}>
+                <BottomPanel
+                    tab={bottomTab}
+                    root={activePane.root}
+                    background={background}
+                    placement={bottomPlacement.placement}
+                    dockedPlacement={bottomPlacement.dockedPlacement}
+                    onPlacementChange={bottomPlacement.setPlacement}
+                    historyPath={historyPath}
+                    onClearHistoryPath={() => setHistoryPath(null)}
+                    onTabChange={setBottomTab}
+                    onClose={() => setBottomTab(null)}
+                    onDetach={() => {
+                        const tab = bottomTab;
 
-                    // * The running shells move to the window with the panel: closing the panel here must not end them.
-                    const shellIds = listShellIds();
+                        // * The running shells move to the window with the panel: closing the panel here must not end them.
+                        const shellIds = listShellIds();
 
-                    void ide
-                        .terminalWindowOpen(activePane.root, tab, shellIds)
-                        .then(() => {
-                            markShellsHandedOff(shellIds);
-                            setDetachedTab(tab);
-                            setBottomTab(null);
+                        void ide
+                            .terminalWindowOpen(activePane.root, tab, shellIds)
+                            .then(() => {
+                                markShellsHandedOff(shellIds);
+                                setDetachedTab(tab);
+                                setBottomTab(null);
+                            })
+                            .catch((caught) =>
+                                console.error(errorText(caught)),
+                            );
+                    }}
+                    terminalCommand={terminalCommand}
+                    onOpenFile={(path) =>
+                        patchPane(activeKey, {
+                            openFile: {
+                                path,
+                                n:
+                                    (paneStates[activeKey]?.openFile?.n ?? 0) +
+                                    1,
+                            },
                         })
-                        .catch((caught) => console.error(errorText(caught)));
-                }}
-                terminalCommand={terminalCommand}
-                onOpenFile={(path) =>
-                    patchPane(activeKey, {
-                        openFile: {
-                            path,
-                            n: (paneStates[activeKey]?.openFile?.n ?? 0) + 1,
-                        },
-                    })
-                }
-                runningPrompts={activeState.runningPrompts}
-                onSendPrompt={(text) =>
-                    patchPane(activeKey, {
-                        sendPrompt: {
-                            text,
-                            n: (paneStates[activeKey]?.sendPrompt?.n ?? 0) + 1,
-                        },
-                    })
-                }
-                onOpenSubagent={(id) =>
-                    patchPane(activeKey, {
-                        viewSubagent: id,
-                    })
-                }
-            />
+                    }
+                    runningPrompts={activeState.runningPrompts}
+                    onSendPrompt={(text) =>
+                        patchPane(activeKey, {
+                            sendPrompt: {
+                                text,
+                                n:
+                                    (paneStates[activeKey]?.sendPrompt?.n ??
+                                        0) + 1,
+                            },
+                        })
+                    }
+                    onOpenSubagent={(id) =>
+                        patchPane(activeKey, {
+                            viewSubagent: id,
+                        })
+                    }
+                />
+            </Suspense>
         ) : null;
     // * The sidebar always floats over the content (absolute) instead of pushing it.
     const sidebarOverlay = true;

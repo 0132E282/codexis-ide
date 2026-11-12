@@ -92,6 +92,11 @@ export const aiChatVietnamese: Record<string, string> = {
     'file_context_menu.copy_file': 'Sao chép tệp',
     'file_context_menu.copy_folder': 'Sao chép thư mục',
     'file_context_menu.paste': 'Dán',
+    'file_context_menu.delete_title': 'Xóa "{name}"?',
+    'file_context_menu.delete_file_description':
+        'Tệp này sẽ bị xóa vĩnh viễn và không hoàn tác được.',
+    'file_context_menu.delete_folder_description':
+        'Thư mục này và mọi thứ bên trong sẽ bị xóa vĩnh viễn và không hoàn tác được.',
     'file_context_menu.copy_name': 'Sao chép tên',
     'inline_ask.accept': 'Chấp nhận',
     'inline_ask.ai_edited_the_file':

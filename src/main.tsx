@@ -1,8 +1,8 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Toaster } from 'sonner';
 import './index.css';
 import App from './app';
-import { TerminalWindow } from '@/components/shell/terminal-window';
 import { setLanguage, useLanguage } from '@/lib/i18n';
 import { ideSettings } from '@/lib/ide-settings';
 import { setAppearance, setCodeColors, startTheme } from '@/lib/system-theme';
@@ -23,6 +23,13 @@ ideSettings
     })
     .catch(() => undefined);
 
+// * The separate terminal window is fetched only inside that window, so the main window does not carry the bottom panel's code at start-up.
+const TerminalWindow = lazy(() =>
+    import('@/components/shell/terminal-window').then((module) => ({
+        default: module.TerminalWindow,
+    })),
+);
+
 // * The separate terminal window loads the same page with `?terminal`.
 const isTerminalWindow = new URLSearchParams(window.location.search).has(
     'terminal',
@@ -32,10 +39,18 @@ const isTerminalWindow = new URLSearchParams(window.location.search).has(
 function Root() {
     const language = useLanguage();
 
-    return isTerminalWindow ? (
-        <TerminalWindow key={language} />
-    ) : (
-        <App key={language} />
+    // * Every `toast(...)` of the app shows here; without a Toaster none of them is seen.
+    return (
+        <>
+            {isTerminalWindow ? (
+                <Suspense fallback={null}>
+                    <TerminalWindow key={language} />
+                </Suspense>
+            ) : (
+                <App key={language} />
+            )}
+            <Toaster richColors />
+        </>
     );
 }
 

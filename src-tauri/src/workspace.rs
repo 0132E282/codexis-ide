@@ -375,6 +375,11 @@ impl Workspace {
         self.access(&Unguarded).move_into(path, folder)
     }
 
+    /// Removes a file, a folder with everything in it, or a link (only the link itself): the person's action in the file tree.
+    pub fn delete_for_viewer(&self, path: &str) -> Result<()> {
+        self.access(&Unguarded).delete_entry(path)
+    }
+
     /// Removes a regular file (a new file being discarded); never a link, never a folder.
     pub fn delete(&self, path: &str) -> Result<()> {
         self.access(&Guarded).delete(path)
@@ -715,6 +720,33 @@ impl Access<'_> {
         }
 
         Ok(full)
+    }
+
+    /// Removes an existing file or folder (with all it holds) for good. A link is unlinked and its target is left alone; nothing in a denied folder (`.git`, `node_modules`...) and never the project root.
+    pub fn delete_entry(&self, path: &str) -> Result<()> {
+        let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
+
+        if in_denied_directory(&relative) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        let parent = self.parent_directory_with(&relative, &Unguarded)?;
+
+        // * A folder reached through a link may resolve into a denied one (e.g. `docs` -> `.git`).
+        if in_denied_directory(&self.sandbox().relative(&parent)) {
+            return Err(WorkspaceError::Denied);
+        }
+
+        let full = parent.join(file_name(&relative));
+        let meta = fs::symlink_metadata(&full).map_err(|_| WorkspaceError::NotFound)?;
+        // * `symlink_metadata` does not follow: a link is neither a folder nor a file here, so only the link goes.
+        let removed = if meta.file_type().is_dir() {
+            fs::remove_dir_all(&full)
+        } else {
+            fs::remove_file(&full)
+        };
+
+        removed.map_err(|_| WorkspaceError::WriteFailed)
     }
 
     pub fn delete(&self, path: &str) -> Result<()> {

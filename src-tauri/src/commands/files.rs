@@ -296,6 +296,34 @@ pub fn workspace_copy(
     Ok(copied)
 }
 
+/// Deletes a file or a folder (with everything in it) for good; a link is only unlinked.
+#[tauri::command]
+pub fn workspace_delete(
+    app: AppHandle,
+    state: State<AppState>,
+    root: Option<String>,
+    path: String,
+) -> Result<(), String> {
+    validation::relative_path(&path)?;
+
+    let workspace = state.workspace_for(root.as_deref())?;
+
+    workspace
+        .delete_for_viewer(&path)
+        .map_err(|error| error.to_string())?;
+
+    log_file_event(
+        &app,
+        &NewFileEvent::user(
+            &workspace.root().display().to_string(),
+            &path,
+            FileAction::Delete,
+        ),
+    );
+
+    Ok(())
+}
+
 /// Copies files and folders dropped from outside the app into `folder` (empty: the project root) and returns their new paths. One that cannot be copied is skipped, the rest still go in.
 #[tauri::command]
 pub fn workspace_import(

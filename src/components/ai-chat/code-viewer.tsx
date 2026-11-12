@@ -7,7 +7,10 @@ import { cn } from '@/lib/utils';
 import { QuickOpen } from '@/components/ai-chat/quick-open';
 import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { ide } from '@/lib/ide';
+import { useConfirm } from '@/hooks/use-confirm';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useFullscreen } from '@/hooks/use-fullscreen';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
@@ -172,6 +175,7 @@ export function CodeViewer({
         isDirty,
         closeTab,
         closeTabs,
+        discardTabs,
         confirmDialog,
     } = useFileSession({
         repo,
@@ -325,6 +329,46 @@ export function CodeViewer({
     // * The right-click menu of every file row (tree and change list) and of the open-file tabs shares these.
     // * The file whose new name is being asked (null: none).
     const [renaming, setRenaming] = useState<string | null>(null);
+    const { confirm: confirmRemove, dialog: removeDialog } = useConfirm();
+    // * Deletes for good after asking; the tabs of what was deleted close without saving, then the tree is read again.
+    const removeEntry = useStableCallback(
+        async (path: string, isFolder: boolean) => {
+            if (localRoot === null) {
+                return;
+            }
+
+            const isConfirmed = await confirmRemove({
+                title: t('file_context_menu.delete_title', {
+                    name: path.split('/').pop() ?? path,
+                }),
+                description: isFolder
+                    ? t('file_context_menu.delete_folder_description')
+                    : t('file_context_menu.delete_file_description'),
+                action: t('common.delete'),
+            });
+
+            if (!isConfirmed) {
+                return;
+            }
+
+            try {
+                await ide.workspaceDelete(path, localRoot);
+                discardTabs(
+                    (openPath) =>
+                        openPath === path || openPath.startsWith(`${path}/`),
+                );
+                reload();
+            } catch (caught) {
+                toast.error(
+                    t(
+                        typeof caught === 'string'
+                            ? caught
+                            : 'common.something_went_wrong',
+                    ),
+                );
+            }
+        },
+    );
     const fileActions: FileActions = useMemo(
         () => ({
             copy: (path) => {
@@ -334,13 +378,14 @@ export function CodeViewer({
                 void copyPath(path.split('/').pop() ?? path);
             },
             rename: localRoot === null ? undefined : setRenaming,
+            remove: localRoot === null ? undefined : removeEntry,
             history: localRoot === null ? undefined : onShowHistory,
             ask: onAsk
                 ? (path) =>
                       onAsk({ path, startLine: 0, endLine: 0, text: path })
                 : undefined,
         }),
-        [copyPath, onAsk, localRoot, onShowHistory],
+        [copyPath, onAsk, localRoot, onShowHistory, removeEntry],
     );
 
     // * Stable handlers: the tab bar and the tree rows are memoized, so typing in the editor does not re-render them.
@@ -463,6 +508,7 @@ export function CodeViewer({
         <>
             <span ref={viewerMarker} hidden />
             {confirmDialog}
+            {removeDialog}
             {treePlacement.placement === 'left' && treePanel}
             <RenameDialog
                 path={renaming}

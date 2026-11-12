@@ -46,6 +46,8 @@ import type { TreeNode } from './tree';
 
 // * Top and bottom are not offered: the tree stays beside the editor.
 const TREE_EDGES = ['left', 'right'] as const;
+// * macOS (wry) gives the position of a file dragged in from outside in points, the other systems in physical pixels.
+const DRAG_POSITION_IN_POINTS = navigator.userAgent.includes('Mac');
 
 /** * The far-right column, like an editor's explorer: project switcher, header buttons, the Files / Changes switch, the filter and the file tree. */
 export function TreePanel({
@@ -200,11 +202,10 @@ export function TreePanel({
             return;
         }
 
+        // * The drop position is physical pixels, except on macOS where wry reports it in points (already the CSS pixels).
+        const scale = DRAG_POSITION_IN_POINTS ? 1 : window.devicePixelRatio;
         const target = (x: number, y: number) => {
-            const element = document.elementFromPoint(
-                x / window.devicePixelRatio,
-                y / window.devicePixelRatio,
-            );
+            const element = document.elementFromPoint(x / scale, y / scale);
 
             if (element === null || !rows.current?.contains(element)) {
                 return null;
@@ -265,10 +266,19 @@ export function TreePanel({
                 ide.workspaceImport(hit.folder, payload.paths, localRoot)
                     .then((created) => {
                         reloadRef.current();
+
+                        // * The backend skips what it cannot copy (link, closed folder, too large) and still answers; the gap is told.
+                        const skipped = payload.paths.length - created.length;
+
                         toast.success(
-                            t('tree_panel.imported', {
-                                count: created.length,
-                            }),
+                            skipped > 0
+                                ? t('tree_panel.imported_partial', {
+                                      count: created.length,
+                                      skipped,
+                                  })
+                                : t('tree_panel.imported', {
+                                      count: created.length,
+                                  }),
                         );
                     })
                     .catch((caught) =>

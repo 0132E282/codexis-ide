@@ -602,6 +602,37 @@ export function useFileSession({
         }
     };
 
+    // * Tabs of files that no longer exist (deleted): closed without writing their typed text back, which would bring the files back.
+    const discardTabs = (isGone: (path: string) => boolean) => {
+        const closing = tabs.filter(isGone);
+
+        if (closing.length === 0) {
+            return;
+        }
+
+        closing.forEach((path) => drafts.current.delete(path));
+        const rest = tabs.filter((item) => !isGone(item));
+
+        setTabs(rest);
+
+        if (previewTab !== null && isGone(previewTab)) {
+            setPreviewTab(null);
+        }
+
+        if (selected === null || !isGone(selected)) {
+            return;
+        }
+
+        const next = rest[Math.min(tabs.indexOf(selected), rest.length - 1)];
+
+        if (next === undefined) {
+            setSelected(null);
+            setDraft(null);
+        } else {
+            void openFile(next, true);
+        }
+    };
+
     return {
         selected,
         tabs,
@@ -627,6 +658,7 @@ export function useFileSession({
         isDirty,
         closeTab,
         closeTabs,
+        discardTabs,
         confirmDialog,
     };
 }
