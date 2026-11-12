@@ -8,6 +8,7 @@ import {
     TriangleAlert,
     X,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LocalBranchPopover } from '@/components/ai-chat/branch-popover';
 import { FileIcon } from '@/components/ai-chat/file-icon';
@@ -71,6 +72,43 @@ function Row({
                 className="min-w-0 truncate text-right font-medium"
             >
                 {value}
+            </span>
+        </div>
+    );
+}
+
+function UsageStat({
+    label,
+    value,
+    hint,
+    isWarning = false,
+}: {
+    label: string;
+    value: string;
+    hint?: string;
+    isWarning?: boolean;
+}) {
+    return (
+        <div className="flex min-w-0 flex-col gap-0.5 rounded-md border bg-muted/40 px-2 py-1.5">
+            <span className="flex items-baseline gap-1">
+                <span className="truncate text-base font-semibold tabular-nums">
+                    {value}
+                </span>
+                {hint !== undefined && (
+                    <span
+                        className={cn(
+                            'shrink-0 text-[10px]',
+                            isWarning
+                                ? 'text-destructive'
+                                : 'text-muted-foreground',
+                        )}
+                    >
+                        {hint}
+                    </span>
+                )}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+                {label}
             </span>
         </div>
     );
@@ -311,6 +349,18 @@ export function SessionRail({
         enabled: true,
         refreshKey,
     });
+    const [dismissedPaths, setDismissedPaths] = useState<Set<string>>(
+        () => new Set(),
+    );
+    const [dismissedConversation, setDismissedConversation] =
+        useState(conversation);
+    if (dismissedConversation !== conversation) {
+        setDismissedConversation(conversation);
+        setDismissedPaths(new Set());
+    }
+    const visibleOutputs = (outputs.data ?? []).filter(
+        (file) => !dismissedPaths.has(file.path),
+    );
     return (
         <section
             aria-label={t('session_rail.title')}
@@ -423,20 +473,48 @@ export function SessionRail({
                         </>
                     )}
                 </Block>
-                <Block title={t('session_rail.outputs')}>
+                <Block
+                    title={t('session_rail.outputs')}
+                    action={
+                        visibleOutputs.length > 0 ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                    setDismissedPaths(
+                                        (current) =>
+                                            new Set([
+                                                ...current,
+                                                ...visibleOutputs.map(
+                                                    (file) => file.path,
+                                                ),
+                                            ]),
+                                    )
+                                }
+                                className="h-6 px-1.5 text-xs text-muted-foreground"
+                            >
+                                {t('session_rail.outputs_clear')}
+                            </Button>
+                        ) : undefined
+                    }
+                >
                     {outputs.failed && outputs.data === null ? (
                         <Muted>{t('session_rail.load_failed')}</Muted>
-                    ) : (outputs.data ?? []).length === 0 ? (
+                    ) : visibleOutputs.length === 0 ? (
                         <Muted>{t('session_rail.outputs_empty')}</Muted>
                     ) : (
                         <ul className="flex flex-col">
-                            {(outputs.data ?? []).map((file) => (
-                                <li key={file.path}>
+                            {visibleOutputs.map((file) => (
+                                <li
+                                    key={file.path}
+                                    className="group relative flex items-center rounded-md hover:bg-accent focus-within:bg-accent"
+                                >
                                     <button
                                         type="button"
                                         title={file.path}
                                         onClick={() => onOpenFile(file.path)}
-                                        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-accent"
+                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs"
                                     >
                                         <FileIcon
                                             name={file.path}
@@ -445,6 +523,24 @@ export function SessionRail({
                                         <span className="truncate">
                                             {file.path}
                                         </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label={t(
+                                            'session_rail.outputs_remove',
+                                        )}
+                                        title={t('session_rail.outputs_remove')}
+                                        onClick={() =>
+                                            setDismissedPaths((current) =>
+                                                new Set(current).add(file.path),
+                                            )
+                                        }
+                                        className="mr-1 shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                                    >
+                                        <X
+                                            aria-hidden="true"
+                                            className="size-3.5"
+                                        />
                                     </button>
                                 </li>
                             ))}
@@ -461,24 +557,49 @@ export function SessionRail({
                             )}
                         </Muted>
                     ) : (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-2">
                             {usage.data.conversation === null ||
                             usage.data.conversation.turns === 0 ? (
                                 <Muted>{t('session_rail.usage_empty')}</Muted>
                             ) : (
                                 <>
-                                    <Row
-                                        label={t('session_rail.usage_turns')}
-                                        value={t(
-                                            'session_rail.usage_turns_value',
-                                            {
-                                                turns: usage.data.conversation
-                                                    .turns,
-                                                failed: usage.data.conversation
-                                                    .failedTurns,
-                                            },
-                                        )}
-                                    />
+                                    <div
+                                        title={t('session_rail.usage_note')}
+                                        className="grid grid-cols-3 gap-1.5"
+                                    >
+                                        <UsageStat
+                                            label={t(
+                                                'session_rail.usage_turns_short',
+                                            )}
+                                            value={String(
+                                                usage.data.conversation.turns,
+                                            )}
+                                            hint={t(
+                                                'session_rail.usage_errors_short',
+                                                {
+                                                    failed: usage.data
+                                                        .conversation
+                                                        .failedTurns,
+                                                },
+                                            )}
+                                            isWarning={
+                                                usage.data.conversation
+                                                    .failedTurns > 0
+                                            }
+                                        />
+                                        <UsageStat
+                                            label={t(
+                                                'session_rail.usage_sent_short',
+                                            )}
+                                            value={`~${formatTokens(usage.data.conversation.promptTokens)}`}
+                                        />
+                                        <UsageStat
+                                            label={t(
+                                                'session_rail.usage_received_short',
+                                            )}
+                                            value={`~${formatTokens(usage.data.conversation.answerTokens)}`}
+                                        />
+                                    </div>
                                     <Row
                                         label={t('session_rail.usage_model')}
                                         value={
@@ -493,17 +614,8 @@ export function SessionRail({
                                             )
                                         }
                                     />
-                                    <Row
-                                        label={t('session_rail.usage_sent')}
-                                        value={`~${formatTokens(usage.data.conversation.promptTokens)}`}
-                                    />
-                                    <Row
-                                        label={t('session_rail.usage_received')}
-                                        value={`~${formatTokens(usage.data.conversation.answerTokens)}`}
-                                    />
                                 </>
                             )}
-                            <Muted>{t('session_rail.usage_note')}</Muted>
                         </div>
                     )}
                 </Block>
