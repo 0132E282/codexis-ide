@@ -72,6 +72,7 @@ Biến đặt camelCase; tên lệnh Tauri đặt snake_case (là tên hàm Rust
 ## Quy tắc cho agent
 
 - Đọc `~/.agents/CONTRACT.md` trước khi làm; tuân thủ các ràng buộc cứng trong đó.
+- Trước mỗi lần chạy `git commit`, luôn đọc lại `~/.agents/rules/git.md` trong phiên hiện tại và làm theo checklist trong đó. File quy tắc hiện nằm ở `~/.agents/rules/git.md`; không giả định có bản sao tại `.agent/rules/git.md` hoặc `.agents/rules/git.md` trong repo.
 - Không `git commit`/`git push` khi người dùng chưa yêu cầu rõ trong lượt hiện tại.
 - Không thêm dependency hay tính năng ngoài phạm vi task; cần mở rộng thì hỏi trước.
 - Giữ ổn định tên và shape (tham số, kiểu trả về) của Tauri command: nếu đổi phía Rust (`commands.rs`, `lib.rs`) thì phải đổi `src/lib/api.ts` tương ứng, và ngược lại.
