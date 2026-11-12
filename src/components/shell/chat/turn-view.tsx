@@ -1,4 +1,4 @@
-import { Repeat } from 'lucide-react';
+import { Repeat, Sparkles } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
@@ -139,6 +139,10 @@ export const TurnView = memo(function TurnView({
                     role="status"
                     className="flex items-center gap-2 text-muted-foreground"
                 >
+                    <Sparkles
+                        aria-hidden="true"
+                        className="size-4 animate-pulse text-primary motion-reduce:animate-none"
+                    />
                     {t('turn_view.answering')}
                     <span
                         aria-hidden="true"
