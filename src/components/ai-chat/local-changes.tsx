@@ -66,7 +66,20 @@ export function useLocalChanges(root: string | null): LocalChangeList {
                     cache.set(root, data);
 
                     if (!cancelled) {
-                        setFiles(data.files);
+                        // * The same list again changes nothing (no render every few seconds).
+                        setFiles((current) =>
+                            current !== null &&
+                            current.length === data.files.length &&
+                            current.every(
+                                (file, index) =>
+                                    file.path === data.files[index].path &&
+                                    file.status === data.files[index].status &&
+                                    file.added === data.files[index].added &&
+                                    file.removed === data.files[index].removed,
+                            )
+                                ? current
+                                : data.files,
+                        );
                         setGit(data.git);
                         setError(null);
                     }
@@ -204,7 +217,8 @@ export function LocalChanges({
                 {files.map((file) => {
                     const name = file.path.split('/').pop() ?? file.path;
                     const dir = file.path.split('/').slice(0, -1).join('/');
-                    const isSelected = selected?.path === file.path && !isClosed;
+                    const isSelected =
+                        selected?.path === file.path && !isClosed;
 
                     return (
                         <li

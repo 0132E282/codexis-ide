@@ -86,21 +86,45 @@ export function useFileTree({
         );
 
         request
-            .then((rows) => {
+            .then(async (rows) => {
                 if (cancelled) {
                     return;
                 }
 
-                // * The root was read again: folders that are open are read again too, parents first.
+                // * The root was read again: folders that are open are read again too, and the tree is replaced once with all of them in it (no moment where an open folder is empty).
+                const folders = localRoot
+                    ? [...openDirsRef.current].sort(
+                          (a, b) => a.length - b.length,
+                      )
+                    : [];
+                const listings = await Promise.all(
+                    folders.map((folder) =>
+                        ide
+                            .listDirectory(folder, localRoot as string)
+                            .catch(() => null),
+                    ),
+                );
+
+                if (cancelled) {
+                    return;
+                }
+
                 loadedRef.current.clear();
-                setPaths(rows);
-                [...openDirsRef.current]
-                    .sort((a, b) => a.length - b.length)
-                    .reduce<Promise<void>>(
-                        (chain, folder) => chain.then(() => loadFolder(folder)),
-                        Promise.resolve(),
-                    )
-                    .catch(() => undefined);
+                setPaths(
+                    folders.reduce((merged, folder, index) => {
+                        const children = listings[index];
+
+                        if (children === null) {
+                            return merged;
+                        }
+
+                        loadedRef.current.add(folder);
+
+                        return merged
+                            .filter((path) => path !== `${folder}/`)
+                            .concat(children);
+                    }, rows),
+                );
             })
             .catch((caught) => {
                 if (!cancelled) {

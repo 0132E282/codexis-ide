@@ -59,7 +59,19 @@ export function useFileSession({
     // * The column left of the tree shows the open file, or (local projects) every file that differs from git HEAD.
     const [view, setView] = useState<'files' | 'changes'>('files');
     // * The person's unsaved edit of the open local file (null = none).
-    const [draft, setDraft] = useState<string | null>(null);
+    const [draft, setDraftState] = useState<string | null>(null);
+    // * Counts every change of the text or the open file: a disk read that started before a change is stale and is dropped.
+    const versionRef = useRef(0);
+    const savingRef = useRef(false);
+    const setDraft = (next: string | null) => {
+        versionRef.current += 1;
+        setDraftState(next);
+
+        // * An edit typed back to the disk's text is no longer unsaved.
+        if (next === null && selected !== null) {
+            drafts.current.delete(selected);
+        }
+    };
     // * Where the AI changed the open file: the editor scrolls there (the first changed line of the stored diff).
     // * While an edit the AI just wrote is "typed" into the editor: the text shown (null: the file as it is).
     const [typing, setTyping] = useState<string | null>(null);
@@ -118,18 +130,25 @@ export function useFileSession({
             if (
                 document.hidden ||
                 contentRef.current === null ||
-                draftRef.current !== null
+                draftRef.current !== null ||
+                savingRef.current
             ) {
                 return;
             }
+
+            const startedVersion = versionRef.current;
 
             api.get<{ content?: string; image?: string }>(
                 '/ai-chat/local/file',
                 { params: { root: localRoot, path: selected } },
             )
                 .then(({ data }) => {
+                    // * The answer is stale when typing, a save or another file came in while it was on its way.
                     if (
                         !cancelled &&
+                        draftRef.current === null &&
+                        !savingRef.current &&
+                        versionRef.current === startedVersion &&
                         data.content !== undefined &&
                         data.content !== contentRef.current
                     ) {
@@ -193,6 +212,18 @@ export function useFileSession({
                 ? undefined
                 : latest;
 
+        // * The typed text of the file being left waits in `drafts` until the person comes back (or its tab closes and writes it).
+        if (
+            !discardCurrent &&
+            selected !== null &&
+            selected !== path &&
+            draftRef.current !== null
+        ) {
+            drafts.current.set(selected, draftRef.current);
+        }
+
+        versionRef.current += 1;
+
         // * A local edit that is applied is already in the file: show the file itself, not a diff against itself.
         const applied = localRoot !== null && change?.status === 'applied';
 
@@ -218,7 +249,7 @@ export function useFileSession({
         setTyping(null);
         setContent(null);
         setRevealAt(null);
-        setDraft(null);
+        setDraftState(null);
         setBaseline(null);
         setSaveError(null);
         setImage(null);
@@ -340,8 +371,12 @@ export function useFileSession({
 
             const unsaved = drafts.current.get(path);
 
-            if (unsaved !== undefined && unsaved !== file.content) {
-                setDraft(unsaved);
+            if (unsaved !== undefined) {
+                drafts.current.delete(path);
+
+                if (unsaved !== file.content) {
+                    setDraftState(unsaved);
+                }
             }
 
             if (localRoot && file.content !== undefined) {
@@ -361,7 +396,8 @@ export function useFileSession({
         }
     };
 
-    const save = async () => {
+    // * `format: false` (autosave) writes the text exactly as typed, so the editor's text and caret stay; Cmd/Ctrl+S formats first.
+    const save = async ({ format = true }: { format?: boolean } = {}) => {
         if (
             localRoot === null ||
             selected === null ||
@@ -372,6 +408,8 @@ export function useFileSession({
             return;
         }
 
+        savingRef.current = true;
+        versionRef.current += 1;
         setSaving(true);
         setSaveError(null);
 
@@ -379,10 +417,15 @@ export function useFileSession({
 
         try {
             // * The backend formats the text with Prettier as it is saved, like format-on-save in VS Code.
-            const { data: written } = await api.post<string>(
-                '/ai-chat/local/format',
-                { root: localRoot, path: selected, content: typed },
-            );
+            const written = format
+                ? (
+                      await api.post<string>('/ai-chat/local/format', {
+                          root: localRoot,
+                          path: selected,
+                          content: typed,
+                      })
+                  ).data
+                : typed;
             await api.put('/ai-chat/local/file', {
                 root: localRoot,
                 path: selected,
@@ -391,9 +434,10 @@ export function useFileSession({
             });
             // * A language server (if one runs for this file) hears that the file reached the disk.
             notifyDocumentSaved(localRoot, selected, written);
+            versionRef.current += 1;
             setContent(written);
             // * Typing went on during the request: that newer text stays a draft and is saved next.
-            setDraft((current) => (current === typed ? null : current));
+            setDraftState((current) => (current === typed ? null : current));
             if (draftRef.current === typed) {
                 drafts.current.delete(selected);
             }
@@ -402,6 +446,7 @@ export function useFileSession({
                 errorText(caught, t('use_file_session.could_not_save_the')),
             );
         } finally {
+            savingRef.current = false;
             setSaving(false);
         }
     };
@@ -448,7 +493,10 @@ export function useFileSession({
             return;
         }
 
-        const timer = window.setTimeout(() => void autoSave.current(), 800);
+        const timer = window.setTimeout(
+            () => void autoSave.current({ format: false }),
+            800,
+        );
 
         return () => window.clearTimeout(timer);
     }, [draft, saving, isAutoSaveEnabled]);

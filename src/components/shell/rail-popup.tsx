@@ -187,10 +187,14 @@ export function RailPopup({
                 onPointerUp={endDrag}
                 onPointerCancel={endDrag}
                 onDoubleClick={(event) => {
-                    const target = event.target;
+                    // * The pointer is captured by the popup, so the event's target is the popup itself: the element under the pointer says what was hit.
+                    const target = document.elementFromPoint(
+                        event.clientX,
+                        event.clientY,
+                    );
 
                     if (
-                        target instanceof Element &&
+                        target !== null &&
                         target.closest('[data-rail-drag]') !== null &&
                         target.closest(DRAG_IGNORED) === null
                     ) {

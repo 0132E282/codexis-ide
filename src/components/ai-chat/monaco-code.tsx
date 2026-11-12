@@ -116,6 +116,54 @@ export default function MonacoCode({
 
     useBlameAnnotation(instance, blame ?? null);
 
+    // * A new `value` for the same file (a formatted save, a disk refresh) is applied by the wrapper as an edit of the whole text, which moves the caret to the end: the caret, selection and scroll seen before it are put back.
+    const lastValue = useRef(value);
+    const lastView = useRef<{
+        path: string;
+        selection: ReturnType<editor.IStandaloneCodeEditor['getSelection']>;
+        scrollTop: number;
+        scrollLeft: number;
+    } | null>(null);
+
+    if (lastValue.current !== value) {
+        lastValue.current = value;
+        lastView.current =
+            instance === null
+                ? null
+                : {
+                      path,
+                      selection: instance.getSelection(),
+                      scrollTop: instance.getScrollTop(),
+                      scrollLeft: instance.getScrollLeft(),
+                  };
+    }
+
+    useEffect(() => {
+        const view = lastView.current;
+
+        lastView.current = null;
+
+        if (
+            instance === null ||
+            !editable ||
+            view === null ||
+            view.path !== path ||
+            instance.getValue() !== value
+        ) {
+            return;
+        }
+
+        if (view.selection !== null) {
+            instance.setSelection(view.selection);
+        }
+
+        instance.setScrollPosition({
+            scrollTop: view.scrollTop,
+            scrollLeft: view.scrollLeft,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [value]);
+
     // * ESLint underlines (editable local files only; a file the project cannot lint shows none).
     useEslint({
         instance: editable ? instance : null,

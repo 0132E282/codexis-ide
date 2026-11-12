@@ -16,12 +16,28 @@ export function usePanelWidths(
     chatCollapsed: boolean,
     treeEdge: 'leading' | 'trailing' = 'leading',
 ) {
-    // * The room a column may take: the window less the sidebar and the narrowest tree, and less a usable chat while the chat is open.
+    const chatReserve = chatCollapsed ? 0 : CHAT_MIN_WIDTH;
+    // * The tree may grow only while a file column (320 at least) and a usable chat still fit beside it.
+    const treeMax = () =>
+        Math.max(
+            256,
+            Math.min(
+                TREE_MAX_WIDTH,
+                window.innerWidth - SIDEBAR_WIDTH - 320 - chatReserve,
+            ),
+        );
+    const treeWidth = useResizableWidth(
+        'ai-chat.width.tree',
+        256,
+        256,
+        treeMax,
+        'x',
+        // * The tree on the left of the editor is dragged by its right edge.
+        treeEdge,
+    );
+    // * The room a column may take: the window less the sidebar and the tree as it is now, and less a usable chat while the chat is open.
     const columnMax = () =>
-        window.innerWidth -
-        SIDEBAR_WIDTH -
-        256 -
-        (chatCollapsed ? 0 : CHAT_MIN_WIDTH);
+        window.innerWidth - SIDEBAR_WIDTH - treeWidth.width - chatReserve;
     const fileWidth = useResizableWidth(
         'ai-chat.width.file',
         FILE_PANEL_DEFAULT_WIDTH,
@@ -39,15 +55,6 @@ export function usePanelWidths(
         'x',
         // * With the tree on the left, the change list is beside the chat's side of the tree: dragged by its right edge like the tree.
         treeEdge === 'trailing' ? 'trailing' : 'leading',
-    );
-    const treeWidth = useResizableWidth(
-        'ai-chat.width.tree',
-        256,
-        256,
-        TREE_MAX_WIDTH,
-        'x',
-        // * The tree on the left of the editor is dragged by its right edge.
-        treeEdge,
     );
 
     // * Mounted with the chat open, or the chat was opened again: the columns (only in memory, the saved widths stay) give the chat the room it needs, or it would be squeezed shut at once and leave a gap.

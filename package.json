@@ -4,7 +4,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "start": "tauri dev --additional-watch-folders ../prompts",
+    "start": "tauri dev --no-watch",
+    "start:watch": "tauri dev --additional-watch-folders ../prompts",
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",

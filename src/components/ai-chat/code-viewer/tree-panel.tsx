@@ -129,7 +129,8 @@ export function TreePanel({
     const [ownClosed, setOwnClosed] = useState(false);
     const isClosed = closed ?? ownClosed;
     const setIsClosed = onClosedChange ?? setOwnClosed;
-    const isMaximized = treeWidth.width >= TREE_MAX_WIDTH;
+    const isMaximized =
+        treeWidth.width >= treeWidth.handleProps['aria-valuemax'];
     // * Closing keeps the full column mounted while it slides out (no wait with reduced motion).
     const [previousClosed, setPreviousClosed] = useState(isClosed);
     const [isLeaving, setIsLeaving] = useState(false);
