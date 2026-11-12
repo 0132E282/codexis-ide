@@ -113,15 +113,23 @@ export default function App() {
             void stop.then((unlisten) => unlisten());
         };
     }, [showBottomTab]);
-    // * File > Open… / Open Folder…: pick folders and add them as a project (the sidebar's "Thêm mới dự án" does the same through its dialog).
+    // * File > New Project… / Open Folder… (and New Chat): pick folders and add them as a project (the sidebar's "Thêm mới dự án" does the same through its dialog).
     const createdProjectRef = useRef(workspace.createdProject);
+    // * File > New Chat does what the sidebar's new chat button does; set after leaveGrid exists, so the one-time listener never holds old state.
+    const newChatRef = useRef<() => void>(() => undefined);
 
     useEffect(() => {
         createdProjectRef.current = workspace.createdProject;
     });
 
     useEffect(() => {
-        const stop = onFileMenu(() => {
+        const stop = onFileMenu((action) => {
+            if (action === 'new-chat') {
+                newChatRef.current();
+
+                return;
+            }
+
             void (async () => {
                 try {
                     const folders = await pickFolders();
@@ -371,6 +379,18 @@ export default function App() {
         );
     // * Any other pick in the sidebar leaves the grid for the project or chat picked.
     const leaveGrid = () => setOpenGroup(null);
+    const startNewChat = () => {
+        leaveGrid();
+        // * A new chat opens the chat pane at once, even when a file had folded it away.
+        patchPane(activeKey, {
+            newChat: activeState.newChat + 1,
+            chatCollapsed: false,
+        });
+    };
+
+    useEffect(() => {
+        newChatRef.current = startNewChat;
+    });
     const openMembers = grid.filter((member) => member.group === openGroup);
     const showGrid = openGroup !== null && openMembers.length >= 2;
 
@@ -598,14 +618,7 @@ export default function App() {
                                     })
                                     .catch(() => undefined)
                             }
-                            onNewChat={() => {
-                                leaveGrid();
-                                // * A new chat opens the chat pane at once, even when a file had folded it away.
-                                patchPane(activeKey, {
-                                    newChat: activeState.newChat + 1,
-                                    chatCollapsed: false,
-                                });
-                            }}
+                            onNewChat={startNewChat}
                             onOpenSettings={setSettingsTab}
                             onOpenUsage={() => setUsageOpen(true)}
                             toggle={sidebarToggle}

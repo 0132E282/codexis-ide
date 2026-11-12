@@ -89,6 +89,9 @@ export const aiChatVietnamese: Record<string, string> = {
     'file_card.file_label': 'Tệp · {label}',
     'file_card.image_svg': 'Hình ảnh · SVG',
     'file_card.options_for_title': 'Tuỳ chọn cho {title}',
+    'file_context_menu.copy_file': 'Sao chép tệp',
+    'file_context_menu.copy_folder': 'Sao chép thư mục',
+    'file_context_menu.paste': 'Dán',
     'file_context_menu.copy_name': 'Sao chép tên',
     'inline_ask.accept': 'Chấp nhận',
     'inline_ask.ai_edited_the_file':

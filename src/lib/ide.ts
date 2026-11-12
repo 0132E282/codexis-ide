@@ -253,6 +253,9 @@ export const ide = {
     /** Copies files and folders from outside the project (by full path) into `folder` (empty: the project root); resolves to their new paths. */
     workspaceImport: (folder: string, paths: string[], root?: string) =>
         invoke<string[]>('workspace_import', { root, folder, paths }),
+    /** Copies a file or folder into `folder` (empty: the project root) under a free name (`a copy.txt`); resolves to the new path. */
+    workspaceCopy: (path: string, folder: string, root?: string) =>
+        invoke<string>('workspace_copy', { root, path, folder }),
     projects: () =>
         invoke<{ projects: Project[]; selected: string | null }>(
             'projects_list',
@@ -499,11 +502,15 @@ export const onRemoteConnected = (handler: (count: number) => void) =>
 export const onAgentEvent = (handler: (event: AgentEvent) => void) =>
     listen<AgentEvent>('agent-event', ({ payload }) => handler(payload));
 
-/** Listens to the Terminal menu of the menu bar (`new` or `split`). */
-/** Listens to the File menu of the menu bar (only `open-folder` for now). */
-export const onFileMenu = (handler: (action: 'open-folder') => void) =>
-    listen<'open-folder'>('menu-file', ({ payload }) => handler(payload));
+/** Listens to the File menu of the menu bar (`open-folder` or `new-chat`). */
+export const onFileMenu = (
+    handler: (action: 'open-folder' | 'new-chat') => void,
+) =>
+    listen<'open-folder' | 'new-chat'>('menu-file', ({ payload }) =>
+        handler(payload),
+    );
 
+/** Listens to the Terminal menu of the menu bar (`new` or `split`). */
 export const onTerminalMenu = (handler: (action: 'new' | 'split') => void) =>
     listen<'new' | 'split'>('menu-terminal', ({ payload }) => handler(payload));
 

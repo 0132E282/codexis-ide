@@ -174,6 +174,15 @@ export function TreePanel({
     const [newName, setNewName] = useState('');
     const localRoot = repo.startsWith('local:') ? repo.slice(6) : null;
 
+    // * Relative path of the entry marked by "Copy", waiting to be pasted; forgotten when the project changes.
+    const [copiedPath, setCopiedPath] = useState<string | null>(null);
+    const [copiedRoot, setCopiedRoot] = useState(localRoot);
+
+    if (copiedRoot !== localRoot) {
+        setCopiedRoot(localRoot);
+        setCopiedPath(null);
+    }
+
     const isFullscreen = useFullscreen();
     const rows = useRef<HTMLDivElement>(null);
     // * Latest values for the drop listener, which is set up once per project.
@@ -388,10 +397,39 @@ export function TreePanel({
             </form>
         </li>
     );
+    const pasteEntry = async (folder: string) => {
+        if (copiedPath === null || localRoot === null) {
+            return;
+        }
+
+        try {
+            await ide.workspaceCopy(copiedPath, folder, localRoot);
+            onReload();
+
+            // * The folder opens so the pasted copy shows inside it.
+            if (folder !== '' && !openDirs.has(folder)) {
+                onToggle(folder);
+            }
+        } catch (caught) {
+            toast.error(
+                t(
+                    typeof caught === 'string'
+                        ? caught
+                        : 'common.something_went_wrong',
+                ),
+            );
+        }
+    };
     // * Menus of the rows (and the empty area) start entries through the shared actions.
     const treeActions: FileActions = {
         ...actions,
         create: isLocal ? startCreate : undefined,
+        copyEntry: localRoot === null ? undefined : setCopiedPath,
+        paste:
+            localRoot === null
+                ? undefined
+                : (folder) => void pasteEntry(folder),
+        canPaste: copiedPath !== null,
     };
 
     // * The shared menu: Fill is the existing maximize; Move and Arrange pick the side of the editor.
@@ -599,9 +637,7 @@ export function TreePanel({
                     <Input
                         ref={filterInput}
                         value={filter}
-                        onChange={(event) =>
-                            onFilterChange(event.target.value)
-                        }
+                        onChange={(event) => onFilterChange(event.target.value)}
                         aria-label={t('tree_panel.filter_files')}
                         placeholder={t('tree_panel.filter_files2')}
                         className="h-8"
@@ -666,6 +702,12 @@ export function TreePanel({
                                     onSelect={() => startCreate('', true)}
                                 >
                                     {t('common.new_folder')}
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    disabled={copiedPath === null}
+                                    onSelect={() => void pasteEntry('')}
+                                >
+                                    {t('file_context_menu.paste')}
                                 </ContextMenuItem>
                             </ContextMenuContent>
                         </ContextMenu>

@@ -1,4 +1,4 @@
-//! The native menu bar: the menus Tauri makes by default, a File menu laid out like VS Code's, and a Terminal menu (new and split terminal) before Window. The Terminal items only tell the window, through the `menu-terminal` event; the terminals themselves live in the bottom panel. Open… and Open Folder… add a project (the window shows the folder picker); the other File items have no feature yet and are greyed out.
+//! The native menu bar: the menus Tauri makes by default, a short File menu (New Chat, New Project…, Open Folder…, Close Window), and a Terminal menu (new and split terminal) before Window. The Terminal items only tell the window, through the `menu-terminal` event; the terminals themselves live in the bottom panel. New Chat starts a conversation and New Project… / Open Folder… add a project (the window shows the folder picker); both only tell the window, through the `menu-file` event.
 
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Wry};
@@ -6,15 +6,16 @@ use tauri::{AppHandle, Emitter, Wry};
 /// Event sent to the window when a Terminal menu item is chosen; its payload is `new` or `split`.
 pub const TERMINAL_EVENT: &str = "menu-terminal";
 
-/// Event sent to the window when a File menu item is chosen; its payload is `open-folder`.
+/// Event sent to the window when a File menu item is chosen; its payload is `open-folder` or `new-chat`.
 pub const FILE_EVENT: &str = "menu-file";
 
+const NEW_CHAT: &str = "file-new-chat";
+const NEW_PROJECT: &str = "file-new-project";
 const OPEN_FOLDER: &str = "file-open-folder";
-const OPEN: &str = "file-open";
 const NEW_TERMINAL: &str = "terminal-new";
 const SPLIT_TERMINAL: &str = "terminal-split";
 
-/// A File menu item that has no feature yet: shown, but greyed out.
+/// A menu item that has no feature yet: shown, but greyed out.
 fn unavailable(
     handle: &AppHandle,
     id: &str,
@@ -24,16 +25,8 @@ fn unavailable(
     MenuItem::with_id(handle, id, text, false, accelerator)
 }
 
-/// The File menu in the order of VS Code's.
+/// The File menu, laid out like a chat app's: New Chat, the two ways to add a project, and Close Window.
 fn file_menu(handle: &AppHandle) -> tauri::Result<Submenu<Wry>> {
-    let new_window_with_profile = Submenu::with_id(
-        handle,
-        "file-new-window-profile",
-        "New Window with Profile",
-        false,
-    )?;
-    let open_recent = Submenu::with_id(handle, "file-open-recent", "Open Recent", false)?;
-    let share = Submenu::with_id(handle, "file-share", "Share", false)?;
     let separator = || PredefinedMenuItem::separator(handle);
 
     Submenu::with_items(
@@ -41,61 +34,17 @@ fn file_menu(handle: &AppHandle) -> tauri::Result<Submenu<Wry>> {
         "File",
         true,
         &[
-            &unavailable(
-                handle,
-                "file-new-text-file",
-                "New Text File",
-                Some("CmdOrCtrl+N"),
-            )?,
-            &unavailable(
-                handle,
-                "file-new-file",
-                "New File…",
-                Some("Ctrl+Alt+CmdOrCtrl+N"),
-            )?,
-            &unavailable(
-                handle,
-                "file-new-window",
-                "New Window",
-                Some("Shift+CmdOrCtrl+N"),
-            )?,
-            &new_window_with_profile,
+            &MenuItem::with_id(handle, NEW_CHAT, "New Chat", true, Some("CmdOrCtrl+N"))?,
             &separator()?,
-            &MenuItem::with_id(handle, OPEN, "Open…", true, Some("CmdOrCtrl+O"))?,
-            &MenuItem::with_id(handle, OPEN_FOLDER, "Open Folder…", true, None::<&str>)?,
-            &unavailable(
+            &MenuItem::with_id(handle, NEW_PROJECT, "New Project…", true, None::<&str>)?,
+            &MenuItem::with_id(
                 handle,
-                "file-open-workspace",
-                "Open Workspace from File…",
-                None,
-            )?,
-            &open_recent,
-            &separator()?,
-            &unavailable(handle, "file-add-folder", "Add Folder to Workspace…", None)?,
-            &unavailable(handle, "file-save-workspace-as", "Save Workspace As…", None)?,
-            &unavailable(
-                handle,
-                "file-duplicate-workspace",
-                "Duplicate Workspace",
-                None,
+                OPEN_FOLDER,
+                "Open Folder…",
+                true,
+                Some("CmdOrCtrl+O"),
             )?,
             &separator()?,
-            &unavailable(handle, "file-save", "Save", Some("CmdOrCtrl+S"))?,
-            &unavailable(
-                handle,
-                "file-save-as",
-                "Save As…",
-                Some("Shift+CmdOrCtrl+S"),
-            )?,
-            &unavailable(handle, "file-save-all", "Save All", Some("Alt+CmdOrCtrl+S"))?,
-            &separator()?,
-            &share,
-            &separator()?,
-            &unavailable(handle, "file-auto-save", "Auto Save", None)?,
-            &separator()?,
-            &unavailable(handle, "file-revert", "Revert File", None)?,
-            &unavailable(handle, "file-close-editor", "Close Editor", None)?,
-            &unavailable(handle, "file-close-folder", "Close Folder", None)?,
             &PredefinedMenuItem::close_window(handle, Some("Close Window"))?,
         ],
     )
@@ -212,10 +161,11 @@ pub fn build(handle: &AppHandle) -> tauri::Result<Menu<Wry>> {
     Ok(menu)
 }
 
-/// Passes a Terminal menu choice on to the window; any other item is left to Tauri.
+/// Passes a File or Terminal menu choice on to the window; any other item is left to Tauri.
 pub fn handle_event(app: &AppHandle, event: &MenuEvent) {
     let (name, action) = match event.id().as_ref() {
-        OPEN | OPEN_FOLDER => (FILE_EVENT, "open-folder"),
+        NEW_CHAT => (FILE_EVENT, "new-chat"),
+        NEW_PROJECT | OPEN_FOLDER => (FILE_EVENT, "open-folder"),
         NEW_TERMINAL => (TERMINAL_EVENT, "new"),
         SPLIT_TERMINAL => (TERMINAL_EVENT, "split"),
         _ => return,

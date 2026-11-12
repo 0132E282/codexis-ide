@@ -19,6 +19,11 @@ export type FileActions = {
     create?: (folder: string, isFolder: boolean) => void;
     /** * Shows the git history of the file; missing where there is no local repository. */
     history?: (path: string) => void;
+    /** * Marks the file or folder to paste elsewhere; missing where nothing can be copied (a GitHub repo). */
+    copyEntry?: (path: string) => void;
+    /** * Pastes the marked entry into `folder` (empty: the project root). */
+    paste?: (folder: string) => void;
+    canPaste?: boolean;
     /** * Missing when the chat cannot take a file reference. */
     ask?: (path: string) => void;
 };
@@ -91,6 +96,23 @@ export function FileContextMenu({
                 ))}
                 {items !== undefined && items.length > 0 && (
                     <ContextMenuSeparator />
+                )}
+                {actions.copyEntry !== undefined && (
+                    <ContextMenuItem onSelect={() => actions.copyEntry?.(path)}>
+                        {folder
+                            ? t('file_context_menu.copy_folder')
+                            : t('file_context_menu.copy_file')}
+                    </ContextMenuItem>
+                )}
+                {actions.paste !== undefined && (
+                    <ContextMenuItem
+                        disabled={!actions.canPaste}
+                        onSelect={() =>
+                            actions.paste?.(folder ? path : parentFolder(path))
+                        }
+                    >
+                        {t('file_context_menu.paste')}
+                    </ContextMenuItem>
                 )}
                 <ContextMenuItem onSelect={() => actions.copy(path)}>
                     {t('common.copy_path')}

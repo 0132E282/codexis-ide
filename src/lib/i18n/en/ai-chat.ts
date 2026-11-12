@@ -90,6 +90,9 @@ export const aiChatEnglish: Record<string, string> = {
     'file_card.file_label': 'File · {label}',
     'file_card.image_svg': 'Image · SVG',
     'file_card.options_for_title': 'Options for {title}',
+    'file_context_menu.copy_file': 'Copy file',
+    'file_context_menu.copy_folder': 'Copy folder',
+    'file_context_menu.paste': 'Paste',
     'file_context_menu.copy_name': 'Copy name',
     'inline_ask.accept': 'Accept',
     'inline_ask.ai_edited_the_file':
