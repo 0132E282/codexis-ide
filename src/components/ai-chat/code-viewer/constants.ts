@@ -17,7 +17,7 @@ export const LIVE_REFRESH_MS = 8000;
 /** Width of the sidebar and the width the chat gets back when it is opened again. */
 export const SIDEBAR_WIDTH = 320;
 // * The file tree can be dragged this wide at most.
-export const TREE_MAX_WIDTH = 640;
+export const TREE_MAX_WIDTH = 480;
 export const CHAT_OPEN_WIDTH = 384;
 // * The open file's column starts this wide (dragged wider or narrower); the chat takes the rest.
 export const FILE_PANEL_DEFAULT_WIDTH = 600;

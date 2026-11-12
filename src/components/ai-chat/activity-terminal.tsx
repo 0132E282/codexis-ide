@@ -118,6 +118,7 @@ function ShellTerminal({
             instance.loadAddon(fit);
             instance.open(element);
 
+            let lastResize: { columns: number; rows: number } | null = null;
             const fitNow = () => {
                 // * A hidden terminal has no size to fit to.
                 if (element.offsetWidth === 0 || element.offsetHeight === 0) {
@@ -125,8 +126,19 @@ function ShellTerminal({
                 }
 
                 fit.fit();
+                const columns = instance.cols;
+                const rows = instance.rows;
+
+                if (
+                    lastResize?.columns === columns &&
+                    lastResize.rows === rows
+                ) {
+                    return;
+                }
+
+                lastResize = { columns, rows };
                 void ide
-                    .terminalResize(sessionId, instance.cols, instance.rows)
+                    .terminalResize(sessionId, columns, rows)
                     .catch(() => undefined);
             };
 
@@ -158,9 +170,14 @@ function ShellTerminal({
                 }),
             ]);
 
-            const input = instance.onData((data) => {
-                void ide.terminalWrite(sessionId, data).catch(() => undefined);
-            });
+            // * Each write waits for the one before it: separate invokes may reach the shell out of order, and typing (an IME sends several chunks per key) would come out scrambled or short.
+            let writes: Promise<unknown> = Promise.resolve();
+            const sendInput = (data: string) => {
+                writes = writes
+                    .then(() => ide.terminalWrite(sessionId, data))
+                    .catch(() => undefined);
+            };
+            const input = instance.onData(sendInput);
             const observer = new ResizeObserver(fitNow);
 
             observer.observe(element);
@@ -181,9 +198,7 @@ function ShellTerminal({
                 }
 
                 event.preventDefault();
-                void ide
-                    .terminalWrite(sessionId, `${shellQuote(path)} `)
-                    .catch(() => undefined);
+                sendInput(`${shellQuote(path)} `);
                 instance.focus();
             };
 

@@ -61,6 +61,8 @@ const TreeRow = memo(function TreeRow({
         >
             <button
                 type="button"
+                data-path={node.path}
+                data-folder={isDir ? '' : undefined}
                 draggable
                 onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = 'copy';

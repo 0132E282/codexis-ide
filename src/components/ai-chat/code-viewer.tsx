@@ -475,6 +475,7 @@ export function CodeViewer({
             createRequest={createRequest}
             sourceName={sourceName}
             treeWidth={treeWidth}
+            hasAdjacentPanel={editorVisible}
             repo={repo}
             repos={repos}
             onViewRepo={onViewRepo}

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -53,6 +53,7 @@ const DRAG_POSITION_IN_POINTS = navigator.userAgent.includes('Mac');
 export function TreePanel({
     sourceName,
     treeWidth,
+    hasAdjacentPanel,
     placement,
     repo,
     repos,
@@ -95,6 +96,8 @@ export function TreePanel({
     createRequest?: { isFolder: boolean } | null;
     sourceName: string;
     treeWidth: ReturnType<typeof useResizableWidth>;
+    /** Keep the tree at its dragged width while an editor or changes panel uses the remaining space. */
+    hasAdjacentPanel: boolean;
     /** Left or right of the editor (the Move menu); Fill is the maximize below. */
     placement: ReturnType<typeof usePanelPlacement>;
     repo: string;
@@ -432,6 +435,58 @@ export function TreePanel({
             );
         }
     };
+    // * Ctrl/Cmd+C and Ctrl/Cmd+V on the tree: the focused row, else the selected file, is copied; pasting goes into the focused folder, the parent folder of a file, or the project root.
+    const handleTreeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        const key = event.key.toLowerCase();
+
+        if (
+            !(event.metaKey || event.ctrlKey) ||
+            event.altKey ||
+            event.shiftKey ||
+            (key !== 'c' && key !== 'v') ||
+            localRoot === null
+        ) {
+            return;
+        }
+
+        const target = event.target as HTMLElement;
+
+        if (
+            target.closest('input, textarea, select, [contenteditable]') !==
+            null
+        ) {
+            return;
+        }
+
+        const row = target.closest<HTMLElement>('button[data-path]');
+        const path = row?.dataset.path ?? selected;
+        const isFolder =
+            row !== null && row !== undefined && 'folder' in row.dataset;
+
+        if (key === 'c') {
+            if (path === null || path === '') {
+                return;
+            }
+
+            event.preventDefault();
+            setCopiedPath(path);
+
+            return;
+        }
+
+        if (copiedPath === null) {
+            return;
+        }
+
+        event.preventDefault();
+        void pasteEntry(
+            path === null
+                ? ''
+                : isFolder
+                  ? path
+                  : path.split('/').slice(0, -1).join('/'),
+        );
+    };
     // * Menus of the rows (and the empty area) start entries through the shared actions.
     const treeActions: FileActions = {
         ...actions,
@@ -490,8 +545,9 @@ export function TreePanel({
             aria-label={t('tree_panel.file_tree_name', { name: sourceName })}
             style={{ width: treeWidth.width }}
             className={cn(
-                // * grow: under the bottom panel the column can be wider than the tree's own width; the tree then fills it instead of leaving an empty strip.
-                'relative hidden min-h-0 max-w-full shrink-0 grow flex-col md:flex',
+                // * Without adjacent content, fill the wider bottom-panel column instead of leaving an empty strip.
+                'relative hidden min-h-0 max-w-full shrink-0 flex-col md:flex',
+                !hasAdjacentPanel && 'grow',
                 // * It slides in when opened again (it is not mounted while closed), and slides back out for a moment when closing.
                 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:animate-none',
                 isLeaving
@@ -661,7 +717,9 @@ export function TreePanel({
                 </div>
                 <div
                     ref={rows}
-                    className="flex min-h-0 flex-1 flex-col overflow-y-auto [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"
+                    tabIndex={-1}
+                    onKeyDown={handleTreeKeyDown}
+                    className="flex min-h-0 flex-1 flex-col overflow-y-auto outline-none [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"
                 >
                     {paths === null ? (
                         <LoadingRows rows={10} className="px-2" />
