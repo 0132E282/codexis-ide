@@ -114,10 +114,10 @@ pub async fn terminal_window_open(
     }
 
     let built = WebviewWindowBuilder::new(&app, WINDOW_LABEL, WebviewUrl::App(address.into()))
-    .title("Codexis")
-    .inner_size(980.0, 640.0)
-    .min_inner_size(360.0, 240.0)
-    .build();
+        .title("Codexis")
+        .inner_size(980.0, 640.0)
+        .min_inner_size(360.0, 240.0)
+        .build();
 
     if let Err(error) = built {
         // * Back to the window that had them, so a failed window does not end the shells.
