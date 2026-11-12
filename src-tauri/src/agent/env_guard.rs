@@ -36,7 +36,10 @@ pub fn tool_reads_env(_name: &str, input: &Value) -> bool {
         command
             .split(|character: char| {
                 character.is_whitespace()
-                    || matches!(character, '\'' | '"' | ';' | '|' | '&' | '<' | '>' | '(' | ')')
+                    || matches!(
+                        character,
+                        '\'' | '"' | ';' | '|' | '&' | '<' | '>' | '(' | ')'
+                    )
             })
             .any(is_env_path)
     })

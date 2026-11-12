@@ -55,10 +55,22 @@ fn other_names_are_not_env_paths() {
 #[test]
 fn read_tools_are_checked_by_path_fields() {
     assert!(tool_reads_env("Read", &json!({ "file_path": "/p/.env" })));
-    assert!(tool_reads_env("Grep", &json!({ "pattern": "KEY", "path": ".env.local" })));
-    assert!(tool_reads_env("NotebookRead", &json!({ "notebook_path": "x/.env" })));
-    assert!(!tool_reads_env("Read", &json!({ "file_path": "src/environment.ts" })));
-    assert!(!tool_reads_env("Grep", &json!({ "pattern": ".env", "path": "src" })));
+    assert!(tool_reads_env(
+        "Grep",
+        &json!({ "pattern": "KEY", "path": ".env.local" })
+    ));
+    assert!(tool_reads_env(
+        "NotebookRead",
+        &json!({ "notebook_path": "x/.env" })
+    ));
+    assert!(!tool_reads_env(
+        "Read",
+        &json!({ "file_path": "src/environment.ts" })
+    ));
+    assert!(!tool_reads_env(
+        "Grep",
+        &json!({ "pattern": ".env", "path": "src" })
+    ));
 }
 
 #[test]

@@ -399,9 +399,8 @@ fn account_in_log(log: &str) -> Option<String> {
 
 /// The email after the last marker of `line` that is followed by one; later text on the line is ignored.
 fn email_in_line(line: &str) -> Option<String> {
-    line.rmatch_indices(SIGNED_IN_MARKER).find_map(|(start, marker)| {
-        email_at_start(&line[start + marker.len()..])
-    })
+    line.rmatch_indices(SIGNED_IN_MARKER)
+        .find_map(|(start, marker)| email_at_start(&line[start + marker.len()..]))
 }
 
 /// The first token of `text` when it looks like an email: one `@`, a local part, and a dotted domain.
