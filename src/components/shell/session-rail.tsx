@@ -316,7 +316,10 @@ export function SessionRail({
             aria-label={t('session_rail.title')}
             className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
         >
-            <header className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
+            <header
+                data-rail-drag
+                className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2"
+            >
                 <h2 className="truncate text-sm font-medium">
                     {t('session_rail.title')}
                 </h2>

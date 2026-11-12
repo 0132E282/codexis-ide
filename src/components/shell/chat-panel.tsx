@@ -64,6 +64,7 @@ export function ChatPanel({
     onRunningPrompts,
     collapsed,
     popup,
+    onOpenRail,
     onTooNarrow,
     viewSubagent,
     onLeaveSubagent,
@@ -105,6 +106,8 @@ export function ChatPanel({
     collapsed: boolean;
     /** Laid above the top of the message box (the session rail popup). */
     popup?: ReactNode;
+    /** Opens (or closes) the session rail popup: the context ring and `/context` call it. */
+    onOpenRail?: () => void;
     /** Told when the editor columns have squeezed the chat narrower than it can be used; the app then closes it. */
     onTooNarrow: () => void;
     /** The sub-agent picked in the sidebar: the chat shows what it is doing instead of the conversation. */
@@ -237,7 +240,6 @@ export function ChatPanel({
         },
     });
 
-    const [contextOpen, setContextOpen] = useState(false);
     const runCommand = useStableCallback((command: BuiltinCommand) => {
         switch (command) {
             case 'clear':
@@ -260,7 +262,7 @@ export function ChatPanel({
 
                 break;
             case 'context':
-                setContextOpen(true);
+                onOpenRail?.();
 
                 break;
         }
@@ -449,18 +451,7 @@ export function ChatPanel({
                         )}
                     </div>
                     <span className="flex shrink-0 items-center gap-0.5">
-                        <ContextPanel
-                            usage={context}
-                            cli={cli}
-                            open={contextOpen}
-                            onOpenChange={setContextOpen}
-                            onCompact={
-                                cli === 'claude'
-                                    ? () => runCommand('compact')
-                                    : undefined
-                            }
-                            onClear={() => runCommand('clear')}
-                        />
+                        <ContextPanel usage={context} onClick={onOpenRail} />
                         {headerActions}
                     </span>
                 </header>

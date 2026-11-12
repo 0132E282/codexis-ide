@@ -535,6 +535,7 @@ export function WorkspacePane({
                             onPatch(pane.key, { viewSubagent: null })
                         }
                         popup={railPopup}
+                        onOpenRail={toggleRail}
                         collapsed={
                             state.chatCollapsed &&
                             !filesHidden &&

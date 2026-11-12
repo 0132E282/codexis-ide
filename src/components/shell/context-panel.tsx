@@ -1,9 +1,4 @@
 import { Button } from '@/components/ui/button';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
 import type { ContextUsage } from '@/components/shell/chat/turn-events';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -13,16 +8,8 @@ export type { ContextUsage };
 type ContextPanelProps = {
     /** * Null until a turn reports usage (or after the model changed). */
     usage: ContextUsage | null;
-    /** * CLI in use (`claude` or `codex`), shown beside the model. */
-    cli?: string;
     className?: string;
-    /** Controlled state, so a command (`/context`) can open the popover. */
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
-    /** Compacts the session (shown only when given: the Claude CLI has `/compact`). */
-    onCompact?: () => void;
-    /** Starts a new chat without the old history. */
-    onClear?: () => void;
+    onClick?: () => void;
 };
 
 /** * Compact count: 203900 → `203.9k`, 400000 → `400k`. Only formats; the backend does the maths. */
@@ -32,88 +19,6 @@ export function formatTokens(count: number): string {
     }
 
     return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-muted-foreground">{label}</span>
-            <span className="truncate font-medium tabular-nums">{value}</span>
-        </div>
-    );
-}
-
-function UsageBar({ percent }: { percent: number }) {
-    const clamped = Math.min(100, Math.max(0, percent));
-
-    return (
-        <div
-            role="progressbar"
-            aria-label={t('context_panel.trigger')}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(clamped)}
-            className="h-2 w-full overflow-hidden rounded-full bg-muted"
-        >
-            <div
-                className="h-full rounded-full bg-primary transition-[width] duration-300 motion-reduce:transition-none"
-                style={{ width: `${clamped}%` }}
-            />
-        </div>
-    );
-}
-
-function Details({ usage, cli }: { usage: ContextUsage; cli?: string }) {
-    const { percent, window } = usage;
-    const summary =
-        window === null
-            ? t('context_panel.used_only', { used: formatTokens(usage.used) })
-            : t('context_panel.used_of', {
-                  used: formatTokens(usage.used),
-                  window: formatTokens(window),
-              });
-
-    return (
-        <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-                <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="font-medium tabular-nums">{summary}</span>
-                    {percent !== null && (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                            {t('context_panel.percent_used', {
-                                percent: Math.round(percent),
-                            })}
-                        </span>
-                    )}
-                </div>
-                {percent !== null && <UsageBar percent={percent} />}
-            </div>
-            <div className="flex flex-col gap-1.5">
-                <Row
-                    label={t('context_panel.input')}
-                    value={formatTokens(usage.input)}
-                />
-                <Row
-                    label={t('context_panel.cache_read')}
-                    value={formatTokens(usage.cacheRead)}
-                />
-                <Row
-                    label={t('context_panel.cache_creation')}
-                    value={formatTokens(usage.cacheCreation)}
-                />
-                <Row
-                    label={t('context_panel.output')}
-                    value={formatTokens(usage.output)}
-                />
-            </div>
-            <div className="flex flex-col gap-1.5 border-t pt-2">
-                <Row label={t('context_panel.model')} value={usage.model} />
-                {cli !== undefined && (
-                    <Row label={t('context_panel.cli')} value={cli} />
-                )}
-            </div>
-        </div>
-    );
 }
 
 /** * Ring that fills with the share of the context window used (empty when unknown), like the one in Claude. */
@@ -153,73 +58,20 @@ function ContextRing({ percent }: { percent: number | null }) {
     );
 }
 
-/** * Button that opens a popover with how much of the model's context the chat has used. It gets the numbers and the actions by props. */
-export function ContextPanel({
-    usage,
-    cli,
-    className,
-    open,
-    onOpenChange,
-    onCompact,
-    onClear,
-}: ContextPanelProps) {
-    const run = (action: () => void) => () => {
-        onOpenChange?.(false);
-        action();
-    };
-
+/** * Button holding the ring of how much of the model's context the chat has used; it opens the session rail through `onClick`. */
+export function ContextPanel({ usage, className, onClick }: ContextPanelProps) {
     return (
-        <Popover open={open} onOpenChange={onOpenChange}>
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={cn('text-muted-foreground', className)}
-                    aria-label={t('context_panel.trigger')}
-                    title={t('context_panel.trigger')}
-                >
-                    <ContextRing percent={usage?.percent ?? null} />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 max-w-[90vw]">
-                <h3 className="mb-3 text-sm font-medium">
-                    {t('context_panel.title')}
-                </h3>
-                {usage === null ? (
-                    <p className="text-xs text-muted-foreground">
-                        {t('context_panel.empty')}
-                    </p>
-                ) : (
-                    <Details usage={usage} cli={cli} />
-                )}
-                {(onCompact || onClear) && (
-                    <div className="mt-3 flex gap-2 border-t pt-3">
-                        {onCompact && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={run(onCompact)}
-                            >
-                                {t('context_panel.compact')}
-                            </Button>
-                        )}
-                        {onClear && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex-1"
-                                onClick={run(onClear)}
-                            >
-                                {t('context_panel.clear')}
-                            </Button>
-                        )}
-                    </div>
-                )}
-            </PopoverContent>
-        </Popover>
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={cn('text-muted-foreground', className)}
+            aria-label={t('context_panel.trigger')}
+            title={t('context_panel.trigger')}
+            data-rail-toggle=""
+            onClick={onClick}
+        >
+            <ContextRing percent={usage?.percent ?? null} />
+        </Button>
     );
 }
