@@ -532,6 +532,7 @@ struct TauriHopRunner<'a> {
     run_id: &'a str,
     root: &'a Path,
     add_dirs: &'a [String],
+    blocked_dirs: &'a [String],
     language: &'a str,
     agent_team: bool,
     /// The AI the chat talks to: it keeps its model and its chat session events.
@@ -565,6 +566,7 @@ impl HopRunner for TauriHopRunner<'_> {
                 model: if own { self.model } else { None },
                 mode: mode_for_hop(self.mode),
                 add_dirs: self.add_dirs,
+                blocked_dirs: self.blocked_dirs,
                 fork: false,
             },
             language: self.language,
@@ -628,6 +630,7 @@ pub async fn agent_send(
         model: model.as_deref(),
         mode: mode.as_deref(),
         add_dirs: &[],
+        blocked_dirs: &[],
         fork,
     }
     .validate()?;
@@ -647,6 +650,12 @@ pub async fn agent_send(
         .iter()
         .map(|extra| Ok(state.workspace_for(Some(extra))?.root().to_path_buf()))
         .collect::<Result<Vec<_>, String>>()?;
+    // * In worktree mode the CLI works in the copies only: every saved project folder, the originals of this chat's projects included, is closed to it.
+    let blocked_dirs = if worktree.is_some() {
+        state.saved_roots()
+    } else {
+        Vec::new()
+    };
     // * Creating a worktree runs git, so it happens on the blocking pool.
     let (root, add_dirs) = super::blocking("agent.workdir_failed", {
         let app = app.clone();
@@ -713,6 +722,7 @@ pub async fn agent_send(
                 model: model.as_deref(),
                 mode: mode.as_deref(),
                 add_dirs: &add_dirs,
+                blocked_dirs: &blocked_dirs,
                 fork,
             },
             language: &language,
@@ -742,6 +752,7 @@ pub async fn agent_send(
                         run_id: &run_id,
                         root: &root,
                         add_dirs: &add_dirs,
+                        blocked_dirs: &blocked_dirs,
                         language: &language,
                         agent_team,
                         chat_cli: cli.kind(),

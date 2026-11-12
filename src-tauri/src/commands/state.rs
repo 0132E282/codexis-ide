@@ -99,6 +99,15 @@ impl AppState {
         Workspace::open(Path::new(root)).map_err(|error| error.to_string())
     }
 
+    /// The first folder (the root) of every saved project.
+    pub(super) fn saved_roots(&self) -> Vec<String> {
+        self.lock_projects()
+            .projects()
+            .iter()
+            .filter_map(|project| project.folders.first().cloned())
+            .collect()
+    }
+
     /// The root path of the workspace at `root`, the key chats are stored under.
     pub(super) fn workspace_key(&self, root: Option<&str>) -> Result<String, String> {
         Ok(self.workspace_for(root)?.root().display().to_string())

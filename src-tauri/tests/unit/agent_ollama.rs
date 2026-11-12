@@ -7,6 +7,7 @@ fn ollama_runs_the_claude_cli_with_the_selected_model() {
         model: Some("qwen3:8b"),
         mode: None,
         add_dirs: &[],
+        blocked_dirs: &[],
         fork: false,
     };
     let args = OllamaAgent.turn_args(&options);

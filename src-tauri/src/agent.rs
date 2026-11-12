@@ -71,6 +71,8 @@ pub struct TurnOptions<'a> {
     pub mode: Option<&'a str>,
     /// More project folders the CLI may work in, next to the one it runs in.
     pub add_dirs: &'a [String],
+    /// Folders the CLI must not read or write: other saved projects and the originals of the worktree copies (Claude only).
+    pub blocked_dirs: &'a [String],
     /// Resume `session` into a new session id (Claude only: `--fork-session`), so a turn started while another one still runs on the same session does not write into its file.
     pub fork: bool,
 }

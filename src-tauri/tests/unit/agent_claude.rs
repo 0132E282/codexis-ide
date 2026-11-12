@@ -7,6 +7,7 @@ fn mode_args(mode: Option<&str>) -> Vec<String> {
         model: None,
         mode,
         add_dirs: &[],
+        blocked_dirs: &[],
         fork: false,
     })
 }
@@ -19,6 +20,7 @@ fn claude_arguments_follow_the_documented_order() {
         model: Some("opus"),
         mode: Some(ASK_MODE),
         add_dirs: &dirs,
+        blocked_dirs: &[],
         fork: false,
     });
 
@@ -51,6 +53,35 @@ fn claude_arguments_follow_the_documented_order() {
             "/a"
         ]
     );
+}
+
+#[test]
+fn blocked_dirs_become_deny_rules_and_a_prompt_note() {
+    let blocked = vec!["/Users/a/b".to_string()];
+    let args = ClaudeAgent.turn_args(&TurnOptions {
+        session: None,
+        model: None,
+        mode: None,
+        add_dirs: &[],
+        blocked_dirs: &blocked,
+        fork: false,
+    });
+    let at = args.iter().position(|arg| arg == "--settings").unwrap();
+    let settings: serde_json::Value = serde_json::from_str(&args[at + 1]).unwrap();
+
+    assert_eq!(
+        settings["permissions"]["deny"],
+        serde_json::json!(["Read(//Users/a/b/**)", "Edit(//Users/a/b/**)"])
+    );
+    assert!(args[6].contains("Worktree mode"));
+}
+
+#[test]
+fn no_blocked_dirs_means_no_settings() {
+    let args = mode_args(None);
+
+    assert!(!args.iter().any(|arg| arg == "--settings"));
+    assert!(!args[6].contains("Worktree mode"));
 }
 
 #[test]

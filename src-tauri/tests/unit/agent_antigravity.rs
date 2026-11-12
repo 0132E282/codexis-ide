@@ -34,6 +34,7 @@ fn arguments_carry_model_session_and_attached_prompt() {
         model: Some("gemini-3.8-flash-low"),
         mode: None,
         add_dirs: &[],
+        blocked_dirs: &[],
         fork: false,
     };
 
