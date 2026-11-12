@@ -128,6 +128,10 @@ export function Sidebar({
     hasWindowButtons?: boolean;
 }) {
     const [query, setQuery] = useState('');
+    // * The project whose conversations the person folded by clicking it again; undefined: none (null is the start-up folder).
+    const [foldedId, setFoldedId] = useState<string | null | undefined>(
+        undefined,
+    );
     const { statuses } = useAuthStatus(false);
     const github = statuses?.find((status) => status.provider === 'github');
 
@@ -247,6 +251,7 @@ export function Sidebar({
                 )}
                 {visible.map((row) => {
                     const active = selected && row.id === activeId;
+                    const folded = foldedId === row.id;
 
                     return (
                         <Fragment key={row.id ?? 'startup'}>
@@ -254,11 +259,25 @@ export function Sidebar({
                                 <button
                                     type="button"
                                     aria-current={active}
-                                    onClick={() =>
-                                        row.id === null
-                                            ? onSelectStartup()
-                                            : onSelect(row.id)
-                                    }
+                                    aria-expanded={active ? !folded : undefined}
+                                    onClick={() => {
+                                        // * Clicking the open project again folds or unfolds its conversations.
+                                        if (active) {
+                                            setFoldedId(
+                                                folded ? undefined : row.id,
+                                            );
+
+                                            return;
+                                        }
+
+                                        setFoldedId(undefined);
+
+                                        if (row.id === null) {
+                                            onSelectStartup();
+                                        } else {
+                                            onSelect(row.id);
+                                        }
+                                    }}
                                     className={cn(
                                         'flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                                         active &&
@@ -309,46 +328,66 @@ export function Sidebar({
                                 </Button>
                             </div>
                             {active && (
-                                <button
-                                    type="button"
-                                    onClick={onNewChat}
-                                    className="mt-0.5 ml-5 flex w-[calc(100%-1.25rem)] items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                <div
+                                    inert={folded}
+                                    className={cn(
+                                        // * The conversations stay mounted so folding can slide them shut: the row height eases between 0 and its content.
+                                        'animate-in fade-in slide-in-from-top-2 grid duration-200 ease-out motion-reduce:animate-none motion-reduce:transition-none',
+                                        'transition-[grid-template-rows,opacity]',
+                                        folded
+                                            ? 'grid-rows-[0fr] opacity-0'
+                                            : 'grid-rows-[1fr] opacity-100',
+                                    )}
                                 >
-                                    <Plus
-                                        aria-hidden="true"
-                                        className="size-4"
-                                    />
-                                    {t('sidebar.new_conversation')}
-                                </button>
-                            )}
-                            {active && (
-                                <ul className="ml-5 flex flex-col gap-0.5">
-                                    {conversations.map((conversation) => (
-                                        <SidebarConversationItem
-                                            key={conversation.id}
-                                            conversation={conversation}
-                                            isCurrent={
-                                                conversation.id ===
-                                                currentConversation
-                                            }
-                                            inGrid={gridConversations.has(
-                                                conversation.id,
+                                    <div className="min-h-0 overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={onNewChat}
+                                            className="mt-0.5 ml-5 flex w-[calc(100%-1.25rem)] items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            <Plus
+                                                aria-hidden="true"
+                                                className="size-4"
+                                            />
+                                            {t('sidebar.new_conversation')}
+                                        </button>
+                                        <ul className="ml-5 flex flex-col gap-0.5">
+                                            {conversations.map(
+                                                (conversation) => (
+                                                    <SidebarConversationItem
+                                                        key={conversation.id}
+                                                        conversation={
+                                                            conversation
+                                                        }
+                                                        isCurrent={
+                                                            conversation.id ===
+                                                            currentConversation
+                                                        }
+                                                        inGrid={gridConversations.has(
+                                                            conversation.id,
+                                                        )}
+                                                        activeRoot={activeRoot}
+                                                        targetGroup={
+                                                            targetGroup
+                                                        }
+                                                        maxGrid={maxGrid}
+                                                        gridGroups={gridGroups}
+                                                        nextGroup={nextGroup}
+                                                        onOpenConversation={
+                                                            onOpenConversation
+                                                        }
+                                                        onDeleteConversation={
+                                                            onDeleteConversation
+                                                        }
+                                                        onToggleGrid={
+                                                            onToggleGrid
+                                                        }
+                                                    />
+                                                ),
                                             )}
-                                            activeRoot={activeRoot}
-                                            targetGroup={targetGroup}
-                                            maxGrid={maxGrid}
-                                            gridGroups={gridGroups}
-                                            nextGroup={nextGroup}
-                                            onOpenConversation={
-                                                onOpenConversation
-                                            }
-                                            onDeleteConversation={
-                                                onDeleteConversation
-                                            }
-                                            onToggleGrid={onToggleGrid}
-                                        />
-                                    ))}
-                                </ul>
+                                        </ul>
+                                    </div>
+                                </div>
                             )}
                         </Fragment>
                     );

@@ -20,8 +20,8 @@ const CHAT_ROLE: &str = concat!(
 /// What plan mode adds to the chat prompt (`prompts/chat/plan.md`): once the plan is approved, each task goes to a sub-agent and its status is kept up to date.
 const PLAN_ROLE: &str = include_str!("../../../prompts/chat/plan.md");
 
-/// What worktree mode adds to the chat prompt (`prompts/chat/worktree.md`): the CLI stays in the copies it was given.
-const WORKTREE_ROLE: &str = include_str!("../../../prompts/chat/worktree.md");
+/// What the chat prompt gets when some saved projects are closed (`prompts/chat/selected-projects.md`): the CLI stays in the selected projects.
+const SELECTED_PROJECTS_ROLE: &str = include_str!("../../../prompts/chat/selected-projects.md");
 
 /// The `--settings` JSON that denies reading and editing `dirs`: each absolute folder gets a `Read` and an `Edit` rule, where `//` marks an absolute path.
 fn deny_settings(dirs: &[String]) -> String {
@@ -64,7 +64,7 @@ impl AgentCli for ClaudeAgent {
 
                 if !options.blocked_dirs.is_empty() {
                     prompt.push_str("\n\n");
-                    prompt.push_str(WORKTREE_ROLE);
+                    prompt.push_str(SELECTED_PROJECTS_ROLE);
                 }
 
                 prompt
@@ -119,7 +119,7 @@ impl AgentCli for ClaudeAgent {
             args.push(dir.clone());
         }
 
-        // * Worktree mode: the saved projects the chat has not selected stay closed to the CLI.
+        // * The saved projects the chat has not selected stay closed to the CLI.
         if !options.blocked_dirs.is_empty() {
             args.push("--settings".to_string());
             args.push(deny_settings(options.blocked_dirs));

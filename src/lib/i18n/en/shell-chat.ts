@@ -52,6 +52,9 @@ export const shellChatEnglish: Record<string, string> = {
         'The AI will run commands and change or delete files without asking you. Use it only when you trust the task and the project.',
     'project_row.bypass_title': 'Bypass permissions?',
     'project_row.settings': 'Settings',
+    'project_row.worktree': 'Worktree',
+    'project_row.worktree_hint':
+        'Run the AI on its own git branch, in a copy of the project; the original stays untouched',
     'project_row.choose_mode': 'Choose mode',
     'project_row.choose_working_projects': 'Choose working projects',
     'project_row.enable_agent_team_experimental':

@@ -424,6 +424,34 @@ fn working_folder(
     git::ensure_worktree(project, &base, name).map_err(|error| error.to_string())
 }
 
+/// The folders closed to the CLI, each once: the saved projects the chat has not selected (neither the main project nor an added one). In worktree mode the CLI works in copies, so the original main project and added folders are closed too.
+fn blocked_for_selection(
+    saved: &[String],
+    project_root: &str,
+    extras: &[String],
+    worktree: bool,
+) -> Vec<String> {
+    let mut blocked: Vec<String> = Vec::new();
+
+    for folder in saved {
+        let is_selected = folder == project_root || extras.contains(folder);
+
+        if (worktree || !is_selected) && !blocked.contains(folder) {
+            blocked.push(folder.clone());
+        }
+    }
+
+    if worktree {
+        for folder in std::iter::once(&project_root.to_string()).chain(extras) {
+            if !blocked.contains(folder) {
+                blocked.push(folder.clone());
+            }
+        }
+    }
+
+    blocked
+}
+
 /// The environment of a turn of `cli`: the saved API keys and the agent-team switch go only to the CLIs that read them, and the turn runs under the account chosen for this CLI.
 fn turn_environment(
     app: &AppHandle,
@@ -657,21 +685,17 @@ pub async fn agent_send(
         .iter()
         .map(|extra| Ok(state.workspace_for(Some(extra))?.root().to_path_buf()))
         .collect::<Result<Vec<_>, String>>()?;
-    // * In worktree mode only the saved projects this chat has not selected are closed to the CLI; the main folder and the added folders of the chat stay writable.
-    let blocked_dirs = if worktree.is_some() {
-        state
-            .saved_roots()
-            .into_iter()
-            .filter(|saved| {
-                let saved = Path::new(saved);
-
-                saved != project_root.as_path()
-                    && !extra_folders.iter().any(|folder| saved == folder.as_path())
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // * Only the selected projects are open to the CLI: every other saved project is closed to it. In worktree mode the originals are closed too, so the CLI cannot leave its copies.
+    let extras = extra_folders
+        .iter()
+        .map(|folder| folder.display().to_string())
+        .collect::<Vec<_>>();
+    let blocked_dirs = blocked_for_selection(
+        &state.saved_roots(),
+        &project_root.display().to_string(),
+        &extras,
+        worktree.is_some(),
+    );
     // * Creating a worktree runs git, so it happens on the blocking pool.
     let (root, add_dirs) = super::blocking("agent.workdir_failed", {
         let app = app.clone();

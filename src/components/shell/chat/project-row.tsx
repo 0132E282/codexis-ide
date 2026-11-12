@@ -3,6 +3,7 @@ import {
     ChevronDown,
     CircleHelp,
     FilePen,
+    GitBranch,
     Laptop,
     ListChecks,
     ShieldOff,
@@ -46,13 +47,14 @@ export function ProjectRow({
     otherProjects,
     extraRoots,
     onExtraRootsChange,
-    worktree,
     compact = false,
     cli,
     mode,
     onModeChange,
     agentTeam,
     onAgentTeamChange,
+    worktree,
+    onWorktreeChange,
 }: {
     busy: boolean;
     /** Name of the project this chat belongs to. */
@@ -62,15 +64,16 @@ export function ProjectRow({
     /** Folders of the other projects the AI may also work in. */
     extraRoots: string[];
     onExtraRootsChange: (roots: string[]) => void;
-    /** Worktree mode (read only; on by itself when other projects are picked): the AI works on its own git branch, in a copy of the project. */
-    worktree: boolean;
-    /** One "Settings" menu holds Worktree, the permission mode and agent team, so the row stays short (every chat). */
+    /** One "Settings" menu holds the permission mode and agent team, so the row stays short (every chat). */
     compact?: boolean;
     cli: AgentCli;
     mode: string;
     onModeChange: (mode: string) => void;
     agentTeam: boolean;
     onAgentTeamChange: (on: boolean) => void;
+    /** Worktree (off by default): the AI works on its own git branch, in a copy of the project. */
+    worktree: boolean;
+    onWorktreeChange: (on: boolean) => void;
 }) {
     const modeLabel = t(
         MODES.find((option) => option.value === mode)?.label ?? mode,
@@ -208,15 +211,20 @@ export function ProjectRow({
                                 key={other.root}
                                 checked={extraRoots.includes(other.root)}
                                 onSelect={(event) => event.preventDefault()}
-                                onCheckedChange={(on) =>
+                                onCheckedChange={(on) => {
                                     onExtraRootsChange(
                                         on
                                             ? [...extraRoots, other.root]
                                             : extraRoots.filter(
                                                   (root) => root !== other.root,
                                               ),
-                                    )
-                                }
+                                    );
+
+                                    // * Picking more projects lets the AI read, edit and delete in them without asking.
+                                    if (on && cli === 'claude') {
+                                        onModeChange('bypassPermissions');
+                                    }
+                                }}
                             >
                                 {other.name}
                             </DropdownMenuCheckboxItem>
@@ -262,6 +270,17 @@ export function ProjectRow({
                             )
                         }
                     >
+                        <DropdownMenuCheckboxItem
+                            checked={worktree}
+                            onSelect={(event) => event.preventDefault()}
+                            onCheckedChange={(on) =>
+                                onWorktreeChange(on === true)
+                            }
+                            title={t('project_row.worktree_hint')}
+                        >
+                            <GitBranch aria-hidden="true" />
+                            {t('project_row.worktree')}
+                        </DropdownMenuCheckboxItem>
                         {cli === 'claude' && (
                             <>
                                 <DropdownMenuCheckboxItem
@@ -288,6 +307,19 @@ export function ProjectRow({
                 </DropdownMenu>
             ) : (
                 <>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        aria-pressed={worktree}
+                        title={t('project_row.worktree_hint')}
+                        onClick={() => onWorktreeChange(!worktree)}
+                        className={`ml-1 gap-1.5 ${worktree ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
+                    >
+                        <GitBranch aria-hidden="true" />
+                        {t('project_row.worktree')}
+                    </Button>
                     {cli === 'claude' && (
                         <>
                             <DropdownMenu

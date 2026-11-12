@@ -68,7 +68,6 @@ export function WorkspacePane({
     sidebarToggle,
     hasWindowButtons,
     bottomPanel,
-    accountMenu,
     onToggleTerminal,
     onToggleBackground,
     onTogglePlans,
@@ -95,7 +94,6 @@ export function WorkspacePane({
     /** The bottom panel when it sits under the work area: drawn under the file area only, never under the main chat. */
     bottomPanel: ReactNode;
     /** The account menu button for the file tree header. */
-    accountMenu: ReactNode;
     onToggleTerminal: () => void;
     onToggleBackground: () => void;
     onTogglePlans: () => void;
@@ -188,6 +186,13 @@ export function WorkspacePane({
                 hasWindowButtons && !treeLeadsWindow && 'pl-16',
             )}
         >
+            {sidebarToggle}
+        </span>
+    );
+    // * Folded sidebar and the open tree is the leftmost column: the toggle heads the tree's toolbar (after the window buttons), not the chat header.
+    const toggleInTree = sidebarCollapsed && treeLeadsWindow;
+    const treeSidebarToggle = (
+        <span className={cn('flex', hasWindowButtons && 'pl-16')}>
             {sidebarToggle}
         </span>
     );
@@ -364,11 +369,13 @@ export function WorkspacePane({
                 trailing={
                     <CodeViewer
                         alwaysShowEditor
-                        accountMenu={accountMenu}
                         treeClosed={treeClosed}
                         onTreeClosedChange={setTreeClosed}
                         chatCollapsed={state.chatCollapsed}
                         treePlacement={treePlacement}
+                        toolbarStart={
+                            toggleInTree ? treeSidebarToggle : undefined
+                        }
                         tabsStart={
                             (state.chatCollapsed && sidebarCollapsed) ||
                             filesLeadWindow
@@ -437,7 +444,9 @@ export function WorkspacePane({
                         projects={projects}
                         fill
                         headerStart={
-                            sidebarCollapsed && !filesLeadWindow
+                            sidebarCollapsed &&
+                            !filesLeadWindow &&
+                            !toggleInTree
                                 ? windowedSidebarToggle
                                 : null
                         }

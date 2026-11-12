@@ -73,7 +73,7 @@ fn blocked_dirs_become_deny_rules_and_a_prompt_note() {
         settings["permissions"]["deny"],
         serde_json::json!(["Read(//Users/a/b/**)", "Edit(//Users/a/b/**)"])
     );
-    assert!(args[6].contains("Worktree mode"));
+    assert!(args[6].contains("only in the current project"));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn no_blocked_dirs_means_no_settings() {
     let args = mode_args(None);
 
     assert!(!args.iter().any(|arg| arg == "--settings"));
-    assert!(!args[6].contains("Worktree mode"));
+    assert!(!args[6].contains("only in the current project"));
 }
 
 #[test]

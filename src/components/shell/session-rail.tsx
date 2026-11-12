@@ -77,43 +77,6 @@ function Row({
     );
 }
 
-function UsageStat({
-    label,
-    value,
-    hint,
-    isWarning = false,
-}: {
-    label: string;
-    value: string;
-    hint?: string;
-    isWarning?: boolean;
-}) {
-    return (
-        <div className="flex min-w-0 flex-col gap-0.5 rounded-md border bg-muted/40 px-2 py-1.5">
-            <span className="flex items-baseline gap-1">
-                <span className="truncate text-base font-semibold tabular-nums">
-                    {value}
-                </span>
-                {hint !== undefined && (
-                    <span
-                        className={cn(
-                            'shrink-0 text-[10px]',
-                            isWarning
-                                ? 'text-destructive'
-                                : 'text-muted-foreground',
-                        )}
-                    >
-                        {hint}
-                    </span>
-                )}
-            </span>
-            <span className="truncate text-xs text-muted-foreground">
-                {label}
-            </span>
-        </div>
-    );
-}
-
 type Segment = { key: string; label: string; tokens: number; color: string };
 
 /** The parts of `used` the CLI reports: `used` minus the cache is what was sent fresh (Claude counts it as input, Codex already has the cache inside input). No finer split exists: Messages, tools, skills and the system prompt are not reported. */
@@ -338,7 +301,7 @@ export function SessionRail({
     onClearContext: () => void;
     onClose: () => void;
 }) {
-    const { environment, connectors, outputs, usage, github } = useSessionRail({
+    const { environment, connectors, outputs, github } = useSessionRail({
         root,
         conversation,
         enabled: true,
@@ -545,78 +508,6 @@ export function SessionRail({
                         </ul>
                     )}
                 </Block>
-                <Block title={t('session_rail.usage')}>
-                    {usage.data === null ? (
-                        <Muted>
-                            {t(
-                                usage.failed
-                                    ? 'session_rail.load_failed'
-                                    : 'session_rail.usage_empty',
-                            )}
-                        </Muted>
-                    ) : (
-                        <div className="flex flex-col gap-2">
-                            {usage.data.conversation === null ||
-                            usage.data.conversation.turns === 0 ? (
-                                <Muted>{t('session_rail.usage_empty')}</Muted>
-                            ) : (
-                                <>
-                                    <div
-                                        title={t('session_rail.usage_note')}
-                                        className="grid grid-cols-3 gap-1.5"
-                                    >
-                                        <UsageStat
-                                            label={t(
-                                                'session_rail.usage_turns_short',
-                                            )}
-                                            value={String(
-                                                usage.data.conversation.turns,
-                                            )}
-                                            hint={t(
-                                                'session_rail.usage_errors_short',
-                                                {
-                                                    failed: usage.data
-                                                        .conversation
-                                                        .failedTurns,
-                                                },
-                                            )}
-                                            isWarning={
-                                                usage.data.conversation
-                                                    .failedTurns > 0
-                                            }
-                                        />
-                                        <UsageStat
-                                            label={t(
-                                                'session_rail.usage_sent_short',
-                                            )}
-                                            value={`~${formatTokens(usage.data.conversation.promptTokens)}`}
-                                        />
-                                        <UsageStat
-                                            label={t(
-                                                'session_rail.usage_received_short',
-                                            )}
-                                            value={`~${formatTokens(usage.data.conversation.answerTokens)}`}
-                                        />
-                                    </div>
-                                    <Row
-                                        label={t('session_rail.usage_model')}
-                                        value={
-                                            context?.model ??
-                                            t(
-                                                'session_rail.usage_model_default',
-                                                {
-                                                    cli:
-                                                        usage.data.conversation
-                                                            .cli ?? '',
-                                                },
-                                            )
-                                        }
-                                    />
-                                </>
-                            )}
-                        </div>
-                    )}
-                </Block>
                 <Block title={t('storage.title')}>
                     <StorageUsageBlock root={root} refreshKey={refreshKey} />
                 </Block>
@@ -642,6 +533,22 @@ export function SessionRail({
                             )
                         }
                     >
+                        {environment.data?.branch != null && (
+                            <div className="mb-1.5">
+                                <Row
+                                    icon={
+                                        <GitBranch
+                                            aria-hidden="true"
+                                            className="size-3.5"
+                                        />
+                                    }
+                                    label={t('session_rail.branch')}
+                                    value={
+                                        <LocalBranchPopover root={root} inRow />
+                                    }
+                                />
+                            </div>
+                        )}
                         {github.data?.status ===
                         'no_cli' ? null : github.data === null ? (
                             github.failed && (

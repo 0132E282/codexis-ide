@@ -16,7 +16,6 @@ import { OPEN_USAGE_EVENT } from '@/components/shell/chat/builtin-commands';
 import { DialogsHost } from '@/components/shell/dialogs-host';
 import type { SettingsTab } from '@/components/shell/settings-dialog';
 import { Sidebar } from '@/components/shell/sidebar';
-import { AccountMenu } from '@/components/shell/sidebar-footer';
 import { SidebarToggle } from '@/components/shell/sidebar-toggle';
 import { UpdateBanner } from '@/components/shell/update-banner';
 import { WorkspacePane } from '@/components/shell/workspace-pane';
@@ -550,7 +549,7 @@ export default function App() {
                         className={cn(
                             'flex shrink-0 overflow-hidden',
                             sidebarOverlay &&
-                                'absolute inset-y-0 left-0 z-30 border-r bg-background shadow-lg transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                                'absolute inset-y-0 left-0 z-30 border-r bg-background shadow-lg transition-[translate,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
                             sidebarOverlay &&
                                 sidebarCollapsed &&
                                 'pointer-events-none -translate-x-full shadow-none',
@@ -690,22 +689,6 @@ export default function App() {
                                             sidebarCollapsed={sidebarCollapsed}
                                             sidebarToggle={sidebarToggle}
                                             hasWindowButtons={!isFullscreen}
-                                            accountMenu={
-                                                <AccountMenu
-                                                    github={auth.statuses?.find(
-                                                        (status) =>
-                                                            status.provider ===
-                                                            'github',
-                                                    )}
-                                                    onOpenSettings={
-                                                        setSettingsTab
-                                                    }
-                                                    onOpenUsage={() =>
-                                                        setUsageOpen(true)
-                                                    }
-                                                    side="bottom"
-                                                />
-                                            }
                                             bottomPanel={
                                                 pane.key === activeKey &&
                                                 bottomPanel !== null &&

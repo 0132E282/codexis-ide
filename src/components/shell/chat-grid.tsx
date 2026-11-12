@@ -50,14 +50,16 @@ type ChatSettings = {
     mode: string;
     agentTeam: boolean;
     extraRoots: string[];
+    worktree: boolean;
 };
 const DEFAULT_SETTINGS: ChatSettings = {
     mode: 'auto',
     agentTeam: false,
     extraRoots: [],
+    worktree: false,
 };
 
-/** The chat grid: up to four chats, from any projects, in one layout, with the files of the picked chat's project on the right. The chats of one project share one bar (project, permission mode, agent team; Worktree turns on by itself when other projects are picked) and are stacked under it; projects sit side by side, so the bar is split the same way as the chats. */
+/** The chat grid: up to four chats, from any projects, in one layout, with the files of the picked chat's project on the right. The chats of one project share one bar (project, permission mode, agent team) and are stacked under it; projects sit side by side, so the bar is split the same way as the chats. */
 export function ChatGrid({
     members,
     projects,
@@ -106,6 +108,9 @@ export function ChatGrid({
     // * Whether a file (or the list of changes) is open next to the tree: then the width of the chats is the person's to drag.
     const [editorVisible, setEditorVisible] = useState(false);
     const filesOnLeft = treePlacement.placement === 'left';
+    // * The tree is the leftmost column when it is on the left and open: the sidebar toggle goes at the start of its toolbar, not in the chat header.
+    const toggleInTree =
+        filesOnLeft && !treeClosed && headerStart !== undefined;
     // * The width the floating files really get: the overlay is clamped to the grid, so the handle must report that, not the stored width.
     const gridArea = useRef<HTMLDivElement>(null);
     const [areaWidth, setAreaWidth] = useState(Infinity);
@@ -227,7 +232,9 @@ export function ChatGrid({
                             >
                                 <div className="flex h-12 shrink-0 items-center border-b px-2">
                                     {/* * The button that unfolds the sidebar sits in the first bar, so the grid has no row of its own above it. */}
-                                    {groupIndex === 0 && headerStart}
+                                    {groupIndex === 0 &&
+                                        !toggleInTree &&
+                                        headerStart}
                                     {treeClosed &&
                                         !editorVisible &&
                                         treePlacement.placement === 'left' &&
@@ -251,10 +258,6 @@ export function ChatGrid({
                                                 extraRoots,
                                             })
                                         }
-                                        worktree={
-                                            settingsOf(group.root).extraRoots
-                                                .length > 0
-                                        }
                                         cli="claude"
                                         compact
                                         mode={settingsOf(group.root).mode}
@@ -267,6 +270,14 @@ export function ChatGrid({
                                         onAgentTeamChange={(agentTeam) =>
                                             patchSettings(group.root, {
                                                 agentTeam,
+                                            })
+                                        }
+                                        worktree={
+                                            settingsOf(group.root).worktree
+                                        }
+                                        onWorktreeChange={(worktree) =>
+                                            patchSettings(group.root, {
+                                                worktree,
                                             })
                                         }
                                     />
@@ -387,6 +398,9 @@ export function ChatGrid({
                             key={picked.workspace}
                             treePlacement={treePlacement}
                             treeClosed={treeClosed}
+                            toolbarStart={
+                                toggleInTree ? headerStart : undefined
+                            }
                             onEditorVisible={setEditorVisible}
                             onTreeClosedChange={setTreeClosed}
                             onAttachFile={(path) =>

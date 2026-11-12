@@ -111,3 +111,30 @@ fn a_poisoned_registry_gives_the_reply_and_stop_keys() {
     );
     assert_eq!(registry.pid("run"), Err("agent.stop_failed".to_string()));
 }
+
+#[test]
+fn blocks_only_saved_projects_that_are_not_selected() {
+    let saved = vec![
+        "/a".to_string(),
+        "/b".to_string(),
+        "/d".to_string(),
+        "/d".to_string(),
+    ];
+    let extras = vec!["/c".to_string(), "/a".to_string()];
+
+    assert_eq!(
+        blocked_for_selection(&saved, "/b", &extras, false),
+        vec!["/d"]
+    );
+}
+
+#[test]
+fn worktree_mode_also_blocks_the_original_folders() {
+    let saved = vec!["/a".to_string(), "/b".to_string(), "/d".to_string()];
+    let extras = vec!["/c".to_string(), "/a".to_string()];
+
+    assert_eq!(
+        blocked_for_selection(&saved, "/b", &extras, true),
+        vec!["/a", "/b", "/d", "/c"]
+    );
+}

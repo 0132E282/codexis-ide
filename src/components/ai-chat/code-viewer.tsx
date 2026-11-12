@@ -40,7 +40,6 @@ export function CodeViewer({
     repos,
     onViewRepo,
     headerActions,
-    accountMenu,
     branch = null,
     changes,
     openRequest = null,
@@ -55,6 +54,7 @@ export function CodeViewer({
     onEditorVisible,
     chatCollapsed = false,
     tabsStart,
+    toolbarStart,
     tabsEnd,
     treePlacement,
     treeClosed,
@@ -71,7 +71,6 @@ export function CodeViewer({
     /** * Extra buttons in the tree header (branch and Terminal), next to the project name. */
     headerActions?: ReactNode;
     /** The account menu button, drawn next to the tree filter. */
-    accountMenu?: ReactNode;
     /** * GitHub branch to browse (null: the default one). */
     branch?: string | null;
     /** * Files the AI changed in this conversation (shown with M/A marks and a diff). */
@@ -100,6 +99,8 @@ export function CodeViewer({
     chatCollapsed?: boolean;
     /** Buttons pinned to the left end of the tab bar. */
     tabsStart?: ReactNode;
+    /** Drawn first in the toolbar of the file tree when it is on the left. */
+    toolbarStart?: ReactNode;
     /** Buttons pinned to the right end of the tab bar. */
     tabsEnd?: ReactNode;
     /** Left or right of the editor; the owner also moves the whole file area in front of the chat when it is left. */
@@ -433,7 +434,7 @@ export function CodeViewer({
             repos={repos}
             onViewRepo={onViewRepo}
             headerActions={headerActions}
-            accountMenu={accountMenu}
+            toolbarStart={toolbarStart}
             isLocal={localRoot !== null}
             view={view}
             onViewChange={setView}

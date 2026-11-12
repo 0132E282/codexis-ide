@@ -178,6 +178,7 @@ fn closing_a_window_ends_only_its_shells() {
                 writer: Arc::new(Mutex::new(writer)),
                 child,
                 owner: owner.to_string(),
+                scrollback: Arc::new(Mutex::new(Scrollback::default())),
             },
         );
     }

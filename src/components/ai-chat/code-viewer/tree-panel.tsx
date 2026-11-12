@@ -81,11 +81,12 @@ export function TreePanel({
     closed,
     onClosedChange,
     createRequest,
-    accountMenu,
+    toolbarStart,
 }: {
     /** The host holds the closed state and draws the button that opens the tree again (the chat grid puts it in its header): closed, the tree draws nothing. */
+    /** Drawn first in the toolbar of a tree on the left (the folded sidebar's toggle, which brings its own room for the window buttons). */
+    toolbarStart?: ReactNode;
     /** The account menu button, drawn right of the filter; none, no button. */
-    accountMenu?: ReactNode;
     closed?: boolean;
     onClosedChange?: (closed: boolean) => void;
     /** * A new object each time the editor options menu asks for a new file or folder at the project root (local projects). */
@@ -507,9 +508,13 @@ export function TreePanel({
                 className={cn(
                     'flex h-12 shrink-0 items-center gap-0.5 border-b px-2',
                     // * On the left the tree is the leftmost column (the sidebar floats over it), so the window buttons sit over its toolbar: start after them.
-                    onLeft && !isFullscreen && 'pl-20',
+                    onLeft &&
+                        !isFullscreen &&
+                        toolbarStart === undefined &&
+                        'pl-20',
                 )}
             >
+                {onLeft && toolbarStart}
                 <Button
                     type="button"
                     variant="ghost"
@@ -643,7 +648,6 @@ export function TreePanel({
                         placeholder={t('tree_panel.filter_files2')}
                         className="h-8"
                     />
-                    {accountMenu}
                 </div>
                 <div
                     ref={rows}

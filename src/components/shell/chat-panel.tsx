@@ -43,6 +43,7 @@ export type SharedChatOptions = {
     mode: string;
     agentTeam: boolean;
     extraRoots: string[];
+    worktree: boolean;
 };
 
 const NO_PROJECTS: { root: string; name: string }[] = [];
@@ -136,13 +137,14 @@ export function ChatPanel({
     // * Claude only: the permission mode, and whether its experimental agent teams are on.
     const [ownMode, setMode] = useState('auto');
     const [ownAgentTeam, setAgentTeam] = useState(false);
+    // * Worktree: the turns run on their own git branch, in a copy of the project; off by default.
+    const [ownWorktree, setWorktree] = useState(false);
     // * Other projects the AI may also work in; kept for the whole chat, changed between messages.
     const [ownExtraRoots, setExtraRoots] = useState<string[]>([]);
     const mode = sharedOptions?.mode ?? ownMode;
     const agentTeam = sharedOptions?.agentTeam ?? ownAgentTeam;
     const extraRoots = sharedOptions?.extraRoots ?? ownExtraRoots;
-    // * Worktree mode: the turns run on their own git branch, in a copy of the project; automatic when more than one project is picked.
-    const worktree = extraRoots.length > 0;
+    const worktree = sharedOptions?.worktree ?? ownWorktree;
     // * Names this chat among the chats of the grid: only the one in use reads its answers aloud.
     const chatId = useId();
     const bottom = useRef<HTMLDivElement>(null);
@@ -440,13 +442,14 @@ export function ChatPanel({
                                 otherProjects={otherProjects}
                                 extraRoots={extraRoots}
                                 onExtraRootsChange={setExtraRoots}
-                                worktree={worktree}
                                 compact
                                 cli={cli}
                                 mode={mode}
                                 onModeChange={setMode}
                                 agentTeam={agentTeam}
                                 onAgentTeamChange={setAgentTeam}
+                                worktree={worktree}
+                                onWorktreeChange={setWorktree}
                             />
                         )}
                     </div>
