@@ -2,7 +2,9 @@ use super::background::{BackgroundStore, ProjectTasks};
 use super::plan::project_data_dir;
 use super::state::AppState;
 use crate::activity;
-use crate::agent::{self, AgentCli, Decision, Responder, TurnObserver, TurnOptions, TurnRequest};
+use crate::agent::{
+    self, AgentCli, Decision, EnvGuard, Responder, TurnObserver, TurnOptions, TurnRequest,
+};
 use crate::background::{BackgroundChange, TaskKind};
 use crate::cli::CliKind;
 use crate::credentials::CredentialStore;
@@ -177,6 +179,8 @@ struct TauriTurnObserver {
     project: ObservedProject,
     /// Edit tool calls waiting for their result: tool id and the path they change. The event is stored only when the call succeeded.
     pending_edits: Mutex<HashMap<String, String>>,
+    /// Hides what a tool read from a `.env*` file, before the event is stored or sent to the chat.
+    env_guard: EnvGuard,
 }
 
 struct ObservedProject {
@@ -354,6 +358,9 @@ impl TurnObserver for TauriTurnObserver {
     }
 
     fn event(&self, event: agent::Event) {
+        // * First, so neither the stored chat nor the emitted event ever holds the content of an env file.
+        let event = self.env_guard.filter(event);
+
         self.persist(&event);
 
         // * A sub-agent is a background task too: its start adds a row and its result closes it.
@@ -650,9 +657,18 @@ pub async fn agent_send(
         .iter()
         .map(|extra| Ok(state.workspace_for(Some(extra))?.root().to_path_buf()))
         .collect::<Result<Vec<_>, String>>()?;
-    // * In worktree mode the CLI works in the copies only: every saved project folder, the originals of this chat's projects included, is closed to it.
+    // * In worktree mode only the saved projects this chat has not selected are closed to the CLI; the main folder and the added folders of the chat stay writable.
     let blocked_dirs = if worktree.is_some() {
-        state.saved_roots()
+        state
+            .saved_roots()
+            .into_iter()
+            .filter(|saved| {
+                let saved = Path::new(saved);
+
+                saved != project_root.as_path()
+                    && !extra_folders.iter().any(|folder| saved == folder.as_path())
+            })
+            .collect()
     } else {
         Vec::new()
     };
@@ -709,6 +725,7 @@ pub async fn agent_send(
                 id: project_id.clone(),
             },
             pending_edits: Mutex::new(HashMap::new()),
+            env_guard: EnvGuard::default(),
         };
 
         observer.log(&LogEntry::Start);

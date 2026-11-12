@@ -6,11 +6,13 @@ mod antigravity;
 mod claude;
 mod claude_background;
 mod codex;
+mod env_guard;
 mod ollama;
 
 pub use antigravity::AntigravityAgent;
 pub use claude::ClaudeAgent;
 pub use codex::CodexAgent;
+pub use env_guard::EnvGuard;
 pub use ollama::OllamaAgent;
 
 use crate::background::BackgroundChange;
@@ -71,7 +73,7 @@ pub struct TurnOptions<'a> {
     pub mode: Option<&'a str>,
     /// More project folders the CLI may work in, next to the one it runs in.
     pub add_dirs: &'a [String],
-    /// Folders the CLI must not read or write: other saved projects and the originals of the worktree copies (Claude only).
+    /// Folders the CLI must not read or write: saved projects the chat has not selected (Claude only).
     pub blocked_dirs: &'a [String],
     /// Resume `session` into a new session id (Claude only: `--fork-session`), so a turn started while another one still runs on the same session does not write into its file.
     pub fork: bool,

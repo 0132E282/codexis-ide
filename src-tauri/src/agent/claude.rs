@@ -119,7 +119,7 @@ impl AgentCli for ClaudeAgent {
             args.push(dir.clone());
         }
 
-        // * Worktree mode: the other saved projects and the originals stay closed to the CLI.
+        // * Worktree mode: the saved projects the chat has not selected stay closed to the CLI.
         if !options.blocked_dirs.is_empty() {
             args.push("--settings".to_string());
             args.push(deny_settings(options.blocked_dirs));
