@@ -52,8 +52,6 @@ function BottomWindowBody({ root }: { root: string | undefined }) {
                 dockedPlacement="bottom"
                 historyPath={null}
                 onPlacementChange={noop}
-                onSaveDefault={noop}
-                onResetDefault={noop}
                 onClearHistoryPath={noop}
                 onTabChange={setTab}
                 onClose={closeWindow}

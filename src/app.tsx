@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+    listShellIds,
+    markShellsHandedOff,
+} from '@/components/ai-chat/activity-terminal';
 import { BottomPanel } from '@/components/shell/bottom-panel';
 import { FloatingFrame } from '@/components/shell/floating-frame';
 import type {
@@ -398,8 +402,6 @@ export default function App() {
                 placement={bottomPlacement.placement}
                 dockedPlacement={bottomPlacement.dockedPlacement}
                 onPlacementChange={bottomPlacement.setPlacement}
-                onSaveDefault={bottomPlacement.saveAsDefault}
-                onResetDefault={bottomPlacement.resetToDefault}
                 historyPath={historyPath}
                 onClearHistoryPath={() => setHistoryPath(null)}
                 onTabChange={setBottomTab}
@@ -407,9 +409,13 @@ export default function App() {
                 onDetach={() => {
                     const tab = bottomTab;
 
+                    // * The running shells move to the window with the panel: closing the panel here must not end them.
+                    const shellIds = listShellIds();
+
                     void ide
-                        .terminalWindowOpen(activePane.root, tab)
+                        .terminalWindowOpen(activePane.root, tab, shellIds)
                         .then(() => {
+                            markShellsHandedOff(shellIds);
                             setDetachedTab(tab);
                             setBottomTab(null);
                         })

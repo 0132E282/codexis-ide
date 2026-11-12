@@ -1,4 +1,4 @@
-import { Columns2, ExternalLink, Plus, Trash2, X } from 'lucide-react';
+import { Columns2, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import {
     ActivityTerminal,
@@ -38,8 +38,6 @@ export function BottomPanel({
     dockedPlacement,
     historyPath,
     onPlacementChange,
-    onSaveDefault,
-    onResetDefault,
     onClearHistoryPath,
     onTabChange,
     onClose,
@@ -62,8 +60,6 @@ export function BottomPanel({
     /** The file the Lịch sử tab is limited to (null: the whole project). */
     historyPath: string | null;
     onPlacementChange: (placement: PanelPlacement) => void;
-    onSaveDefault: () => void;
-    onResetDefault: () => void;
     onClearHistoryPath: () => void;
     onTabChange: (tab: BottomTab) => void;
     onClose: () => void;
@@ -189,27 +185,13 @@ export function BottomPanel({
                         </Button>
                     ) : null}
                     {onDetach !== undefined && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title={t('bottom_panel.open_window')}
-                            aria-label={t('bottom_panel.open_window')}
-                            onClick={onDetach}
-                            className={ACTION_STYLE}
-                        >
-                            <ExternalLink aria-hidden="true" />
-                        </Button>
-                    )}
-                    {onDetach !== undefined && (
                         <PanelMenu
+                            onOpenWindow={onDetach}
                             placement={placement}
                             dockedPlacement={dockedPlacement}
                             floatable
                             edges={['bottom']}
                             onPlacementChange={onPlacementChange}
-                            onSaveDefault={onSaveDefault}
-                            onResetDefault={onResetDefault}
                         />
                     )}
                     <Button

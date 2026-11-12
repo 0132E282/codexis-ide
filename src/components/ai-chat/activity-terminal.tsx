@@ -24,12 +24,47 @@ const THEME = {
 const SESSION_PREFIX = `shell-${crypto.randomUUID().slice(0, 8)}`;
 let sessionCounter = 0;
 
+const nextSessionId = () => `${SESSION_PREFIX}-${sessionCounter++}`;
+
+/** The shells of this window that are open, by the id of the terminal that shows them. */
+const liveShells = new Map<number, string>();
+/** Shells given to another window: they keep running, so closing their terminal here must not end them. */
+const handedOffShells = new Set<string>();
+
+/** The ids of the shells this window has open, to take to a separate window. */
+export function listShellIds(): string[] {
+    return [...liveShells.values()];
+}
+
+/** Marks the shells as moved to another window, which now owns them. */
+export function markShellsHandedOff(ids: string[]) {
+    ids.forEach((id) => handedOffShells.add(id));
+}
+
+const MAX_ADOPTED_SHELLS = 16;
+
+/** The shells a separate window was opened with (`?sessions=a,b`): only well-formed ids, no repeats. */
+function readAdoptedShellIds(): string[] {
+    const asked =
+        new URLSearchParams(window.location.search).get('sessions') ?? '';
+    const ids = asked
+        .split(',')
+        .filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id));
+
+    return [...new Set(ids)].slice(0, MAX_ADOPTED_SHELLS);
+}
+
 /** One real shell in the project folder, drawn by xterm.js; everything typed goes straight to it. */
 function ShellTerminal({
+    terminalId,
+    adoptedId,
     root,
     visible,
     onEnded,
 }: {
+    terminalId: number;
+    /** A shell that is already running (taken over from another window): shown again instead of opening a new one. */
+    adoptedId: string | undefined;
     root: string | undefined;
     /** Hidden terminals stay alive (their shell goes on) but are not drawn. */
     visible: boolean;
@@ -56,7 +91,7 @@ function ShellTerminal({
             return;
         }
 
-        const sessionId = `${SESSION_PREFIX}-${sessionCounter++}`;
+        let sessionId = adoptedId ?? nextSessionId();
         let cancelled = false;
         let cleanup = () => {};
 
@@ -98,10 +133,19 @@ function ShellTerminal({
             fit.fit();
             refit.current = fitNow;
 
+            // * A shell taken over keeps printing while its screen is rebuilt: what arrives meanwhile waits for the snapshot.
+            let waiting: { data: string; end?: number }[] | null =
+                adoptedId === undefined ? null : [];
             const stops = await Promise.all([
                 onTerminalData((event) => {
-                    if (event.id === sessionId) {
+                    if (event.id !== sessionId) {
+                        return;
+                    }
+
+                    if (waiting === null) {
                         instance.write(event.data);
+                    } else {
+                        waiting.push(event);
                     }
                 }),
                 onTerminalExit((id) => {
@@ -152,7 +196,12 @@ function ShellTerminal({
                 observer.disconnect();
                 input.dispose();
                 stops.forEach((stop) => stop());
-                void ide.terminalClose(sessionId).catch(() => undefined);
+                liveShells.delete(terminalId);
+
+                if (!handedOffShells.has(sessionId)) {
+                    void ide.terminalClose(sessionId).catch(() => undefined);
+                }
+
                 instance.dispose();
             };
 
@@ -162,6 +211,41 @@ function ShellTerminal({
                 return;
             }
 
+            if (adoptedId !== undefined) {
+                try {
+                    const snapshot = await ide.terminalSnapshot(adoptedId);
+
+                    if (cancelled) {
+                        return;
+                    }
+
+                    instance.write(snapshot.data);
+
+                    // * Chunks the snapshot already holds are not written twice.
+                    waiting
+                        ?.filter(
+                            (event) =>
+                                event.end === undefined ||
+                                event.end > snapshot.end,
+                        )
+                        .forEach((event) => instance.write(event.data));
+                    waiting = null;
+                    liveShells.set(terminalId, sessionId);
+                    fitNow();
+                    instance.focus();
+
+                    return;
+                } catch {
+                    if (cancelled) {
+                        return;
+                    }
+
+                    // * The shell is gone (it ended in between): this terminal starts a new one.
+                    waiting = null;
+                    sessionId = nextSessionId();
+                }
+            }
+
             try {
                 await ide.terminalOpen(
                     sessionId,
@@ -169,6 +253,7 @@ function ShellTerminal({
                     instance.rows,
                     root,
                 );
+                liveShells.set(terminalId, sessionId);
                 instance.focus();
             } catch (caught) {
                 const message =
@@ -176,6 +261,7 @@ function ShellTerminal({
 
                 // * An already open terminal is not an error: keep using it.
                 if (message === translateError('terminal.exists')) {
+                    liveShells.set(terminalId, sessionId);
                     instance.focus();
 
                     return;
@@ -189,7 +275,7 @@ function ShellTerminal({
             cancelled = true;
             cleanup();
         };
-    }, [root]);
+    }, [root, terminalId, adoptedId]);
 
     return (
         // * xterm sits out of flow so its fitted pixel width never feeds back into the width of the column.
@@ -212,11 +298,29 @@ export function useTerminalSessions(
     onClose: () => void,
     root: string | undefined,
 ) {
-    const counter = useRef(2);
+    // * A separate window opened with running shells shows them again, one terminal each; otherwise there is one new shell.
+    const [firstTerminals] = useState(() => {
+        const adopted = readAdoptedShellIds();
+
+        return adopted.length === 0
+            ? [{ id: 1, title: 'Terminal 1', root, adoptedId: undefined }]
+            : adopted.map((adoptedId, index) => ({
+                  id: index + 1,
+                  title: `Terminal ${index + 1}`,
+                  root,
+                  adoptedId: adoptedId as string | undefined,
+              }));
+    });
+    const counter = useRef(firstTerminals.length + 1);
     // * Each shell starts in the folder of the project open when it was made and stays there: switching project leaves it running.
     const [terminals, setTerminals] = useState<
-        { id: number; title: string; root: string | undefined }[]
-    >([{ id: 1, title: 'Terminal 1', root }]);
+        {
+            id: number;
+            title: string;
+            root: string | undefined;
+            adoptedId?: string;
+        }[]
+    >(firstTerminals);
     const [active, setActive] = useState(1);
     // * The terminal drawn beside the active one (null: only one on screen).
     const [split, setSplit] = useState<number | null>(null);
@@ -334,6 +438,8 @@ export function ActivityTerminal({
                         )}
                     >
                         <ShellTerminal
+                            terminalId={terminal.id}
+                            adoptedId={terminal.adoptedId}
                             root={terminal.root}
                             visible={
                                 visible &&

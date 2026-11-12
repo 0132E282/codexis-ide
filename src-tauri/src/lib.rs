@@ -119,6 +119,7 @@ pub fn run() {
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
+            commands::terminal::terminal_snapshot,
             commands::terminal::terminal_window_open,
             commands::terminal::terminal_window_root,
             commands::remote::remote_start,

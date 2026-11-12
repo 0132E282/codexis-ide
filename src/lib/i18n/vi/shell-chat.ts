@@ -67,8 +67,6 @@ export const shellChatVietnamese: Record<string, string> = {
         'Chưa có dự án khác. Thêm ở thanh bên.',
     'project_row.projects_the_ai_works':
         'Dự án AI làm việc: chọn thêm để làm nhiều dự án trong một chat',
-    'project_row.run_the_ai_on':
-        'Chạy AI trên nhánh git riêng, trong bản sao của dự án; dự án gốc không bị đụng tới',
     'subagent_view.back_to_the_conversation': 'Quay lại cuộc trò chuyện',
     'subagent_view.sub_agent_is_starting': 'Sub-agent đang bắt đầu…',
     'subagent_view.this_sub_agent_recorded':
@@ -97,8 +95,6 @@ export const shellChatVietnamese: Record<string, string> = {
     'panel_menu.fill_and_arrange': 'Lấp đầy và sắp xếp',
     'panel_menu.fill': 'Chiếm cả vùng làm việc',
     'panel_menu.arrange': 'Xếp cạnh ngăn khác',
-    'panel_menu.save_default': 'Đặt làm vị trí mặc định',
-    'panel_menu.reset_default': 'Về vị trí mặc định',
     'dock.resize_panel': 'Đổi kích thước ngăn',
     'errors.terminal.failed': 'Terminal lỗi: {value}',
     'errors.terminal.unknown': 'Không có terminal {value}.',

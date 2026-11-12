@@ -50,16 +50,14 @@ type ChatSettings = {
     mode: string;
     agentTeam: boolean;
     extraRoots: string[];
-    worktree: boolean;
 };
 const DEFAULT_SETTINGS: ChatSettings = {
     mode: 'auto',
     agentTeam: false,
     extraRoots: [],
-    worktree: false,
 };
 
-/** The chat grid: up to four chats, from any projects, in one layout, with the files of the picked chat's project on the right. The chats of one project share one bar (project, Worktree, permission mode, agent team) and are stacked under it; projects sit side by side, so the bar is split the same way as the chats. */
+/** The chat grid: up to four chats, from any projects, in one layout, with the files of the picked chat's project on the right. The chats of one project share one bar (project, permission mode, agent team; Worktree turns on by itself when other projects are picked) and are stacked under it; projects sit side by side, so the bar is split the same way as the chats. */
 export function ChatGrid({
     members,
     projects,
@@ -77,7 +75,7 @@ export function ChatGrid({
     /** Told when a turn of a chat was saved, with the project folder, so its conversation list is read again. */
     onChanged: (root: string) => void;
 }) {
-    // * Settings are per project: a project that is not a git repo (no Worktree), or one that needs another permission mode, does not hold the others back.
+    // * Settings are per project: a project that needs another permission mode does not hold the others back.
     const [settings, setSettings] = useState<Record<string, ChatSettings>>({});
     const settingsOf = (root: string) => settings[root] ?? DEFAULT_SETTINGS;
     const patchSettings = (root: string, change: Partial<ChatSettings>) =>
@@ -254,12 +252,8 @@ export function ChatGrid({
                                             })
                                         }
                                         worktree={
-                                            settingsOf(group.root).worktree
-                                        }
-                                        onWorktreeChange={(worktree) =>
-                                            patchSettings(group.root, {
-                                                worktree,
-                                            })
+                                            settingsOf(group.root).extraRoots
+                                                .length > 0
                                         }
                                         cli="claude"
                                         compact

@@ -15,12 +15,63 @@ const MAX_SESSIONS: usize = 16;
 const MAX_ID_BYTES: usize = 64;
 const MAX_WRITE_BYTES: usize = 64 * 1024;
 const MAX_DIMENSION: u16 = 500;
+/// How much of what a shell printed is kept, so a window that takes the shell over can show it again.
+const MAX_SCROLLBACK_BYTES: usize = 256 * 1024;
 
 /// What a shell printed, sent to the panel as the `terminal-data` event.
 #[derive(Debug, Clone, Serialize)]
 pub struct TerminalData {
     pub id: String,
     pub data: String,
+    /// Bytes the shell had printed in all once this chunk is counted: lets a snapshot tell which chunks it already holds.
+    pub end: u64,
+}
+
+/// What a shell printed lately, as text, and how many bytes it has printed in all.
+#[derive(Debug, Clone, Serialize)]
+pub struct TerminalSnapshot {
+    pub data: String,
+    pub end: u64,
+}
+
+/// The tail of what a shell printed, capped at `MAX_SCROLLBACK_BYTES`.
+#[derive(Default)]
+struct Scrollback {
+    text: String,
+    total: u64,
+}
+
+impl Scrollback {
+    /// Keeps `chunk` and returns the number of bytes printed in all so far.
+    fn push(&mut self, chunk: &str) -> u64 {
+        self.text.push_str(chunk);
+        self.total += chunk.len() as u64;
+        trim_front(&mut self.text, MAX_SCROLLBACK_BYTES);
+
+        self.total
+    }
+
+    fn snapshot(&self) -> TerminalSnapshot {
+        TerminalSnapshot {
+            data: self.text.clone(),
+            end: self.total,
+        }
+    }
+}
+
+/// Drops the start of `text` until at most `limit` bytes remain, never cutting a character in two.
+fn trim_front(text: &mut String, limit: usize) {
+    if text.len() <= limit {
+        return;
+    }
+
+    let mut cut = text.len() - limit;
+
+    while !text.is_char_boundary(cut) {
+        cut += 1;
+    }
+
+    text.drain(..cut);
 }
 
 #[derive(Debug)]
@@ -58,6 +109,8 @@ struct Session {
     child: Box<dyn Child + Send + Sync>,
     /// Label of the window that opened the shell: its shells end with it.
     owner: String,
+    /// What the shell printed lately, for a window that takes it over.
+    scrollback: Arc<Mutex<Scrollback>>,
 }
 
 /// The open shells by the id the panel gave them.
@@ -182,6 +235,8 @@ impl Terminals {
         let mut reader = pair.master.try_clone_reader().map_err(pty_error)?;
         let writer = pair.master.take_writer().map_err(pty_error)?;
         let reader_id = id.clone();
+        let scrollback = Arc::new(Mutex::new(Scrollback::default()));
+        let reader_scrollback = Arc::clone(&scrollback);
 
         thread::spawn(move || {
             let mut buffer = [0u8; READ_CHUNK];
@@ -197,11 +252,17 @@ impl Terminals {
                 let data = take_text(&mut pending);
 
                 if !data.is_empty() {
+                    // * Kept before it is sent, so a snapshot never lacks a chunk whose event was already delivered.
+                    let end = reader_scrollback
+                        .lock()
+                        .map(|mut kept| kept.push(&data))
+                        .unwrap_or_default();
                     let _ = app.emit(
                         "terminal-data",
                         TerminalData {
                             id: reader_id.clone(),
                             data,
+                            end,
                         },
                     );
                 }
@@ -227,6 +288,7 @@ impl Terminals {
                 writer: Arc::new(Mutex::new(writer)),
                 child,
                 owner,
+                scrollback,
             },
         );
 
@@ -291,6 +353,49 @@ impl Terminals {
                 pixel_height: 0,
             })
             .map_err(pty_error)
+    }
+
+    /// Gives the shells `ids` to the window `owner` without ending them, so they outlive the window that opened them; ids that are not open are skipped. Returns the ids that were handed over.
+    pub fn adopt(&self, ids: &[String], owner: &str) -> Result<Vec<String>, TerminalError> {
+        if ids.len() > MAX_SESSIONS {
+            return Err(TerminalError::TooMany);
+        }
+
+        for id in ids {
+            check_id(id)?;
+        }
+
+        let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
+        let mut adopted: Vec<String> = Vec::new();
+
+        for id in ids {
+            if let Some(session) = sessions.get_mut(id) {
+                session.owner = owner.to_string();
+
+                if !adopted.contains(id) {
+                    adopted.push(id.clone());
+                }
+            }
+        }
+
+        Ok(adopted)
+    }
+
+    /// What the shell printed lately, to draw again in a window that took it over.
+    pub fn snapshot(&self, id: &str) -> Result<TerminalSnapshot, TerminalError> {
+        let scrollback = {
+            let sessions = self.sessions.lock().map_err(|_| TerminalError::Poisoned)?;
+
+            Arc::clone(
+                &sessions
+                    .get(id)
+                    .ok_or_else(|| TerminalError::Unknown(id.to_string()))?
+                    .scrollback,
+            )
+        };
+        let kept = scrollback.lock().map_err(|_| TerminalError::Poisoned)?;
+
+        Ok(kept.snapshot())
     }
 
     /// Remembers the project folder a separate terminal window was opened for.

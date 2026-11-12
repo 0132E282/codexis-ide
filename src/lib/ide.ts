@@ -278,8 +278,11 @@ export const ide = {
         invoke<void>('terminal_resize', { id, columns, rows }),
     terminalClose: (id: string) => invoke<void>('terminal_close', { id }),
     /** Opens the separate operating-system window that holds the whole bottom panel on `tab` (an open one is brought to the front). */
-    terminalWindowOpen: (root?: string, tab?: string) =>
-        invoke<void>('terminal_window_open', { root, tab }),
+    terminalWindowOpen: (root?: string, tab?: string, sessions?: string[]) =>
+        invoke<void>('terminal_window_open', { root, tab, sessions }),
+    /** What a shell printed lately, and how many bytes it has printed in all (the `end` of a `terminal-data` event tells which chunks the snapshot already holds). */
+    terminalSnapshot: (id: string) =>
+        invoke<{ data: string; end: number }>('terminal_snapshot', { id }),
     /** The project folder the separate terminal window that asks was opened for. */
     terminalWindowRoot: () => invoke<string | null>('terminal_window_root'),
     /** Starts one chat turn; the answer arrives through `onAgentEvent`, tagged with `runId`. */
@@ -506,10 +509,11 @@ export const onTerminalMenu = (handler: (action: 'new' | 'split') => void) =>
 
 /** Listens to what the shells of the terminal panel print. */
 export const onTerminalData = (
-    handler: (event: { id: string; data: string }) => void,
+    handler: (event: { id: string; data: string; end?: number }) => void,
 ) =>
-    listen<{ id: string; data: string }>('terminal-data', ({ payload }) =>
-        handler(payload),
+    listen<{ id: string; data: string; end?: number }>(
+        'terminal-data',
+        ({ payload }) => handler(payload),
     );
 
 /** What the separate bottom-panel window asks of the main window, which alone holds the chats and the editor. */

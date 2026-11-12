@@ -242,8 +242,6 @@ export function WorkspacePane({
             dockedPlacement={placement.dockedPlacement}
             floatable={floatable}
             onPlacementChange={placement.setPlacement}
-            onSaveDefault={placement.saveAsDefault}
-            onResetDefault={placement.resetToDefault}
         />
     );
 

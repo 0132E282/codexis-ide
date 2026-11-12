@@ -190,3 +190,38 @@ fn closing_a_window_ends_only_its_shells() {
     drop(sessions);
     terminals.close("c").unwrap();
 }
+
+#[test]
+fn scrollback_keeps_the_tail_within_the_limit() {
+    let mut text = "abcdef".to_string();
+
+    trim_front(&mut text, 4);
+    assert_eq!(text, "cdef");
+
+    trim_front(&mut text, 10);
+    assert_eq!(text, "cdef");
+}
+
+#[test]
+fn scrollback_is_never_cut_inside_a_character() {
+    // * Each of these characters takes 3 bytes: a limit of 7 would start in the middle of one, so the whole character goes.
+    let mut text = "\u{1EA1}\u{1EA1}\u{1EA1}".to_string();
+
+    trim_front(&mut text, 7);
+    assert_eq!(text, "\u{1EA1}\u{1EA1}");
+}
+
+#[test]
+fn scrollback_counts_every_byte_printed() {
+    let mut scrollback = Scrollback::default();
+    let chunk = "x".repeat(MAX_SCROLLBACK_BYTES);
+
+    assert_eq!(scrollback.push(&chunk), MAX_SCROLLBACK_BYTES as u64);
+    assert_eq!(scrollback.push("tail"), MAX_SCROLLBACK_BYTES as u64 + 4);
+
+    let snapshot = scrollback.snapshot();
+
+    assert_eq!(snapshot.data.len(), MAX_SCROLLBACK_BYTES);
+    assert!(snapshot.data.ends_with("xtail"));
+    assert_eq!(snapshot.end, MAX_SCROLLBACK_BYTES as u64 + 4);
+}

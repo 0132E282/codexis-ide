@@ -3,7 +3,6 @@ import {
     ChevronDown,
     CircleHelp,
     FilePen,
-    GitBranch,
     Laptop,
     ListChecks,
     ShieldOff,
@@ -16,7 +15,6 @@ import {
 import { useState, type KeyboardEvent } from 'react';
 import { MODES } from '@/components/shell/chat/cli-options';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -41,7 +39,7 @@ const MODE_ICONS: Record<string, LucideIcon> = {
     bypassPermissions: ShieldOff,
 };
 
-/** The row under the message box: the projects the AI works in (this one, and others picked for the chat), the worktree switch and (Claude only) the permission mode and agent team. */
+/** The row under the message box: the projects the AI works in (this one, and others picked for the chat) and (Claude only) the permission mode and agent team. */
 export function ProjectRow({
     busy,
     projectName,
@@ -49,8 +47,6 @@ export function ProjectRow({
     extraRoots,
     onExtraRootsChange,
     worktree,
-    onWorktreeChange,
-    showWorktree = true,
     compact = false,
     cli,
     mode,
@@ -66,11 +62,8 @@ export function ProjectRow({
     /** Folders of the other projects the AI may also work in. */
     extraRoots: string[];
     onExtraRootsChange: (roots: string[]) => void;
-    /** Worktree mode: the AI works on its own git branch, in a copy of the project. */
+    /** Worktree mode (read only; on by itself when other projects are picked): the AI works on its own git branch, in a copy of the project. */
     worktree: boolean;
-    onWorktreeChange: (on: boolean) => void;
-    /** False in the chat grid, where each project has its own Worktree switch on its bar. */
-    showWorktree?: boolean;
     /** One "Settings" menu holds Worktree, the permission mode and agent team, so the row stays short (every chat). */
     compact?: boolean;
     cli: AgentCli;
@@ -269,19 +262,6 @@ export function ProjectRow({
                             )
                         }
                     >
-                        {showWorktree && (
-                            <DropdownMenuCheckboxItem
-                                checked={worktree}
-                                onSelect={(event) => event.preventDefault()}
-                                onCheckedChange={(on) =>
-                                    onWorktreeChange(on === true)
-                                }
-                                title={t('project_row.run_the_ai_on')}
-                            >
-                                <GitBranch aria-hidden="true" />
-                                Worktree
-                            </DropdownMenuCheckboxItem>
-                        )}
                         {cli === 'claude' && (
                             <>
                                 <DropdownMenuCheckboxItem
@@ -308,21 +288,6 @@ export function ProjectRow({
                 </DropdownMenu>
             ) : (
                 <>
-                    {showWorktree && (
-                        <label
-                            title={t('project_row.run_the_ai_on')}
-                            className="ml-2 flex cursor-pointer items-center gap-1.5 text-muted-foreground"
-                        >
-                            <Checkbox
-                                checked={worktree}
-                                disabled={busy}
-                                onCheckedChange={(on) =>
-                                    onWorktreeChange(on === true)
-                                }
-                            />
-                            Worktree
-                        </label>
-                    )}
                     {cli === 'claude' && (
                         <>
                             <DropdownMenu

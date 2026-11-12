@@ -1,13 +1,12 @@
 import {
     Columns2,
+    ExternalLink,
     Maximize2,
     PanelBottom,
     PanelLeft,
     PanelRight,
     PanelTop,
     PictureInPicture2,
-    Pin,
-    RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -80,7 +79,7 @@ function PlacementItem({
 
 /**
  * The menu of a dock panel: Move (left, right, top, bottom, and Float when offered) and Fill and arrange (fill the work area, or go back beside the other panels).
- * Open in new window is deferred (pane-placement.md Q2), so it is not shown.
+ * Open in new window is shown only when the panel can move into a separate window (`onOpenWindow`).
  */
 export function PanelMenu({
     placement,
@@ -88,8 +87,7 @@ export function PanelMenu({
     floatable = false,
     edges,
     onPlacementChange,
-    onSaveDefault,
-    onResetDefault,
+    onOpenWindow,
 }: {
     placement: PanelPlacement;
     /** The edge to return to when the panel leaves `fill`. */
@@ -99,10 +97,8 @@ export function PanelMenu({
     /** The edges offered under Move (default: all four). */
     edges?: readonly DockedPlacement[];
     onPlacementChange: (placement: PanelPlacement) => void;
-    /** Offers "Set as default position": keeps the current placement as the one the panel starts with. */
-    onSaveDefault?: () => void;
-    /** Offers "Reset to default position". */
-    onResetDefault?: () => void;
+    /** Offers "Open in new window": moves the whole panel into a separate window. */
+    onOpenWindow?: () => void;
 }) {
     const filled = placement === 'fill';
     const floating = placement === 'float';
@@ -204,22 +200,13 @@ export function PanelMenu({
                         />
                     </div>
                 </DropdownMenuGroup>
-                {(onSaveDefault !== undefined ||
-                    onResetDefault !== undefined) && (
+                {onOpenWindow !== undefined && (
                     <>
                         <DropdownMenuSeparator />
-                        {onSaveDefault !== undefined && (
-                            <DropdownMenuItem onSelect={onSaveDefault}>
-                                <Pin aria-hidden="true" />
-                                {t('panel_menu.save_default')}
-                            </DropdownMenuItem>
-                        )}
-                        {onResetDefault !== undefined && (
-                            <DropdownMenuItem onSelect={onResetDefault}>
-                                <RotateCcw aria-hidden="true" />
-                                {t('panel_menu.reset_default')}
-                            </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onSelect={onOpenWindow}>
+                            <ExternalLink aria-hidden="true" />
+                            {t('bottom_panel.open_window')}
+                        </DropdownMenuItem>
                     </>
                 )}
             </DropdownMenuContent>

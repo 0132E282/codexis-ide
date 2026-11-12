@@ -43,7 +43,6 @@ export type SharedChatOptions = {
     mode: string;
     agentTeam: boolean;
     extraRoots: string[];
-    worktree: boolean;
 };
 
 const NO_PROJECTS: { root: string; name: string }[] = [];
@@ -136,12 +135,11 @@ export function ChatPanel({
     const [ownAgentTeam, setAgentTeam] = useState(false);
     // * Other projects the AI may also work in; kept for the whole chat, changed between messages.
     const [ownExtraRoots, setExtraRoots] = useState<string[]>([]);
-    // * Worktree mode: the turns of this conversation run on their own git branch, in a copy of the project.
-    const [ownWorktree, setWorktree] = useState(false);
     const mode = sharedOptions?.mode ?? ownMode;
     const agentTeam = sharedOptions?.agentTeam ?? ownAgentTeam;
     const extraRoots = sharedOptions?.extraRoots ?? ownExtraRoots;
-    const worktree = sharedOptions?.worktree ?? ownWorktree;
+    // * Worktree mode: the turns run on their own git branch, in a copy of the project; automatic when more than one project is picked.
+    const worktree = extraRoots.length > 0;
     // * Names this chat among the chats of the grid: only the one in use reads its answers aloud.
     const chatId = useId();
     const bottom = useRef<HTMLDivElement>(null);
@@ -441,7 +439,6 @@ export function ChatPanel({
                                 extraRoots={extraRoots}
                                 onExtraRootsChange={setExtraRoots}
                                 worktree={worktree}
-                                onWorktreeChange={setWorktree}
                                 compact
                                 cli={cli}
                                 mode={mode}

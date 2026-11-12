@@ -524,11 +524,8 @@ export function TreePanel({
                     <PanelMenu
                         placement={isMaximized ? 'fill' : placement.placement}
                         dockedPlacement={placement.dockedPlacement}
-                        floatable
                         edges={TREE_EDGES}
                         onPlacementChange={changePlacement}
-                        onSaveDefault={placement.saveAsDefault}
-                        onResetDefault={placement.resetToDefault}
                     />
                     <Button
                         type="button"

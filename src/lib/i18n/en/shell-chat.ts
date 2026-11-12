@@ -67,8 +67,6 @@ export const shellChatEnglish: Record<string, string> = {
         'No other projects yet. Add them in the sidebar.',
     'project_row.projects_the_ai_works':
         'Projects the AI works on: pick more to work on several projects in one chat',
-    'project_row.run_the_ai_on':
-        'Run the AI on its own git branch in a copy of the project; the original project is left untouched',
     'subagent_view.back_to_the_conversation': 'Back to the conversation',
     'subagent_view.sub_agent_is_starting': 'Sub-agent is starting…',
     'subagent_view.this_sub_agent_recorded':
@@ -97,8 +95,6 @@ export const shellChatEnglish: Record<string, string> = {
     'panel_menu.fill_and_arrange': 'Fill and arrange',
     'panel_menu.fill': 'Fill the work area',
     'panel_menu.arrange': 'Beside other panels',
-    'panel_menu.save_default': 'Set as default position',
-    'panel_menu.reset_default': 'Reset to default position',
     'dock.resize_panel': 'Resize panel',
     'errors.terminal.failed': 'Terminal error: {value}',
     'errors.terminal.unknown': 'There is no terminal {value}.',
