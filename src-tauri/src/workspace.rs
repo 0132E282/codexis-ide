@@ -25,8 +25,11 @@ const MAX_SEGMENT_BYTES: usize = 255;
 /// Folder names (any level) nobody may read or write: repo internals and dependencies.
 const DENIED_DIRECTORIES: [&str; 4] = [".git", "storage", "vendor", "node_modules"];
 
-/// Shell-style patterns (`*` only) matched against the lower-cased file name: secrets and keys.
-const DENIED_NAMES: [&str; 18] = [
+/// Never listed in the tree (VS Code's default `files.exclude`).
+const HIDDEN_FROM_TREE: [&str; 6] = [".git", ".svn", ".hg", "CVS", ".DS_Store", "Thumbs.db"];
+
+/// Shell-style patterns (`*` only) matched against the lower-cased file name: secrets, keys and macOS's `.DS_Store`.
+const DENIED_NAMES: [&str; 19] = [
     ".env",
     ".env.*",
     "*.pem",
@@ -44,6 +47,7 @@ const DENIED_NAMES: [&str; 18] = [
     ".npmrc",
     ".htpasswd",
     ".netrc",
+    ".ds_store",
     "auth.json",
 ];
 
@@ -249,7 +253,7 @@ impl Workspace {
         Tree { paths, truncated }
     }
 
-    /// What lies directly in one folder: files as `dir/name`, sub-folders as `dir/name/`. Links are skipped; secret files are listed by name only. Folders such as `.git` or `node_modules` can be listed (never read).
+    /// What lies directly in one folder: files as `dir/name`, sub-folders as `dir/name/`. Links are skipped; secret files are listed by name only. `.git` and OS junk are hidden; `node_modules` can be listed (never read).
     pub fn list_directory(&self, path: &str) -> Result<Tree> {
         let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
         let full =
@@ -277,6 +281,11 @@ impl Workspace {
             .filter_map(|entry| {
                 let kind = entry.file_type().ok()?;
                 let name = entry.file_name().to_string_lossy().into_owned();
+
+                if HIDDEN_FROM_TREE.contains(&name.as_str()) {
+                    return None;
+                }
+
                 let relative = if prefix.is_empty() {
                     name
                 } else {

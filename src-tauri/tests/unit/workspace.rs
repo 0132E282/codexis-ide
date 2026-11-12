@@ -84,6 +84,7 @@ fn denied_paths_cannot_be_read_or_written() {
         "credentials.json",
         "Secret.txt",
         ".npmrc",
+        ".DS_Store",
         "auth.json",
     ] {
         fs::write(dir.path().join(name), "x").unwrap();
@@ -251,6 +252,8 @@ fn tree_lists_only_the_root_and_folders_are_read_when_opened() {
     fs::write(dir.path().join("src/main.rs"), "").unwrap();
     fs::write(dir.path().join("README.md"), "").unwrap();
     fs::write(dir.path().join(".env"), "").unwrap();
+    fs::write(dir.path().join(".DS_Store"), "").unwrap();
+    fs::create_dir_all(dir.path().join(".git")).unwrap();
     fs::write(dir.path().join("node_modules/x/i.js"), "").unwrap();
     symlink(dir.path().join("src"), dir.path().join("linked")).unwrap();
 
