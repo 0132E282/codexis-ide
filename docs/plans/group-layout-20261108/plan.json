@@ -86,11 +86,11 @@
       "outOfScope": "Kẹp bề rộng lưu",
       "filesToChange": [
         {
-          "path": "src/components/ai-chat/code-viewer/changes-panel.tsx",
+          "path": "src/components/code-viewer/changes-panel.tsx",
           "changes": "shrink thay shrink-0"
         },
         {
-          "path": "src/components/ai-chat/code-viewer.tsx",
+          "path": "src/components/code-viewer.tsx",
           "changes": "shrink thay shrink-0 cho cột tệp mở"
         }
       ]
@@ -108,7 +108,7 @@
       "outOfScope": "Đổi khoá localStorage",
       "filesToChange": [
         {
-          "path": "src/components/ai-chat/code-viewer/use-panel-widths.ts",
+          "path": "src/components/code-viewer/use-panel-widths.ts",
           "changes": "Kẹp theo chỗ trống của vùng chứa"
         },
         {

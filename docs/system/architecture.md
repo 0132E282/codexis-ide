@@ -152,7 +152,7 @@ flowchart TD
     app["app.tsx · main.tsx"] --> hooks["hooks/<br/>use-workspace · use-auth-status<br/>use-pane-state · use-resizable-width"]
     app --> shell["components/shell<br/>sidebar · chat-panel · settings · dialogs-host"]
     shell --> chat["shell/chat<br/>use-agent-turns · turn-view · message-list"]
-    shell --> viewer["components/ai-chat/code-viewer<br/>tab · cây file · Monaco · panel thay đổi"]
+    shell --> viewer["components/code-viewer<br/>tab · cây file · Monaco · panel thay đổi"]
     shell --> ui["components/ui · form/field<br/>Radix · Field"]
     chat & viewer & hooks --> lib["lib/<br/>ide.ts · ide-auth/settings/usage/tools/profiles/credentials<br/>api.ts · invoke.ts"]
     lib --> tauri["Tauri invoke / listen"]
@@ -160,7 +160,7 @@ flowchart TD
 
 - `app.tsx`: ghép hook và component; `hooks/use-workspace.ts` giữ trạng thái dự án, pane, cuộc chat.
 - `components/shell/`: thanh bên, khung chat, hộp thoại (cài đặt, thống kê, kết nối điện thoại, dự án mới) tải chậm qua `dialogs-host.tsx`; `chat/` chứa hook và component của khung chat; card file AI đã sửa ở `changed-files-card.tsx`.
-- `components/ai-chat/code-viewer/`: tab, cây file, editor (Monaco), panel thay đổi.
+- `components/code-viewer/`: tab, cây file, editor (Monaco), panel thay đổi.
 - `components/form/field/`: bộ Field dùng cho mọi ô nhập; `components/ui/`: Radix.
 - `lib/`: lớp gọi backend, nơi duy nhất nên đổi khi đổi cách gọi backend. `ide.ts` và `ide-*.ts` bọc từng nhóm lệnh; `api.ts` giả lập API cũ của web (`/ai-chat/local/*`) bằng lệnh Tauri; `invoke.ts` bọc `invoke` và dịch lỗi (backend trả key cố định, frontend dịch bằng i18n vi/en ở `lib/i18n`).
 - Frontend nghe sự kiện từ backend: `agent-event` (lượt chat), `terminal-data`, `terminal-exit`, `remote-send`, `remote-connected`, `remote-disconnected`.
@@ -1116,7 +1116,7 @@ flowchart TD
 
 ### 9.5. Activity Diagram: lưu file có format
 
-Nguồn: `src/components/ai-chat/code-viewer/use-file-session.ts`, `commands/files.rs` (`format_code`, `local_put_file`), `formatter.rs`, `workspace.rs`.
+Nguồn: `src/components/code-viewer/use-file-session.ts`, `commands/files.rs` (`format_code`, `local_put_file`), `formatter.rs`, `workspace.rs`.
 
 ```mermaid
 flowchart TD

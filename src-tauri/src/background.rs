@@ -236,6 +236,9 @@ impl BackgroundTasks {
                 .find_by_handle(handle)
                 .is_some_and(|id| self.finish(&id, *state)),
             BackgroundChange::Running { handles } => {
+                // * A set makes the check O(tasks + handles) instead of O(tasks * handles).
+                let live: std::collections::HashSet<&str> =
+                    handles.iter().map(String::as_str).collect();
                 let gone: Vec<String> = self
                     .lock()
                     .iter()
@@ -244,7 +247,7 @@ impl BackgroundTasks {
                             && task
                                 .handle
                                 .as_ref()
-                                .is_some_and(|handle| !handles.contains(handle))
+                                .is_some_and(|handle| !live.contains(handle.as_str()))
                     })
                     .map(|task| task.id.clone())
                     .collect();

@@ -1223,151 +1223,151 @@
     "ast_hash": "78d8dab1e186ad1d1de1e675596c1913",
     "semantic_hash": "78d8dab1e186ad1d1de1e675596c1913"
   },
-  "src/components/ai-chat/code-viewer.tsx": {
+  "src/components/code-viewer.tsx": {
     "mtime": 1794316492.46963,
     "seen": 1794366069.19348,
     "ast_hash": "6fdf01a3938dd1bfc585bdb0df34a68b",
     "semantic_hash": "6fdf01a3938dd1bfc585bdb0df34a68b"
   },
-  "src/components/ai-chat/code-viewer/changes-panel.tsx": {
+  "src/components/code-viewer/changes-panel.tsx": {
     "mtime": 1794117147.5122187,
     "seen": 1794366069.19348,
     "ast_hash": "ef7b9e756f4e81dd921a855100960fe3",
     "semantic_hash": "ef7b9e756f4e81dd921a855100960fe3"
   },
-  "src/components/ai-chat/code-viewer/constants.ts": {
+  "src/components/code-viewer/constants.ts": {
     "mtime": 1794119825.2102432,
     "seen": 1794366069.193481,
     "ast_hash": "86464c8300ec35219dbb9ca55f3f713a",
     "semantic_hash": "86464c8300ec35219dbb9ca55f3f713a"
   },
-  "src/components/ai-chat/code-viewer/cursor-position.tsx": {
+  "src/components/code-viewer/cursor-position.tsx": {
     "mtime": 1794052526.6036694,
     "seen": 1794366069.193482,
     "ast_hash": "fce3478209dc0cd22417ab05e38647b1",
     "semantic_hash": "fce3478209dc0cd22417ab05e38647b1"
   },
-  "src/components/ai-chat/code-viewer/editor-body.tsx": {
+  "src/components/code-viewer/editor-body.tsx": {
     "mtime": 1794126997.5831993,
     "seen": 1794366069.193482,
     "ast_hash": "fa2a76dd62ce1c6703438d54f6dae19d",
     "semantic_hash": "fa2a76dd62ce1c6703438d54f6dae19d"
   },
-  "src/components/ai-chat/code-viewer/editor-options-menu.tsx": {
+  "src/components/code-viewer/editor-options-menu.tsx": {
     "mtime": 1794114485.2047243,
     "seen": 1794366069.193483,
     "ast_hash": "34c42361430bf564230d235734a1a688",
     "semantic_hash": "34c42361430bf564230d235734a1a688"
   },
-  "src/components/ai-chat/code-viewer/editor-toolbar.tsx": {
+  "src/components/code-viewer/editor-toolbar.tsx": {
     "mtime": 1794052526.6418297,
     "seen": 1794366069.193483,
     "ast_hash": "a59048be0a03d4e59898f855ad516f5c",
     "semantic_hash": "a59048be0a03d4e59898f855ad516f5c"
   },
-  "src/components/ai-chat/code-viewer/file-tabs.tsx": {
+  "src/components/code-viewer/file-tabs.tsx": {
     "mtime": 1794052088.9449527,
     "seen": 1794366069.193484,
     "ast_hash": "b3609491f3054ac337b5fa3f4bbff0de",
     "semantic_hash": "b3609491f3054ac337b5fa3f4bbff0de"
   },
-  "src/components/ai-chat/code-viewer/outgoing-commits.tsx": {
+  "src/components/code-viewer/outgoing-commits.tsx": {
     "mtime": 1794074782.3722727,
     "seen": 1794366069.193484,
     "ast_hash": "a5cf763986d10f76fd7137b62fd9e70a",
     "semantic_hash": "a5cf763986d10f76fd7137b62fd9e70a"
   },
-  "src/components/ai-chat/code-viewer/rename-dialog.tsx": {
+  "src/components/code-viewer/rename-dialog.tsx": {
     "mtime": 1793988447.674168,
     "seen": 1794366069.193485,
     "ast_hash": "949d52228fcc9483ef78d25dab6992d3",
     "semantic_hash": "949d52228fcc9483ef78d25dab6992d3"
   },
-  "src/components/ai-chat/code-viewer/tree-items.tsx": {
+  "src/components/code-viewer/tree-items.tsx": {
     "mtime": 1794121527.1831667,
     "seen": 1794366069.193486,
     "ast_hash": "d83966323c4f7cc307b6e320472e7598",
     "semantic_hash": "d83966323c4f7cc307b6e320472e7598"
   },
-  "src/components/ai-chat/code-viewer/tree-panel.tsx": {
+  "src/components/code-viewer/tree-panel.tsx": {
     "mtime": 1794316492.468967,
     "seen": 1794366069.193486,
     "ast_hash": "f64213ddbfb58fb6a33c0460fa2a7847",
     "semantic_hash": "f64213ddbfb58fb6a33c0460fa2a7847"
   },
-  "src/components/ai-chat/code-viewer/tree.ts": {
+  "src/components/code-viewer/tree.ts": {
     "mtime": 1794069242.1195154,
     "seen": 1794366069.1934872,
     "ast_hash": "f9ec132b31c10461f8caa028606e8e7c",
     "semantic_hash": "f9ec132b31c10461f8caa028606e8e7c"
   },
-  "src/components/ai-chat/code-viewer/typed-lines.ts": {
+  "src/components/code-viewer/typed-lines.ts": {
     "mtime": 1793950621.0921485,
     "seen": 1794366069.1934872,
     "ast_hash": "6da5b596e3e67962596d2e2bccdfe979",
     "semantic_hash": "6da5b596e3e67962596d2e2bccdfe979"
   },
-  "src/components/ai-chat/code-viewer/types.ts": {
+  "src/components/code-viewer/types.ts": {
     "mtime": 1793950621.091645,
     "seen": 1794366069.193488,
     "ast_hash": "f34ece9af28f4297e7e840cee6f43615",
     "semantic_hash": "f34ece9af28f4297e7e840cee6f43615"
   },
-  "src/components/ai-chat/code-viewer/use-ai-edit.ts": {
+  "src/components/code-viewer/use-ai-edit.ts": {
     "mtime": 1793985879.7505076,
     "seen": 1794366069.193488,
     "ast_hash": "34c5f7e3a2464f75a70796a3b39e6181",
     "semantic_hash": "34c5f7e3a2464f75a70796a3b39e6181"
   },
-  "src/components/ai-chat/code-viewer/use-blame.ts": {
+  "src/components/code-viewer/use-blame.ts": {
     "mtime": 1794051923.1585968,
     "seen": 1794366069.1934888,
     "ast_hash": "8bfbbcee37004d9c8a8cc6916ba83ca2",
     "semantic_hash": "8bfbbcee37004d9c8a8cc6916ba83ca2"
   },
-  "src/components/ai-chat/code-viewer/use-editor-options.ts": {
+  "src/components/code-viewer/use-editor-options.ts": {
     "mtime": 1794051229.9390328,
     "seen": 1794366069.19349,
     "ast_hash": "4a3434ded4f9eb71076c8627e31bf8a9",
     "semantic_hash": "4a3434ded4f9eb71076c8627e31bf8a9"
   },
-  "src/components/ai-chat/code-viewer/use-eslint.ts": {
+  "src/components/code-viewer/use-eslint.ts": {
     "mtime": 1794121671.4360793,
     "seen": 1794366069.19349,
     "ast_hash": "e2f14b91e754534af08aa267b5aad1e9",
     "semantic_hash": "e2f14b91e754534af08aa267b5aad1e9"
   },
-  "src/components/ai-chat/code-viewer/use-file-session.ts": {
+  "src/components/code-viewer/use-file-session.ts": {
     "mtime": 1794062854.0929608,
     "seen": 1794366069.193491,
     "ast_hash": "4172515416e8e417b373850af3bd048b",
     "semantic_hash": "4172515416e8e417b373850af3bd048b"
   },
-  "src/components/ai-chat/code-viewer/use-file-tree.ts": {
+  "src/components/code-viewer/use-file-tree.ts": {
     "mtime": 1793989025.8517823,
     "seen": 1794366069.193491,
     "ast_hash": "d265f2363391ac09af0249e43ee77133",
     "semantic_hash": "d265f2363391ac09af0249e43ee77133"
   },
-  "src/components/ai-chat/code-viewer/use-keyboard-shortcuts.ts": {
+  "src/components/code-viewer/use-keyboard-shortcuts.ts": {
     "mtime": 1794293794.8120341,
     "seen": 1794366069.193492,
     "ast_hash": "e377c637b4934e20361a0f56b6286791",
     "semantic_hash": "e377c637b4934e20361a0f56b6286791"
   },
-  "src/components/ai-chat/code-viewer/use-language-server.ts": {
+  "src/components/code-viewer/use-language-server.ts": {
     "mtime": 1794066131.4067693,
     "seen": 1794366069.193492,
     "ast_hash": "782be2085453d86e50b28ce54922ec91",
     "semantic_hash": "782be2085453d86e50b28ce54922ec91"
   },
-  "src/components/ai-chat/code-viewer/use-panel-widths.ts": {
+  "src/components/code-viewer/use-panel-widths.ts": {
     "mtime": 1794118099.718369,
     "seen": 1794366069.193493,
     "ast_hash": "18931d40c9e04a77479f3cdb2c1ff103",
     "semantic_hash": "18931d40c9e04a77479f3cdb2c1ff103"
   },
-  "src/components/ai-chat/code-viewer/use-stable-callback.ts": {
+  "src/components/code-viewer/use-stable-callback.ts": {
     "mtime": 1793950621.0907323,
     "seen": 1794366069.193494,
     "ast_hash": "ceb4566a1facb96c0f7094c5f0f1225f",

@@ -1,6 +1,6 @@
 # Thiết kế: bố cục chế độ group (chat grid) không chồng khung
 
-Trạng thái: **đang làm** (đợt 1 đã sửa, chờ kiểm tra bằng ảnh thật; các đợt sau chưa làm). Nguồn yêu cầu: ảnh chụp ngày 2026-11-08, cột "Thay đổi" bị chữ của khung khác đè lên khi dùng group hoặc khi kéo cột rộng. Căn cứ mã `[đã kiểm]`: `src/components/shell/chat-grid.tsx`, `src/components/ai-chat/code-viewer.tsx`, `src/components/ai-chat/code-viewer/{changes-panel,use-panel-widths,constants}.ts*`, `src/components/shell/dock-layout.tsx`, `src/hooks/use-resizable-width.ts`. `[giả định]`: nguyên nhân chính là bề rộng đã lưu của cột không co lại; chưa tái hiện bằng ảnh trên app thật.
+Trạng thái: **đang làm** (đợt 1 đã sửa, chờ kiểm tra bằng ảnh thật; các đợt sau chưa làm). Nguồn yêu cầu: ảnh chụp ngày 2026-11-08, cột "Thay đổi" bị chữ của khung khác đè lên khi dùng group hoặc khi kéo cột rộng. Căn cứ mã `[đã kiểm]`: `src/components/shell/chat-grid.tsx`, `src/components/code-viewer.tsx`, `src/components/code-viewer/{changes-panel,use-panel-widths,constants}.ts*`, `src/components/shell/dock-layout.tsx`, `src/hooks/use-resizable-width.ts`. `[giả định]`: nguyên nhân chính là bề rộng đã lưu của cột không co lại; chưa tái hiện bằng ảnh trên app thật.
 
 ## 1. Phạm vi
 

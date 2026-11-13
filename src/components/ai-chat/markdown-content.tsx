@@ -1,4 +1,4 @@
-import { Children, isValidElement, useMemo } from 'react';
+import { Children, isValidElement, memo, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import ReactMarkdown, {
     defaultUrlTransform,
@@ -313,6 +313,28 @@ const HTML_SCHEMA = {
     },
 };
 
+type MarkdownContentProps = {
+    content: string;
+    /** Renders the HTML inside the markdown (sanitized); for opened files, never for chat text. */
+    html?: boolean;
+    /** Enables ```choices cards; without it such a block is a normal code block. */
+    choices?: ChoiceHandlers;
+};
+
+function areMarkdownPropsEqual(
+    previous: MarkdownContentProps,
+    next: MarkdownContentProps,
+): boolean {
+    return (
+        previous.content === next.content &&
+        previous.html === next.html &&
+        previous.choices?.interactive === next.choices?.interactive &&
+        previous.choices?.answer === next.choices?.answer &&
+        previous.choices?.onChoose === next.choices?.onChoose &&
+        previous.choices?.inPopup === next.choices?.inPopup
+    );
+}
+
 // * One shared empty list: a new `[]` on every render would hand the markdown pipeline different plugins each time.
 const NO_PLUGINS: NonNullable<Options['rehypePlugins']> = [];
 
@@ -322,17 +344,12 @@ const HTML_PLUGINS: NonNullable<Options['rehypePlugins']> = [
 ];
 
 /** * Renders assistant text as GFM markdown. Raw HTML stays inert text unless `html` is set (a file preview): then it is parsed and sanitized. */
-export function MarkdownContent({
+// * Memoised: while an answer streams, every earlier text step of the turn keeps the same text and must not be parsed again for each new piece.
+export const MarkdownContent = memo(function MarkdownContent({
     content,
     choices,
     html = false,
-}: {
-    content: string;
-    /** Renders the HTML inside the markdown (sanitized); for opened files, never for chat text. */
-    html?: boolean;
-    /** Enables ```choices cards; without it such a block is a normal code block. */
-    choices?: ChoiceHandlers;
-}) {
+}: MarkdownContentProps) {
     const components = useMemo(
         () => buildComponents(choices),
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -351,4 +368,4 @@ export function MarkdownContent({
             </ReactMarkdown>
         </div>
     );
-}
+}, areMarkdownPropsEqual);

@@ -1,6 +1,6 @@
 import { Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { CodeViewer } from '@/components/ai-chat/code-viewer';
+import { CodeViewer } from '@/components/code-viewer';
 import { BottomPanel } from '@/components/shell/bottom-panel';
 import { useBackgroundTasks } from '@/components/shell/chat/use-background-tasks';
 import { Button } from '@/components/ui/button';

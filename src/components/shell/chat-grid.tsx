@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { CodeViewer } from '@/components/ai-chat/code-viewer';
+import { CodeViewer } from '@/components/code-viewer';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import type { InlineAnswer } from '@/components/ai-chat/inline-ask';
 import { ChatHeaderActions } from '@/components/shell/chat-header-actions';

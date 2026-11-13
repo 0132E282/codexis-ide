@@ -73,8 +73,9 @@ function ToolRow({ label, children }: { label: string; children: ReactNode }) {
     );
 }
 
+// * Memoised: a streamed piece changes the steps array but not the earlier tool calls, whose diffs must not be drawn again.
 /** One tool call: a single line (name and what it works on) that opens into its command, result or diff. */
-function ToolView({ step }: { step: ToolStep }) {
+const ToolView = memo(function ToolView({ step }: { step: ToolStep }) {
     // * A failed call opens by itself: that is the one worth reading.
     const [toggled, setToggled] = useState<boolean | null>(null);
     const open = toggled ?? step.status === 'error';
@@ -142,7 +143,7 @@ function ToolView({ step }: { step: ToolStep }) {
             )}
         </div>
     );
-}
+});
 
 /** The AI that speaks in the steps below, in a turn relayed between AIs. */
 function SpeakerLabel({ cli }: { cli: AgentCli }) {

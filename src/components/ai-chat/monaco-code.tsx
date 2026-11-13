@@ -19,12 +19,12 @@ import {
     monacoTheme,
 } from '@/components/ai-chat/monaco-setup';
 import { t } from '@/lib/i18n';
-import { useLanguageServer } from '@/components/ai-chat/code-viewer/use-language-server';
-import { useEslint } from './code-viewer/use-eslint';
+import { useLanguageServer } from '@/components/code-viewer/hooks/use-language-server';
+import { useEslint } from '@/components/code-viewer/hooks/use-eslint';
 import { useBlameAnnotation } from '@/components/ai-chat/blame-annotation';
 import type { GitBlameLine } from '@/lib/ide';
-import type { CursorStore } from '@/components/ai-chat/code-viewer/cursor-position';
-import type { EditorOptions } from '@/components/ai-chat/code-viewer/use-editor-options';
+import type { CursorStore } from '@/components/code-viewer/types/editor';
+import type { EditorOptions } from '@/components/code-viewer/types/editor';
 
 const noopOpen = () => {};
 

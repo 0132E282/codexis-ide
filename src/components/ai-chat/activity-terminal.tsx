@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { Columns2, SquareTerminal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { TREE_PATH_MIME } from '@/components/ai-chat/code-viewer/constants';
+import { TREE_PATH_MIME } from '@/components/code-viewer/constants';
 import { ide, onTerminalData, onTerminalExit } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t, translateError } from '@/lib/i18n';

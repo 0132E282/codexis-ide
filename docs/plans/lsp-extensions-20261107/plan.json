@@ -624,7 +624,7 @@
         "dependencies": ["TASK-007"],
         "filesToChange": [
           {
-            "path": "src/components/ai-chat/code-viewer/use-language-server.ts",
+            "path": "src/components/code-viewer/use-language-server.ts",
             "changes": "Tạo mới"
           },
           {
@@ -632,15 +632,15 @@
             "changes": "Gọi hook, hover/gợi ý theo trạng thái server (có thay đổi chưa commit)"
           },
           {
-            "path": "src/components/ai-chat/code-viewer/editor-body.tsx",
+            "path": "src/components/code-viewer/editor-body.tsx",
             "changes": "Truyền root, callback mở file đích (có thay đổi chưa commit)"
           },
           {
-            "path": "src/components/ai-chat/code-viewer/use-file-session.ts",
+            "path": "src/components/code-viewer/use-file-session.ts",
             "changes": "document_save sau khi lưu (có thay đổi chưa commit)"
           },
           {
-            "path": "src/components/ai-chat/code-viewer.tsx",
+            "path": "src/components/code-viewer.tsx",
             "changes": "Mở file + nhảy dòng cho definition (có thay đổi chưa commit)"
           },
           { "path": "src/lib/i18n/en/code-viewer.ts", "changes": "Khoá mới" },
