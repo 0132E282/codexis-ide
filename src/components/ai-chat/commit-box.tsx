@@ -191,7 +191,7 @@ function MessagePopup({
                 return;
             }
 
-            const { data } = await api.post<{ hash: string; files: number }>(
+            await api.post<{ hash: string; files: number }>(
                 '/ai-chat/local/commit',
                 {
                     root,
@@ -201,12 +201,6 @@ function MessagePopup({
                 },
             );
 
-            toast.success(
-                t('commit_box.committed_hash_files_files', {
-                    hash: data.hash,
-                    files: data.files,
-                }),
-            );
             onDone();
         } catch (caught) {
             toast.error(
