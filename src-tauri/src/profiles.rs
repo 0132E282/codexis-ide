@@ -309,7 +309,13 @@ impl ProfileStore {
 
         exists.ok_or(ProfileError::NotFound)?;
 
-        Ok(vec![(variable, self.folder(cli, id).display().to_string())])
+        let folder = self.folder(cli, id);
+
+        if cli == "antigravity" {
+            link_keychains(&folder);
+        }
+
+        Ok(vec![(variable, folder.display().to_string())])
     }
 
     /// Environment of the active profile of `cli`; an unreadable choice gives the default profile.
@@ -322,6 +328,30 @@ impl ProfileStore {
 /// `column = value` on a fixed column name.
 fn same(column: &str, value: impl Into<Value>) -> Expr {
     Expr::col(Alias::new(column)).eq(value)
+}
+
+/// `agy` runs with `HOME` set to the profile folder, where macOS finds no `Library/Keychains` ("A keychain cannot be found to store antigravity"): link the real one in.
+fn link_keychains(profile_home: &Path) {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(real_home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return;
+        };
+        let source = real_home.join("Library/Keychains");
+        let library = profile_home.join("Library");
+        let target = library.join("Keychains");
+
+        if target.exists() || fs::symlink_metadata(&target).is_ok() || !source.is_dir() {
+            return;
+        }
+
+        if fs::create_dir_all(&library).is_ok() {
+            let _ = std::os::unix::fs::symlink(&source, &target);
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = profile_home;
 }
 
 fn create_private_folder(path: &Path) -> std::io::Result<()> {
