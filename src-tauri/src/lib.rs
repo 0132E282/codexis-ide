@@ -28,6 +28,7 @@ pub mod plans;
 pub mod profiles;
 pub mod project_data;
 pub mod projects;
+pub mod register_state;
 pub mod relay;
 pub mod remote;
 pub mod run_log;
@@ -80,34 +81,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            let database = db::path(&app.path().app_data_dir()?);
-            let store = projects::ProjectStore::load(database.clone());
-            let chats = chats::ChatStore::open(database.clone());
-
-            app.manage(commands::AppState::new(store, chats));
-            app.manage(terminal::Terminals::default());
-            app.manage(git_history::HistoryCache::default());
-            app.manage(commands::agent::TurnRegistry::default());
-            app.manage(commands::background::BackgroundStore::new(
-                app.path().app_data_dir()?,
-            ));
-            let language_server_settings = language_server_config::setup(app, &database)?;
-
-            app.manage(language_server::LanguageServers::new(std::sync::Arc::new(
-                commands::language_server::WindowSink {
-                    app: app.handle().clone(),
-                    config: language_server_settings,
-                },
-            )));
-            app.manage(remote::Remote::default());
-            app.manage(app_update::UpdateState::default());
-            app_update::start(app.handle());
-            credentials::setup(app, &database)?;
-            profiles::setup(app, &database)?;
-            usage::setup(app, &database)?;
-            settings::setup(app, &database)?;
-            activity::setup(app, &database)?;
-            tools::setup(app, &database)?;
+            register_state::register(app)?;
 
             Ok(())
         })
