@@ -350,9 +350,20 @@ export function useTerminalSessions(
         setActive(id);
     };
 
-    const divide = () => {
-        if (split !== null) {
+    // * The two terminals shown side by side form a group.
+    const isInGroup = (id: number) =>
+        split !== null && (id === active || id === split);
+
+    // * Split the terminal of the clicked row beside the active one; on a row of the current group it ungroups instead.
+    const divide = (rowId: number) => {
+        if (isInGroup(rowId)) {
             setSplit(null);
+
+            return;
+        }
+
+        if (rowId !== active) {
+            setSplit(rowId);
 
             return;
         }
@@ -398,12 +409,24 @@ export function useTerminalSessions(
         }
     };
 
+    // * A terminal outside the group is shown alone: it must not pair with the group's split and push the first terminal down the list.
     const select = (id: number) => {
+        const keepsGroup = isInGroup(id) && id !== split;
+
         setActive(id);
-        setSplit((current) => (current === id ? null : current));
+        setSplit((current) => (keepsGroup ? current : null));
     };
 
-    return { terminals, active, split, add, divide, remove, select };
+    return {
+        terminals,
+        active,
+        split,
+        isInGroup,
+        add,
+        divide,
+        remove,
+        select,
+    };
 }
 
 export type TerminalSessions = ReturnType<typeof useTerminalSessions>;
@@ -417,19 +440,14 @@ export function ActivityTerminal({
     /** The tab is on screen; the shells stay alive when it is not. */
     visible: boolean;
 }) {
-    const { terminals, active, split, remove, select, divide } = sessions;
-    // * The two terminals shown side by side form a group: listed one under the other with connector lines.
-    const rows =
-        split === null
-            ? terminals
-            : [
-                  ...terminals.filter((terminal) => terminal.id === active),
-                  ...terminals.filter((terminal) => terminal.id === split),
-                  ...terminals.filter(
-                      (terminal) =>
-                          terminal.id !== active && terminal.id !== split,
-                  ),
-              ];
+    const { terminals, active, split, isInGroup, remove, select, divide } =
+        sessions;
+    // * The list keeps its order: a connector line joins the two rows of the group.
+    const groupRows = terminals
+        .map((terminal, index) => (isInGroup(terminal.id) ? index : -1))
+        .filter((index) => index !== -1);
+    const groupStart = groupRows[0] ?? -1;
+    const groupEnd = groupRows[1] ?? -1;
 
     return (
         <section
@@ -470,15 +488,16 @@ export function ActivityTerminal({
                 aria-label={t('activity_terminal.sessions')}
                 className="w-44 shrink-0 overflow-y-auto border-l border-zinc-200 py-1 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
             >
-                {rows.map((terminal) => {
+                {terminals.map((terminal, index) => {
                     const isActive = terminal.id === active;
-                    const isGrouped =
-                        split !== null && (isActive || terminal.id === split);
-                    const connector = !isGrouped
-                        ? null
-                        : isActive
-                          ? '\u250c'
-                          : '\u2514';
+                    const connector =
+                        index === groupStart
+                            ? '\u250c'
+                            : index === groupEnd
+                              ? '\u2514'
+                              : index > groupStart && index < groupEnd
+                                ? '\u2502'
+                                : null;
 
                     return (
                         <li
@@ -515,7 +534,7 @@ export function ActivityTerminal({
                                     aria-label={t(
                                         'activity_terminal.split_terminal',
                                     )}
-                                    onClick={divide}
+                                    onClick={() => divide(terminal.id)}
                                     className="rounded-sm p-1 hover:bg-zinc-300 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:hover:bg-zinc-700"
                                 >
                                     <Columns2

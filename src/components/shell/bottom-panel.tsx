@@ -85,7 +85,7 @@ export function BottomPanel({
         setDoneCommand(terminalCommand);
 
         if (terminalCommand.action === 'split') {
-            sessions.divide();
+            sessions.divide(sessions.active);
         } else if (!terminalCommand.isFresh) {
             sessions.add();
         }
@@ -160,7 +160,7 @@ export function BottomPanel({
                                     'activity_terminal.split_terminal',
                                 )}
                                 aria-pressed={sessions.split !== null}
-                                onClick={sessions.divide}
+                                onClick={() => sessions.divide(sessions.active)}
                                 className={cn(
                                     ACTION_STYLE,
                                     sessions.split !== null &&
