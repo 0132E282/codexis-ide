@@ -128,7 +128,11 @@ export const api = {
                     root: rootOf(data),
                 });
             case '/ai-chat/local/commit-message':
-                return call('local_commit_message', { root: rootOf(data) });
+                return call('local_commit_message', {
+                    root: rootOf(data),
+                    cli: data?.cli,
+                    model: data?.model,
+                });
             case '/ai-chat/inline-ask':
                 return call('inline_ask', {
                     root: rootOf(data),

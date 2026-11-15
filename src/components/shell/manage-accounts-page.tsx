@@ -40,8 +40,9 @@ const PROVIDER: Record<ProfileCli, string> = {
 // * Tools that report no usage numbers: their accounts have no usage column.
 const NO_USAGE: ProfileCli[] = ['github', 'gemini'];
 
-const hasUsage = (cli: ProfileCli): cli is Exclude<AgentCli, 'ollama'> =>
-    !NO_USAGE.includes(cli);
+const hasUsage = (
+    cli: ProfileCli,
+): cli is Exclude<AgentCli, 'ollama' | 'openclaw'> => !NO_USAGE.includes(cli);
 
 // * A login finishes in the browser, outside the app, so the accounts are re-read while the page is open.
 const POLL_MILLISECONDS = 3000;

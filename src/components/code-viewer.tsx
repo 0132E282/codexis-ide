@@ -9,7 +9,7 @@ import type { AssistantIdentity } from '@/components/ai-chat/assistant-avatar';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { ide } from '@/lib/ide';
+import { ide, type AgentSelection } from '@/lib/ide';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useFullscreen } from '@/hooks/use-fullscreen';
@@ -94,8 +94,8 @@ export function CodeViewer({
     onShowHistory?: (path: string) => void;
     /** * Name and avatar of the assistant, shown on the answers of the comment box. */
     assistant?: AssistantIdentity;
-    /** * The AI account and model picked in the chat: the commit box's "Tạo bằng AI" asks that one. */
-    aiSelection?: { accountId: number | null; model: string | null };
+    /** The AI and model picked in the chat for writing a commit message. */
+    aiSelection?: AgentSelection;
     /** * An answer's edits changed state (applied or dropped from the header tick): the page's list of changes follows. */
     onChangesUpdate?: (proposals: AiChatProposal[]) => void;
     /** * The file open in the viewer changed (null: none): the chat tags it by itself. */

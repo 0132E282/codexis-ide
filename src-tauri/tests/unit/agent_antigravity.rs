@@ -51,3 +51,29 @@ fn arguments_carry_model_session_and_attached_prompt() {
     );
     assert_eq!(agent.prompt_args("-x hi"), ["--print=-x hi"]);
 }
+
+#[test]
+fn execution_modes_use_their_cli_flags() {
+    for (mode, flags) in [
+        ("auto", vec!["--sandbox", "--mode", "auto"]),
+        ("accept-edits", vec!["--mode", "accept-edits"]),
+        ("plan", vec!["--mode", "plan"]),
+        ("bypassPermissions", vec!["--dangerously-skip-permissions"]),
+    ] {
+        let args = AntigravityAgent.turn_args(&TurnOptions {
+            session: None,
+            model: None,
+            mode: Some(mode),
+            add_dirs: &[],
+            blocked_dirs: &[],
+            fork: false,
+        });
+
+        for flag in flags {
+            assert!(
+                args.iter().any(|argument| argument == flag),
+                "{mode}: {flag}"
+            );
+        }
+    }
+}

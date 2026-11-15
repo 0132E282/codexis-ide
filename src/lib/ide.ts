@@ -24,7 +24,9 @@ export type Project = {
 export type NewProject = Omit<Project, 'id'>;
 /** A workspace: its folder name and the full path that addresses it in the other commands. */
 export type ProjectInfo = { name: string; root: string };
-export type AgentCli = 'claude' | 'codex' | 'ollama' | 'antigravity';
+export type AgentCli =
+    'claude' | 'codex' | 'ollama' | 'antigravity' | 'openclaw';
+export type AgentSelection = { cli: AgentCli; model: string | null };
 /** One step of a turn that is shown live: the AI's words, or a tool call with its result. */
 export type Step =
     | { kind: 'text'; text: string }
@@ -302,7 +304,7 @@ export const ide = {
         session: string | null,
         /** Model for `--model` / `-m`; null keeps the CLI's own default. */
         model: string | null,
-        /** Permission mode (`--permission-mode`, Claude only); null keeps the CLI's own. */
+        /** Selected CLI's execution mode; null keeps its own settings. */
         mode: string | null,
         /** Switches on the Claude CLI's experimental agent teams for this turn. */
         agentTeam: boolean,

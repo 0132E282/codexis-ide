@@ -93,12 +93,26 @@ fn a_stop_is_kept_for_the_relay_and_ends_a_process_that_starts_later() {
 #[test]
 fn a_relayed_hop_never_asks_the_person() {
     assert_eq!(
-        mode_for_hop(Some(agent::PLAN_MODE)),
+        mode_for_hop(CliKind::Claude, CliKind::Claude, Some(agent::PLAN_MODE)),
         Some(agent::READ_ONLY_PLAN_MODE)
     );
-    assert_eq!(mode_for_hop(Some(agent::ASK_MODE)), None);
-    assert_eq!(mode_for_hop(Some("auto")), Some("auto"));
-    assert_eq!(mode_for_hop(None), None);
+    assert_eq!(
+        mode_for_hop(CliKind::Claude, CliKind::Claude, Some(agent::ASK_MODE)),
+        None
+    );
+    assert_eq!(
+        mode_for_hop(CliKind::Claude, CliKind::Claude, Some("auto")),
+        Some("auto")
+    );
+    assert_eq!(mode_for_hop(CliKind::Claude, CliKind::Claude, None), None);
+    assert_eq!(
+        mode_for_hop(CliKind::Codex, CliKind::Codex, Some("read-only")),
+        Some("read-only")
+    );
+    assert_eq!(
+        mode_for_hop(CliKind::Antigravity, CliKind::Claude, Some("plan")),
+        None
+    );
 }
 
 #[test]

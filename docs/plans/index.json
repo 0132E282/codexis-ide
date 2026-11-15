@@ -1,5 +1,11 @@
 [
   {
+    "title": "Kết nối OpenClaw với Codexis IDE qua MCP cục bộ",
+    "description": "Kế hoạch cung cấp MCP server local cho OpenClaw truy cập workspace đang mở; bản đầu đề xuất chỉ đọc, không mở cổng mạng, quyền ghi/terminal cần chốt riêng.",
+    "tags": ["openclaw", "mcp", "integration", "security"],
+    "path": "docs/plans/openclaw-connection-20261115/plan.json"
+  },
+  {
     "title": "Lộ trình tổng: thứ tự triển khai OOP refactor và 4 tính năng mới",
     "description": "Gộp 5 plan (OOP refactor, bảng Context, Side chat, ngăn Plan, ngăn Background tasks) thành một thứ tự làm duy nhất, chỉ ra file dùng chung (agent.rs, remote.rs, workspace-pane.tsx, dock) để không đè nhau. Không thay thế plan chi tiết, chỉ dẫn tới chúng.",
     "tags": [

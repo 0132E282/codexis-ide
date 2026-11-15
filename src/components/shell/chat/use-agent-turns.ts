@@ -51,7 +51,7 @@ const nextAccount = async (
     finished: Turn,
     triedAccounts: number[],
 ): Promise<number | null> => {
-    if (finished.cli === 'ollama') {
+    if (finished.cli === 'ollama' || finished.cli === 'openclaw') {
         return null;
     }
 
@@ -92,7 +92,7 @@ export function useAgentTurns({
     projects,
     cli,
     models,
-    mode,
+    modes,
     agentTeam,
     extraRoots,
     worktree,
@@ -104,7 +104,7 @@ export function useAgentTurns({
     projects: { root: string; name: string }[];
     cli: AgentCli;
     models: Partial<Record<AgentCli, string>>;
-    mode: string;
+    modes: Record<AgentCli, string>;
     agentTeam: boolean;
     extraRoots: string[];
     worktree: boolean;
@@ -324,7 +324,8 @@ export function useAgentTurns({
                         payload === 'claude' ||
                         payload === 'codex' ||
                         payload === 'ollama' ||
-                        payload === 'antigravity'
+                        payload === 'antigravity' ||
+                        payload === 'openclaw'
                     ) {
                         update(runId, (turn) => withSpeaker(turn, payload));
                     }
@@ -491,7 +492,7 @@ export function useAgentTurns({
                     prompt,
                     session,
                     models[target] ?? null,
-                    target === 'claude' ? mode : null,
+                    modes[target] === 'default' ? null : modes[target],
                     target === 'claude' && agentTeam,
                     root,
                     extraRoots.filter((extra) =>
@@ -643,7 +644,7 @@ export function useAgentTurns({
 
     /** The "Chuyển tài khoản" button: the last message goes again under another signed-in account of the same AI that has not hit a limit. */
     const switchAccount = useStableCallback((finished: Turn) => {
-        if (busy || finished.cli === 'ollama') {
+        if (busy || finished.cli === 'ollama' || finished.cli === 'openclaw') {
             return;
         }
 

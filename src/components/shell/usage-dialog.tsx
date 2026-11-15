@@ -9,7 +9,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { AntigravityIcon, ClaudeIcon, CodexIcon, OllamaIcon } from '@/icons';
+import {
+    AntigravityIcon,
+    ClaudeIcon,
+    CodexIcon,
+    OllamaIcon,
+    OpenClawIcon,
+} from '@/icons';
 import { errorText } from '@/lib/ide';
 import { ideAuth, type AuthProvider, type LimitUsage } from '@/lib/ide-auth';
 import { ideProfiles } from '@/lib/ide-profiles';
@@ -28,6 +34,7 @@ const CLI_LABELS: Record<CliUsage['cli'], string> = {
     codex: 'Codex',
     ollama: 'Ollama',
     antigravity: 'Antigravity',
+    openclaw: 'OpenClaw',
 };
 
 /** Brand color of each CLI: its name and its usage bar. */
@@ -48,6 +55,10 @@ const CLI_COLORS: Record<CliUsage['cli'], { text: string; bar: string }> = {
         text: 'text-blue-600 dark:text-blue-400',
         bar: 'bg-blue-500',
     },
+    openclaw: {
+        text: 'text-red-600 dark:text-red-400',
+        bar: 'bg-red-500',
+    },
 };
 
 const CLI_ICONS = {
@@ -55,6 +66,7 @@ const CLI_ICONS = {
     codex: CodexIcon,
     ollama: OllamaIcon,
     antigravity: AntigravityIcon,
+    openclaw: OpenClawIcon,
 };
 
 const formatNumber = (value: number): string =>

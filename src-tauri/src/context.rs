@@ -37,6 +37,7 @@ pub fn window_of(cli: CliKind, model: &str, reported_window: Option<u64>) -> Opt
         | CliKind::Ollama
         | CliKind::Gemini
         | CliKind::Antigravity
+        | CliKind::OpenClaw
         | CliKind::Github => None,
     }
 }
@@ -68,7 +69,11 @@ impl ContextUsage {
                     input.saturating_add(read).saturating_add(creation),
                 )
             }
-            CliKind::Ollama | CliKind::Gemini | CliKind::Antigravity | CliKind::Github => {
+            CliKind::Ollama
+            | CliKind::Gemini
+            | CliKind::Antigravity
+            | CliKind::OpenClaw
+            | CliKind::Github => {
                 return None;
             }
         };

@@ -46,7 +46,7 @@ fn codex_arguments_follow_the_documented_order() {
     let args = CodexAgent.turn_args(&TurnOptions {
         session: Some("s"),
         model: Some("gpt-5"),
-        mode: Some("plan"),
+        mode: Some("read-only"),
         add_dirs: &dirs,
         blocked_dirs: &[],
         fork: false,
@@ -62,6 +62,8 @@ fn codex_arguments_follow_the_documented_order() {
             "/b",
             "-m",
             "gpt-5",
+            "--sandbox",
+            "read-only",
             "resume",
             "s",
             "--json",
@@ -69,4 +71,32 @@ fn codex_arguments_follow_the_documented_order() {
             "-"
         ]
     );
+}
+
+#[test]
+fn codex_execution_modes_use_their_cli_flags() {
+    for (mode, expected) in [
+        ("workspace-write", vec!["--sandbox", "workspace-write"]),
+        ("approve-for-me", vec!["--approve-for-me"]),
+        (
+            "bypassPermissions",
+            vec!["--dangerously-bypass-approvals-and-sandbox"],
+        ),
+    ] {
+        let args = CodexAgent.turn_args(&TurnOptions {
+            session: None,
+            model: None,
+            mode: Some(mode),
+            add_dirs: &[],
+            blocked_dirs: &[],
+            fork: false,
+        });
+
+        for flag in expected {
+            assert!(
+                args.iter().any(|argument| argument == flag),
+                "{mode}: {flag}"
+            );
+        }
+    }
 }

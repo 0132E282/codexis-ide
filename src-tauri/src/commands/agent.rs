@@ -551,12 +551,20 @@ impl TurnObserver for HopObserver<'_> {
     }
 }
 
-/// The permission mode of a relayed hop, which has nobody to answer questions: plan mode stays read-only and "ask each time" falls back to the CLI's default.
-pub(crate) fn mode_for_hop(mode: Option<&str>) -> Option<&str> {
-    match mode {
-        Some(agent::PLAN_MODE) => Some(agent::READ_ONLY_PLAN_MODE),
-        Some(agent::ASK_MODE) => None,
-        other => other,
+/// A relayed hop only uses its own CLI's mode; Claude questions cannot be answered in a hop.
+pub(crate) fn mode_for_hop(chat_cli: CliKind, target: CliKind, mode: Option<&str>) -> Option<&str> {
+    if chat_cli != target {
+        return None;
+    }
+
+    if chat_cli == CliKind::Claude {
+        match mode {
+            Some(agent::PLAN_MODE) => Some(agent::READ_ONLY_PLAN_MODE),
+            Some(agent::ASK_MODE) => None,
+            other => other,
+        }
+    } else {
+        mode
     }
 }
 
@@ -599,7 +607,7 @@ impl HopRunner for TauriHopRunner<'_> {
             options: TurnOptions {
                 session: self.sessions.get(&target).map(String::as_str),
                 model: if own { self.model } else { None },
-                mode: mode_for_hop(self.mode),
+                mode: mode_for_hop(self.chat_cli, target, self.mode),
                 add_dirs: self.add_dirs,
                 blocked_dirs: self.blocked_dirs,
                 fork: false,
@@ -668,7 +676,7 @@ pub async fn agent_send(
         blocked_dirs: &[],
         fork,
     }
-    .validate()?;
+    .validate(cli.kind())?;
 
     let root = state.workspace_for(root.as_deref())?.root().to_path_buf();
     let project_root = root.clone();
@@ -717,7 +725,12 @@ pub async fn agent_send(
     let environment = turn_environment(&app, cli, agent_team);
 
     // * Only "Hỏi từng việc" and plan mode of the Claude CLI ask the person: its input stays open for the answers. The side chat has nobody to answer, so its plan mode stays read-only and never asks.
-    let mode = agent::mode_for_run(&run_id, mode.as_deref()).map(str::to_string);
+    let mode = if cli.kind() == CliKind::Claude {
+        agent::mode_for_run(&run_id, mode.as_deref())
+    } else {
+        mode.as_deref()
+    }
+    .map(str::to_string);
     let responder =
         (cli.supports_ask_mode() && agent::asks_person(mode.as_deref())).then(Responder::new);
 

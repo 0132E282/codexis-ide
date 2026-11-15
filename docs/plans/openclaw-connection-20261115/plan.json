@@ -1,0 +1,139 @@
+{
+    "title": "Kết nối OpenClaw với Codexis IDE qua MCP cục bộ",
+    "description": "Cung cấp MCP server cục bộ để OpenClaw khám phá và thao tác có kiểm soát trên workspace đang mở trong Codexis IDE. Bản đầu đề xuất chỉ đọc; quyền ghi và chạy lệnh cần quyết định riêng.",
+    "tags": ["openclaw", "mcp", "integration", "security", "rust"],
+    "createdAt": "2026-11-15",
+    "status": "DRAFT_CHO_DUYET",
+    "design": {
+        "source": "OpenClaw SDK docs: Gateway integrations for external apps",
+        "related": ["docs/system/architecture.md"],
+        "note": "OpenClaw là bên gọi, Codexis IDE là MCP server/đích. Đề xuất transport stdio cục bộ do OpenClaw hỗ trợ MCP qua stdio; cần xác minh cách chuyển tiếp đúng workspace từ ứng dụng Tauri tới tiến trình server. Chỉ cung cấp công cụ đọc workspace ở giai đoạn đầu; mọi thao tác ghi, terminal và git mutation nằm ngoài phạm vi cho tới khi được duyệt."
+    },
+    "hardConstraints": [
+        "Không làm lộ secret từ env, headers, cấu hình MCP, credential hoặc file nhạy cảm qua tool response hay log",
+        "Mỗi yêu cầu phải bị giới hạn vào workspace được người dùng chọn; chặn traversal và symlink thoát khỏi root",
+        "Mặc định chỉ đọc; không ghi file, chạy terminal, thay đổi git hoặc truy cập workspace khác",
+        "Không bind cổng mạng trong phương án stdio cục bộ",
+        "Không thêm dependency trước khi xác minh MCP SDK/protocol tương thích với Rust và giấy phép",
+        "Giữ nguyên contract Tauri hiện có nếu không có yêu cầu thay đổi rõ ràng"
+    ],
+    "requirements": [
+        {"id": "REQ-OC1", "source": "Yêu cầu người dùng", "text": "Cho phép OpenClaw kết nối tới Codexis IDE để tương tác với workspace đang mở qua MCP cục bộ."},
+        {"id": "REQ-OC2", "source": "Đề xuất bảo vệ dữ liệu trong plan", "text": "Giới hạn công cụ ban đầu ở thao tác đọc trong workspace đã chọn; mọi quyền ghi và chạy lệnh cần duyệt riêng."},
+        {"id": "REQ-OC3", "source": "Đề xuất bảo vệ dữ liệu trong plan", "text": "Người dùng có thể bật/tắt kết nối và biết trạng thái kết nối cùng workspace được cấp quyền."}
+    ],
+    "acceptanceCriteria": [
+        {"id": "AC-OC1", "requirement": "REQ-OC1", "text": "OpenClaw khởi chạy và bắt tay MCP thành công với Codexis server trên cùng máy; danh sách tool và schema được trả về hợp lệ."},
+        {"id": "AC-OC2", "requirement": "REQ-OC2", "text": "OpenClaw đọc được các file được phép trong workspace đang chọn; đường dẫn ngoài root, traversal và symlink thoát root bị từ chối."},
+        {"id": "AC-OC3", "requirement": "REQ-OC3", "text": "Tool không thể ghi file, chạy terminal, sửa git, đọc secret hoặc chuyển sang workspace khác; lỗi không chứa giá trị bí mật."},
+        {"id": "AC-OC4", "requirement": "REQ-OC3", "text": "Người dùng có thể bật/tắt tích hợp và xem trạng thái cùng workspace hiện được cấp quyền."},
+        {"id": "AC-OC5", "requirement": "REQ-OC1", "text": "Tắt ứng dụng hoặc ngắt kết nối sẽ kết thúc server/session gọn gàng; lỗi khởi chạy hiển thị thông báo có thể xử lý."}
+    ],
+    "verificationCommands": [
+        "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
+        "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+        "cargo test --manifest-path src-tauri/Cargo.toml",
+        "pnpm typecheck",
+        "pnpm lint"
+    ],
+    "codingGroups": [
+        {"id": "OCG1", "name": "giao thức và ranh giới bảo mật MCP", "tasks": ["TASK-OC01", "TASK-OC02"], "dependsOnGroups": [], "parallel": false},
+        {"id": "OCG2", "name": "điều khiển tích hợp trong ứng dụng", "tasks": ["TASK-OC03"], "dependsOnGroups": ["OCG1"], "parallel": false},
+        {"id": "OCG3", "name": "kiểm chứng OpenClaw và tài liệu", "tasks": ["TASK-OC04"], "dependsOnGroups": ["OCG2"], "parallel": false}
+    ],
+    "executionOrder": ["TASK-OC01", "TASK-OC02", "TASK-OC03", "TASK-OC04"],
+    "tasks": [
+        {
+            "id": "TASK-OC01",
+            "title": "Chốt transport và cơ chế gắn server với workspace đang mở",
+            "status": "TODO",
+            "priority": "P0",
+            "priorityReason": "OpenClaw cần khởi chạy được MCP server và server phải nhận đúng workspace, không tự suy đoán hoặc cấp quyền toàn máy.",
+            "requirements": ["REQ-OC1", "REQ-OC2"],
+            "acceptanceCriteria": ["AC-OC1", "AC-OC2"],
+            "design": "Tài liệu OpenClaw SDK; docs/system/architecture.md",
+            "inScope": "Xác minh cấu hình MCP stdio của OpenClaw, khả năng gọi tiến trình server, cách truyền root có xác thực/kiểm tra, lifecycle server và khả năng tái dùng Workspace/Sandbox của Rust.",
+            "outOfScope": "Gateway từ xa, bind HTTP/TCP, kết nối qua Internet, chia sẻ workspace giữa máy.",
+            "dependencies": [],
+            "filesToChange": [],
+            "approach": "Đối chiếu tài liệu OpenClaw với cấu trúc Tauri hiện tại; quyết định server là chế độ CLI riêng hay tiến trình con do ứng dụng khởi chạy. Chỉ chốt phương án sau khi xác định được cách giới hạn root và thu hồi quyền.",
+            "test": "Prototype/kiểm tra tương thích trong thư mục tạm hoặc tài liệu chính thức; chưa thay đổi mã sản phẩm.",
+            "doneWhen": "Có quyết định transport, cấu hình OpenClaw mẫu và luồng truyền workspace được duyệt; không cần mở cổng mạng."
+        },
+        {
+            "id": "TASK-OC02",
+            "title": "Cung cấp MCP server chỉ đọc, giới hạn trong workspace",
+            "status": "TODO",
+            "priority": "P0",
+            "priorityReason": "Đây là phạm vi chức năng tối thiểu để OpenClaw đọc ngữ cảnh dự án mà không có quyền thay đổi dữ liệu.",
+            "requirements": ["REQ-OC1", "REQ-OC2"],
+            "acceptanceCriteria": ["AC-OC1", "AC-OC2", "AC-OC3"],
+            "design": "Dùng Workspace/Sandbox hiện có làm ranh giới; schema MCP và danh sách tool phải được chốt sau TASK-OC01.",
+            "inScope": "Khám phá tool và thao tác chỉ đọc tối thiểu trên workspace được cấp quyền (liệt kê/đọc tệp được phép); giới hạn kích thước đầu ra; lọc lỗi và dữ liệu nhạy cảm.",
+            "outOfScope": "Ghi/sửa/xóa file, terminal, git mutation, đọc thư mục home, truy cập nhiều workspace, truyền file đính kèm ra ngoài.",
+            "dependencies": ["TASK-OC01"],
+            "filesToChange": [
+                {"path": "src-tauri/src/", "changes": "Thêm module/entry point MCP theo kiến trúc đã duyệt; danh sách file cụ thể chốt ở TASK-OC01"},
+                {"path": "src-tauri/Cargo.toml", "changes": "Chỉ thay đổi nếu SDK/protocol được duyệt và không thể dùng dependency hiện có"}
+            ],
+            "approach": "Tách giao thức khỏi command Tauri nếu cần chạy stdio độc lập; tái sử dụng kiểm tra workspace containment, áp giới hạn kích thước và timeout, không serialize env/header/token vào response hoặc log.",
+            "test": "Unit/integration: handshake MCP, tool discovery, đọc file hợp lệ, path traversal, symlink ngoài root, file lớn, lỗi I/O, xác nhận không có thao tác ghi hoặc command execution.",
+            "doneWhen": "Các AC bảo mật và đọc workspace đạt; danh sách tool chỉ có công cụ đã duyệt."
+        },
+        {
+            "id": "TASK-OC03",
+            "title": "Thêm bật/tắt kết nối và trạng thái OpenClaw trong IDE",
+            "status": "TODO",
+            "priority": "P1",
+            "priorityReason": "Người dùng cần biết server có hoạt động và workspace nào đang được chia sẻ.",
+            "requirements": ["REQ-OC3"],
+            "acceptanceCriteria": ["AC-OC4", "AC-OC5"],
+            "design": "Tái dùng khu vực Settings/MCP hiện có nếu phù hợp với thiết kế; không hiển thị secret cấu hình.",
+            "inScope": "Điều khiển lifecycle tích hợp, trạng thái kết nối, workspace được cấp quyền, phản hồi lỗi khởi chạy và dừng server khi ứng dụng đóng.",
+            "outOfScope": "Quản lý nhiều profile OpenClaw, OAuth, cloud relay, đồng bộ cấu hình toàn máy.",
+            "dependencies": ["TASK-OC02"],
+            "filesToChange": [
+                {"path": "src-tauri/src/commands/", "changes": "Command quản lý lifecycle chỉ khi kiến trúc cần Tauri điều khiển server"},
+                {"path": "src/lib/api.ts", "changes": "Wrapper tương ứng nếu thêm command Tauri"},
+                {"path": "src/components/shell/settings-tabs/", "changes": "Bật/tắt và trạng thái tích hợp; file cụ thể chốt theo UI hiện có"},
+                {"path": "src/lib/i18n/vi/", "changes": "Nhãn và trạng thái tiếng Việt"},
+                {"path": "src/lib/i18n/en/", "changes": "Nhãn và trạng thái tiếng Anh"}
+            ],
+            "approach": "Giữ contract Rust/TypeScript đồng bộ nếu cần command mới; hiển thị tối thiểu trạng thái, workspace, cách cấu hình OpenClaw và lỗi đã loại bỏ dữ liệu nhạy cảm.",
+            "test": "Kiểm tra bật/tắt, đổi workspace, app shutdown, server crash và cấu hình OpenClaw sai.",
+            "doneWhen": "Trạng thái hiển thị khớp lifecycle thật; kết nối đã dừng không còn truy cập workspace."
+        },
+        {
+            "id": "TASK-OC04",
+            "title": "Kiểm chứng kết nối OpenClaw và hoàn tất hướng dẫn",
+            "status": "TODO",
+            "priority": "P1",
+            "priorityReason": "Cần chứng minh tương tác từ OpenClaw thật và hướng dẫn người dùng cấu hình đúng.",
+            "requirements": ["REQ-OC1", "REQ-OC2", "REQ-OC3"],
+            "acceptanceCriteria": ["AC-OC1", "AC-OC2", "AC-OC3", "AC-OC4", "AC-OC5"],
+            "design": "docs/system/architecture.md",
+            "inScope": "Chạy kết nối OpenClaw trên máy phát triển, xác nhận đọc workspace, kiểm tra đường dẫn bị từ chối, lifecycle, cập nhật tài liệu cấu hình và trạng thái plan.",
+            "outOfScope": "Kiểm thử production hoặc gửi dữ liệu dự án ra dịch vụ bên ngoài.",
+            "dependencies": ["TASK-OC03"],
+            "filesToChange": [
+                {"path": "docs/system/architecture.md", "changes": "Ghi luồng kết nối, transport, trust boundary và quyền"},
+                {"path": "docs/system/openclaw-mcp.md", "changes": "Hướng dẫn cài cấu hình OpenClaw, bật/tắt và xử lý lỗi"}
+            ],
+            "approach": "Dùng workspace thử không chứa secret; chạy checklist quyền và thử ngắt kết nối; cập nhật tài liệu theo đúng cấu hình đã kiểm chứng.",
+            "test": "Handshake từ OpenClaw; discovery; đọc file; từ chối path ngoài root; không có khả năng ghi/terminal; dừng sạch khi ngắt.",
+            "doneWhen": "Mọi AC có bằng chứng chạy thật; tài liệu khớp cấu hình và trạng thái server."
+        }
+    ],
+    "risks": [
+        "OpenClaw cần tiến trình stdio độc lập trong khi app là Tauri desktop; truyền workspace và quản lý lifecycle có thể cần kiến trúc riêng.",
+        "MCP tool đọc file có thể làm lộ secret trong workspace; cần denylist/allowlist rõ ràng và không thể chỉ dựa vào ẩn file trong UI.",
+        "Thêm SDK MCP có thể tăng dependency và bề mặt bảo trì; xác minh giao thức, giấy phép và khả năng dùng dependency hiện có trước.",
+        "Workspace đổi hoặc app thoát có thể để lại server dùng root cũ; ràng buộc quyền vào session và thu hồi khi lifecycle kết thúc."
+    ],
+    "rollback": "Tắt tích hợp và bỏ cấu hình OpenClaw; nếu triển khai rồi, gỡ entry point/server/UI theo từng task. Không cần migration dữ liệu nếu không phát sinh lưu trữ cấu hình mới.",
+    "openQuestions": [
+        {"id": "Q-OC1", "question": "OpenClaw và Codexis chạy cùng máy, dùng MCP stdio cục bộ chứ?", "default": "Có; không mở cổng mạng."},
+        {"id": "Q-OC2", "question": "Quyền bản đầu chỉ đọc workspace hay cần sửa file/chạy terminal?", "default": "Chỉ đọc; quyền ghi và terminal để giai đoạn sau cần duyệt riêng."},
+        {"id": "Q-OC3", "question": "OpenClaw chỉ truy cập workspace đang mở hay người dùng chọn nhiều workspace?", "default": "Chỉ workspace đang mở và phải thu hồi khi đổi/đóng workspace."}
+    ]
+}

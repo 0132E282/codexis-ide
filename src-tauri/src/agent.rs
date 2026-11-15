@@ -8,12 +8,14 @@ mod claude_background;
 mod codex;
 mod env_guard;
 mod ollama;
+mod openclaw;
 
 pub use antigravity::AntigravityAgent;
 pub use claude::ClaudeAgent;
 pub use codex::CodexAgent;
 pub use env_guard::EnvGuard;
 pub use ollama::OllamaAgent;
+pub use openclaw::OpenClawAgent;
 
 use crate::background::BackgroundChange;
 use crate::cli::{self, CliKind, Environment};
@@ -69,7 +71,7 @@ pub struct TurnOptions<'a> {
     /// The conversation to continue.
     pub session: Option<&'a str>,
     pub model: Option<&'a str>,
-    /// Permission mode (Claude only).
+    /// Execution mode of the selected CLI.
     pub mode: Option<&'a str>,
     /// More project folders the CLI may work in, next to the one it runs in.
     pub add_dirs: &'a [String],
@@ -83,12 +85,12 @@ impl TurnOptions<'_> {
     /// # Errors
     /// The error key of the first invalid option: the model is checked before the mode, then the session
     /// (`validation.bad_session`: it goes straight after `--resume` / `resume`, so it must never be read as a flag).
-    pub fn validate(&self) -> Result<(), &'static str> {
+    pub fn validate(&self, cli: CliKind) -> Result<(), &'static str> {
         if self.model.is_some_and(|name| !valid_model(name)) {
             return Err("agent.model_invalid");
         }
 
-        if self.mode.is_some_and(|name| !valid_mode(name)) {
+        if self.mode.is_some_and(|name| !valid_mode(cli, name)) {
             return Err("agent.mode_invalid");
         }
 
@@ -123,6 +125,16 @@ pub trait AgentCli: Sync {
     /// Events carried by one output line of the CLI (empty for lines the chat does not show).
     fn parse_line(&self, line: &str) -> Vec<Event>;
 
+    /// Whether the CLI prints its whole answer as one document at the end (not one JSON object per line): the output is then read to its end and given to [`AgentCli::parse_output`].
+    fn prints_whole_output(&self) -> bool {
+        false
+    }
+
+    /// The events carried by the whole output of a turn, for a CLI where [`AgentCli::prints_whole_output`] is true.
+    fn parse_output(&self, _output: &str) -> Vec<Event> {
+        Vec::new()
+    }
+
     /// What one output line says about shell commands the CLI runs in the background (nothing for CLIs that say nothing).
     fn background_change(&self, _line: &str) -> Option<BackgroundChange> {
         None
@@ -143,6 +155,7 @@ static CLAUDE: ClaudeAgent = ClaudeAgent;
 static CODEX: CodexAgent = CodexAgent;
 static OLLAMA: OllamaAgent = OllamaAgent;
 static ANTIGRAVITY: AntigravityAgent = AntigravityAgent;
+static OPENCLAW: OpenClawAgent = OpenClawAgent;
 
 impl CliKind {
     /// The chat adapter of the CLI; none for the CLIs that cannot chat.
@@ -152,9 +165,125 @@ impl CliKind {
             Self::Codex => Some(&CODEX),
             Self::Ollama => Some(&OLLAMA),
             Self::Antigravity => Some(&ANTIGRAVITY),
+            Self::OpenClaw => Some(&OPENCLAW),
             Self::Gemini | Self::Github => None,
         }
     }
+}
+
+/// Runs one read-only question with the selected chat CLI and returns its plain answer.
+pub fn ask_once_read_only(
+    kind: CliKind,
+    root: &Path,
+    prompt: &str,
+    model: Option<&str>,
+    environment: &[(&str, String)],
+) -> Result<String, String> {
+    let cli = kind
+        .agent()
+        .ok_or_else(|| "agent.cli_unsupported".to_string())?;
+    let program = cli.program();
+    let path = cli::locate(program).ok_or_else(|| format!("agent.command_missing|{program}"))?;
+    let (args, prompt_in_stdin) = read_only_question_args(kind, model, prompt);
+    let mut child = cli::command(&path, environment)
+        .args(args)
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("agent.command_failed|{program}: {error}"))?;
+
+    if prompt_in_stdin {
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| format!("agent.command_failed|{program}: stdin unavailable"))?
+            .write_all(prompt.as_bytes())
+            .map_err(|error| format!("agent.command_failed|{program}: {error}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("agent.command_failed|{program}: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+
+        return Err(format!("agent.command_failed|{program}: {detail}"));
+    }
+
+    if stdout.is_empty() {
+        return Err(format!("agent.command_failed|{program}: empty response"));
+    }
+
+    Ok(stdout)
+}
+
+const ANTIGRAVITY_READ_ONLY_SETTINGS: &str = r#"{"agentMode":"","permissions":{"deny":["read_file(*)","write_file(*)","command(*)","mcp(*)","read_url(*)","execute_url(*)"]}}"#;
+
+fn read_only_question_args(
+    kind: CliKind,
+    model: Option<&str>,
+    prompt: &str,
+) -> (Vec<String>, bool) {
+    let mut args = match kind {
+        CliKind::Claude | CliKind::Ollama => vec![
+            "-p",
+            "--tools",
+            "",
+            "--strict-mcp-config",
+            "--disable-slash-commands",
+            "--setting-sources",
+            "",
+            "--no-session-persistence",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>(),
+        CliKind::Codex => [
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--skip-git-repo-check",
+            "--ephemeral",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect(),
+        CliKind::Antigravity => [
+            "--sandbox",
+            "--disable-slash-commands",
+            "--settings",
+            ANTIGRAVITY_READ_ONLY_SETTINGS,
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect(),
+        CliKind::Gemini | CliKind::Github | CliKind::OpenClaw => return (Vec::new(), false),
+    };
+
+    if let Some(model) = model {
+        args.push(
+            if kind == CliKind::Codex {
+                "-m"
+            } else {
+                "--model"
+            }
+            .to_string(),
+        );
+        args.push(model.to_string());
+    }
+
+    if kind == CliKind::Codex {
+        args.push("-".to_string());
+    } else if kind == CliKind::Antigravity {
+        args.push(format!("--print={prompt}"));
+    }
+
+    (args, kind != CliKind::Antigravity)
 }
 
 /// The text of a JSON string value, if it is not empty.
@@ -196,7 +325,7 @@ pub fn mode_for_run<'a>(run_id: &str, mode: Option<&'a str>) -> Option<&'a str> 
 }
 
 /// Permission modes of the Claude CLI the chat offers (`--permission-mode`).
-const MODES: [&str; 6] = [
+const CLAUDE_MODES: [&str; 6] = [
     "plan",
     READ_ONLY_PLAN_MODE,
     "auto",
@@ -205,9 +334,19 @@ const MODES: [&str; 6] = [
     "bypassPermissions",
 ];
 
-/// Whether `mode` is one of the permission modes the chat offers.
-fn valid_mode(mode: &str) -> bool {
-    MODES.contains(&mode)
+/// Whether the selected CLI accepts this execution mode.
+fn valid_mode(cli: CliKind, mode: &str) -> bool {
+    match cli {
+        CliKind::Claude => CLAUDE_MODES.contains(&mode),
+        CliKind::Codex => matches!(
+            mode,
+            "read-only" | "workspace-write" | "approve-for-me" | "bypassPermissions"
+        ),
+        CliKind::Antigravity => {
+            matches!(mode, "auto" | "accept-edits" | "plan" | "bypassPermissions")
+        }
+        CliKind::Ollama | CliKind::OpenClaw | CliKind::Gemini | CliKind::Github => false,
+    }
 }
 
 /// The person's answer to a permission question of the CLI.
@@ -482,6 +621,18 @@ impl TurnRequest<'_> {
     }
 
     fn stream(&self, stdout: ChildStdout, observer: &dyn TurnObserver) {
+        if self.cli.prints_whole_output() {
+            let mut output = String::new();
+            let _ =
+                std::io::Read::read_to_string(&mut std::io::BufReader::new(stdout), &mut output);
+
+            for event in self.cli.parse_output(&output) {
+                observer.event(event);
+            }
+
+            return;
+        }
+
         let mut filter = EventFilter::default();
         let mut reader = std::io::BufReader::new(stdout);
         // * One buffer for every line of the turn (`BufRead::lines` allocates a `String` per line).

@@ -25,6 +25,20 @@ export const shellChatVietnamese: Record<string, string> = {
     'cli_options.automatically_accept_every_file':
         'Tự chấp nhận mọi lần sửa file',
     'cli_options.bypass_permissions': 'Bỏ qua quyền',
+    'cli_options.cli_default': 'Mặc định của CLI',
+    'cli_options.cli_default_hint': 'Dùng cài đặt của CLI',
+    'cli_options.read_only': 'Chỉ đọc',
+    'cli_options.codex_read_only_hint': 'Chặn ghi file trong sandbox',
+    'cli_options.workspace_write': 'Ghi trong workspace',
+    'cli_options.codex_workspace_write_hint':
+        'Cho phép ghi trong sandbox của workspace',
+    'cli_options.approve_for_me': 'Tự duyệt giúp tôi',
+    'cli_options.codex_approve_for_me_hint': 'Tự xét các yêu cầu cấp quyền',
+    'cli_options.codex_bypass_hint': 'Tắt yêu cầu cấp quyền và sandbox',
+    'cli_options.antigravity_auto_hint': 'Tự duyệt trong sandbox của terminal',
+    'cli_options.antigravity_accept_edits_hint':
+        'Tự chấp nhận các lần sửa file',
+    'cli_options.antigravity_plan_hint': 'Lập kế hoạch trước khi sửa file',
     'cli_options.plan_only_do_not': 'Chỉ lập kế hoạch, không sửa file',
     'cli_options.recommended': 'Khuyên dùng',
     'common.remove_name': 'Bỏ {name}',

@@ -201,7 +201,7 @@ impl CliKind {
             Self::Gemini => Some(&GeminiAuth),
             Self::Antigravity => Some(&AntigravityAuth),
             Self::Github => Some(&GithubAuth),
-            Self::Ollama => None,
+            Self::Ollama | Self::OpenClaw => None,
         }
     }
 }

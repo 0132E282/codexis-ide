@@ -1,6 +1,7 @@
 use super::state::AppState;
-use crate::agent::{self, ClaudeAgent};
+use crate::agent;
 use crate::cli::CliKind;
+use crate::credentials::CredentialStore;
 use crate::git::{Branches, Change, Committed, GitRepo};
 use crate::git_history::{
     BlameLine, BranchCompare, BranchesInfo, CommitFile, CommitInfo, FileDiff, GitHistory,
@@ -144,16 +145,31 @@ pub async fn local_pull(
     super::blocking("git.pull_failed", move || GitRepo::new(&workspace).pull()).await
 }
 
-/// Has the AI write a commit message from the diff of the listed files; sends that diff to the Claude CLI.
+/// Has the selected chat AI write a commit message from the diff of the listed files.
 #[tauri::command]
 pub async fn local_commit_message(
     state: State<'_, AppState>,
     profiles: State<'_, ProfileStore>,
+    credentials: State<'_, CredentialStore>,
     root: Option<String>,
+    cli: Option<String>,
+    model: Option<String>,
 ) -> Result<CommitMessage, String> {
+    let kind = match cli.as_deref() {
+        Some(name) => CliKind::parse_agent(name).ok_or("agent.cli_unsupported")?,
+        None if model.is_none() => CliKind::Claude,
+        None => return Err("agent.cli_unsupported".to_string()),
+    };
+    let model = model.or_else(|| (cli.is_none()).then(|| "haiku".to_string()));
+
+    if let Some(model) = model.as_deref() {
+        validation::valid_model(model)?;
+    }
+
     let workspace = state.workspace_for(root.as_deref())?;
-    // * The same account as the chat: the one chosen for the Claude CLI.
-    let environment = profiles.active_environment(CliKind::Claude.name());
+    let agent_cli = kind.agent().ok_or("agent.cli_unsupported")?;
+    let mut environment = agent_cli.turn_environment(credentials.environment(), false);
+    environment.extend(profiles.active_environment(kind.name()));
 
     super::blocking("git.ai_message_failed", move || {
         let diff = GitRepo::new(&workspace).diff_text().map_err(|error| error.to_string())?;
@@ -161,7 +177,8 @@ pub async fn local_commit_message(
             "Write a commit message for the change below. The first line is a short title (at most 72 characters, no trailing period), \
              then a blank line, then a brief description. Return only the message, no explanation, no markdown.\n\n{diff}"
         );
-        let answer = ClaudeAgent.ask_once(workspace.root(), &prompt, &environment)?;
+        let answer =
+            agent::ask_once_read_only(kind, workspace.root(), &prompt, model.as_deref(), &environment)?;
         let (title, description) = agent::split_message(&answer);
 
         Ok(CommitMessage { title, description })

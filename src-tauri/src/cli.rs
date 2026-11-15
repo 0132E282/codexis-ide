@@ -16,6 +16,7 @@ pub enum CliKind {
     Ollama,
     Gemini,
     Antigravity,
+    OpenClaw,
     Github,
 }
 
@@ -30,11 +31,12 @@ impl CliKind {
     ];
 
     /// The CLIs that can run a chat turn (Gemini is only connected for now, it does not chat yet).
-    pub const AGENTS: [CliKind; 4] = [
+    pub const AGENTS: [CliKind; 5] = [
         CliKind::Claude,
         CliKind::Codex,
         CliKind::Ollama,
         CliKind::Antigravity,
+        CliKind::OpenClaw,
     ];
 
     pub fn parse(name: &str) -> Option<Self> {
@@ -44,6 +46,7 @@ impl CliKind {
             "ollama" => Some(Self::Ollama),
             "gemini" => Some(Self::Gemini),
             "antigravity" => Some(Self::Antigravity),
+            "openclaw" => Some(Self::OpenClaw),
             "github" => Some(Self::Github),
             _ => None,
         }
@@ -62,6 +65,7 @@ impl CliKind {
             Self::Ollama => "ollama",
             Self::Gemini => "gemini",
             Self::Antigravity => "antigravity",
+            Self::OpenClaw => "openclaw",
             Self::Github => "github",
         }
     }
@@ -74,6 +78,7 @@ impl CliKind {
             Self::Ollama => "ollama",
             Self::Gemini => "gemini",
             Self::Antigravity => "agy",
+            Self::OpenClaw => "openclaw",
             Self::Github => "gh",
         }
     }
@@ -88,6 +93,7 @@ impl CliKind {
             Self::Gemini => "GEMINI_CLI_HOME",
             // * `agy` keeps everything under `$HOME/.gemini`, and has no variable of its own for it.
             Self::Antigravity => "HOME",
+            Self::OpenClaw => "OPENCLAW_STATE_DIR",
             Self::Github => "GH_CONFIG_DIR",
         }
     }

@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { ChoiceCard } from '@/components/ai-chat/choice-card';
 import { ResizeHandle } from '@/components/ai-chat/resize-handle';
 import { ProjectRow } from '@/components/shell/chat/project-row';
+import { DEFAULT_MODES } from '@/components/shell/chat/cli-options';
 import { MessageList } from '@/components/shell/chat/message-list';
 import { useAgentTurns } from '@/components/shell/chat/use-agent-turns';
 import { formatLines } from '@/components/shell/chat/attachment';
@@ -32,7 +33,7 @@ import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { markChatActive } from '@/hooks/use-voice-preferences';
 import { findChoices } from '@/lib/choices-parser';
 import { pickFiles } from '@/lib/ide';
-import type { AgentCli, Subagent } from '@/lib/ide';
+import type { AgentCli, AgentSelection, Subagent } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 
 // * The chat can be dragged this wide at most, so the file beside it keeps the larger share.
@@ -40,7 +41,7 @@ const CHAT_MAX_WIDTH = 560;
 
 /** Settings shared by the chats of the grid: set once in the row under the grid, they replace the ones each chat keeps for itself. */
 export type SharedChatOptions = {
-    mode: string;
+    modes: Record<AgentCli, string>;
     agentTeam: boolean;
     extraRoots: string[];
     worktree: boolean;
@@ -76,6 +77,7 @@ export function ChatPanel({
     headerActions,
     showHeader = true,
     sharedOptions,
+    onSelectionChange,
     projects = NO_PROJECTS,
     acceptsRemote = false,
 }: {
@@ -129,22 +131,34 @@ export function ChatPanel({
     showHeader?: boolean;
     /** Chat grid: the settings come from the one row under the grid, and the chat shows no row of its own. */
     sharedOptions?: SharedChatOptions;
+    /** Reports the selected AI and model to the enclosing workspace. */
+    onSelectionChange?: (selection: AgentSelection) => void;
 }) {
     const [text, setText] = useState('');
     const [cli, setCli] = useState<AgentCli>('claude');
     // * The model is picked per CLI; none means the CLI's own default.
     const [models, setModels] = useState<Partial<Record<AgentCli, string>>>({});
-    // * Claude only: the permission mode, and whether its experimental agent teams are on.
-    const [ownMode, setMode] = useState('auto');
+    const [ownModes, setModes] = useState(DEFAULT_MODES);
+    // * Claude only: experimental agent teams.
     const [ownAgentTeam, setAgentTeam] = useState(false);
     // * Worktree: the turns run on their own git branch, in a copy of the project; off by default.
     const [ownWorktree, setWorktree] = useState(false);
     // * Other projects the AI may also work in; kept for the whole chat, changed between messages.
     const [ownExtraRoots, setExtraRoots] = useState<string[]>([]);
-    const mode = sharedOptions?.mode ?? ownMode;
+    const modes = sharedOptions?.modes ?? ownModes;
+    const mode = modes[cli];
     const agentTeam = sharedOptions?.agentTeam ?? ownAgentTeam;
     const extraRoots = sharedOptions?.extraRoots ?? ownExtraRoots;
     const worktree = sharedOptions?.worktree ?? ownWorktree;
+    const selectedModel = models[cli] ?? null;
+    const reportSelection = useStableCallback(
+        onSelectionChange ?? (() => undefined),
+    );
+
+    useEffect(
+        () => reportSelection({ cli, model: selectedModel }),
+        [cli, selectedModel, reportSelection],
+    );
     // * Names this chat among the chats of the grid: only the one in use reads its answers aloud.
     const chatId = useId();
     const bottom = useRef<HTMLDivElement>(null);
@@ -230,7 +244,7 @@ export function ChatPanel({
         projects,
         cli,
         models,
-        mode,
+        modes,
         agentTeam,
         extraRoots,
         worktree,
@@ -445,7 +459,12 @@ export function ChatPanel({
                                 compact
                                 cli={cli}
                                 mode={mode}
-                                onModeChange={setMode}
+                                onModeChange={(next) =>
+                                    setModes((current) => ({
+                                        ...current,
+                                        [cli]: next,
+                                    }))
+                                }
                                 agentTeam={agentTeam}
                                 onAgentTeamChange={setAgentTeam}
                                 worktree={worktree}

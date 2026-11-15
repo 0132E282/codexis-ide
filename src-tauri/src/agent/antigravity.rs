@@ -24,6 +24,22 @@ impl AgentCli for AntigravityAgent {
             args.push(model.to_string());
         }
 
+        match options.mode {
+            Some("auto") => {
+                args.push("--sandbox".to_string());
+                args.push("--mode".to_string());
+                args.push("auto".to_string());
+            }
+            Some(mode @ ("accept-edits" | "plan")) => {
+                args.push("--mode".to_string());
+                args.push(mode.to_string());
+            }
+            Some("bypassPermissions") => {
+                args.push("--dangerously-skip-permissions".to_string());
+            }
+            _ => {}
+        }
+
         if let Some(id) = options.session {
             args.push("--conversation".to_string());
             args.push(id.to_string());

@@ -21,6 +21,7 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { api } from '@/lib/api';
 import { requestErrorMessage } from '@/lib/ai-error';
 import { t } from '@/lib/i18n';
+import type { AgentSelection } from '@/lib/ide';
 import {
     COMMIT_MESSAGE_MAX_LENGTH,
     COMMIT_TITLE_MAX_LENGTH,
@@ -30,20 +31,18 @@ type MessageForm = { title: string; description: string; base: string };
 
 /**
  * The "Commit" button in the header of the change list opens a popup: a title and a description typed as usual, or written by the AI from the diff ("Tạo bằng AI"), then one local commit of the listed files. Nothing is pushed.
- * ! "Tạo bằng AI" sends the diff of the listed files to the picked AI account, only when it is pressed.
+ * ! "Tạo bằng AI" sends the diff to the selected AI and model only when pressed.
  */
 export function CommitActions({
     root,
     disabled,
-    accountId,
-    model,
+    selection,
     onCommitted,
 }: {
     root: string;
     /** * No git, or nothing changed. */
     disabled: boolean;
-    accountId: number | null;
-    model: string | null;
+    selection: AgentSelection | null;
     onCommitted: () => void;
 }) {
     const [open, setOpen] = useState(false);
@@ -66,8 +65,7 @@ export function CommitActions({
                     {open && (
                         <MessagePopup
                             root={root}
-                            accountId={accountId}
-                            model={model}
+                            selection={selection}
                             onDone={() => {
                                 setOpen(false);
                                 onCommitted();
@@ -82,13 +80,11 @@ export function CommitActions({
 
 function MessagePopup({
     root,
-    accountId,
-    model,
+    selection,
     onDone,
 }: {
     root: string;
-    accountId: number | null;
-    model: string | null;
+    selection: AgentSelection | null;
     onDone: () => void;
 }) {
     const form = useAppForm<MessageForm>({
@@ -144,7 +140,11 @@ function MessagePopup({
         try {
             const { data } = await api.post<MessageForm>(
                 '/ai-chat/local/commit-message',
-                { root, ai_account_id: accountId, ai_model: model },
+                {
+                    root,
+                    cli: selection?.cli ?? null,
+                    model: selection?.model ?? null,
+                },
             );
 
             form.setValue('title', data.title);

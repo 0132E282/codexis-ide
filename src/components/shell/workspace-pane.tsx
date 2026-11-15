@@ -24,6 +24,7 @@ import type { Pane, PaneState } from '@/hooks/use-pane-state';
 import { ChangesViewerContext } from '@/contexts/changes-viewer-context';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { api } from '@/lib/api';
+import type { AgentSelection } from '@/lib/ide';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
@@ -109,6 +110,10 @@ export function WorkspacePane({
 }) {
     // * Kept here, not in the pane state: it follows the pane (which stays mounted) and nothing else needs it.
     const [sideChatOpen, setSideChatOpen] = useState(false);
+    const [aiSelection, setAiSelection] = useState<AgentSelection>({
+        cli: 'claude',
+        model: null,
+    });
     const sideChat = useSideChat(pane.root);
     const sideChatPlacement = usePanelPlacement('side-chat', 'bottom');
     // * The session rail: open or not, the context usage the chat reports, a counter bumped when a turn was saved (the rail reads files, branch and pull request again) and the file the rail asked the viewer to open.
@@ -214,6 +219,10 @@ export function WorkspacePane({
     // * Alone: no file shown and the main chat folded away, so the side chat takes the whole area; any panel coming back puts it in its column again.
     const sideChatAlone =
         sideChatOpen && !state.editorVisible && state.chatCollapsed;
+    const isChatCollapsed =
+        state.chatCollapsed &&
+        !filesHidden &&
+        (state.editorVisible || sideChatOpen);
     const toggleSideChat = () => setSideChatOpen((open) => !open);
     // * The chat is shown again when the app starts: a chat folded away in an earlier run (squeezed out by a wide file) must not stay gone. Once per project and run, so a chat folded on purpose stays folded afterwards.
     useEffect(() => {
@@ -440,13 +449,22 @@ export function WorkspacePane({
                         onViewRepo={noViewerChange}
                         changes={[]}
                         assistant={{ name: 'Codexis' }}
+                        aiSelection={aiSelection}
                         onInlineAsk={askAssistant(pane.root)}
                         onShowHistory={onShowHistory}
                         onActiveFile={(file) =>
                             onPatch(pane.key, { activeFile: file })
                         }
+                        // * With no editor, the chat is shown despite a stored collapsed flag; opening a file must keep that visible layout.
                         onEditorVisible={(visible) =>
-                            onPatch(pane.key, { editorVisible: visible })
+                            onPatch(pane.key, {
+                                editorVisible: visible,
+                                ...(visible &&
+                                state.chatCollapsed &&
+                                !isChatCollapsed
+                                    ? { chatCollapsed: false }
+                                    : {}),
+                            })
                         }
                     />
                 }
@@ -456,6 +474,7 @@ export function WorkspacePane({
                         root={pane.root}
                         acceptsRemote={active}
                         projects={projects}
+                        onSelectionChange={setAiSelection}
                         fill
                         headerStart={
                             sidebarCollapsed &&
@@ -490,11 +509,7 @@ export function WorkspacePane({
                         }
                         popup={railPopup}
                         onOpenRail={toggleRail}
-                        collapsed={
-                            state.chatCollapsed &&
-                            !filesHidden &&
-                            (state.editorVisible || sideChatOpen)
-                        }
+                        collapsed={isChatCollapsed}
                         newChat={state.newChat}
                         openConversation={state.picked}
                         onConversation={(id) => {

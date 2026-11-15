@@ -5,6 +5,7 @@ import type { useResizableWidth } from '@/hooks/use-resizable-width';
 import { cn } from '@/lib/utils';
 import { OutgoingCommits } from '@/components/code-viewer/components/outgoing-commits';
 import { t } from '@/lib/i18n';
+import type { AgentSelection } from '@/lib/ide';
 import { CommitActions } from '@/components/ai-chat/commit-box';
 import type { FileActions } from '@/components/ai-chat/file-context-menu';
 import {
@@ -28,8 +29,8 @@ export function ChangesPanel({
     /** Leftmost column of the window: leaves room for the macOS window buttons. */
     startInset?: boolean;
     localChanges: ReturnType<typeof useLocalChanges>;
-    /** * The AI account and model picked in the chat: the commit box's "Tạo bằng AI" asks that one. */
-    aiSelection?: { accountId: number | null; model: string | null };
+    /** The AI and model picked in the chat for writing a commit message. */
+    aiSelection?: AgentSelection;
     actions: FileActions;
     onOpenFile: (path: string) => void;
     /** * The column's own width, dragged by its edge; the chat takes the rest. */
@@ -109,8 +110,7 @@ export function ChangesPanel({
                             !localChanges.git ||
                             (localChanges.files ?? []).length === 0
                         }
-                        accountId={aiSelection?.accountId ?? null}
-                        model={aiSelection?.model ?? null}
+                        selection={aiSelection ?? null}
                         onCommitted={localChanges.refresh}
                     />
                 </div>

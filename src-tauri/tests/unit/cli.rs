@@ -39,7 +39,8 @@ fn lists_keep_their_order() {
             CliKind::Claude,
             CliKind::Codex,
             CliKind::Ollama,
-            CliKind::Antigravity
+            CliKind::Antigravity,
+            CliKind::OpenClaw
         ]
     );
 }

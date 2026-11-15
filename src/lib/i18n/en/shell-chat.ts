@@ -25,6 +25,22 @@ export const shellChatEnglish: Record<string, string> = {
     'cli_options.automatically_accept_every_file':
         'Automatically accept every file edit',
     'cli_options.bypass_permissions': 'Bypass permissions',
+    'cli_options.cli_default': 'CLI default',
+    'cli_options.cli_default_hint': 'Use the CLI settings',
+    'cli_options.read_only': 'Read only',
+    'cli_options.codex_read_only_hint': 'Prevent file writes in the sandbox',
+    'cli_options.workspace_write': 'Workspace write',
+    'cli_options.codex_workspace_write_hint':
+        'Allow writes in the workspace sandbox',
+    'cli_options.approve_for_me': 'Approve for me',
+    'cli_options.codex_approve_for_me_hint':
+        'Automatically review approval requests',
+    'cli_options.codex_bypass_hint': 'Disable approval prompts and sandboxing',
+    'cli_options.antigravity_auto_hint':
+        'Use automatic review in the terminal sandbox',
+    'cli_options.antigravity_accept_edits_hint':
+        'Accept file edits automatically',
+    'cli_options.antigravity_plan_hint': 'Plan before making changes',
     'cli_options.plan_only_do_not': 'Plan only, do not edit files',
     'cli_options.recommended': 'Recommended',
     'common.remove_name': 'Remove {name}',

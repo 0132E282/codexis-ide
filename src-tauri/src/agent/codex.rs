@@ -25,6 +25,18 @@ impl AgentCli for CodexAgent {
             args.push(model.to_string());
         }
 
+        match options.mode {
+            Some(mode @ ("read-only" | "workspace-write")) => {
+                args.push("--sandbox".to_string());
+                args.push(mode.to_string());
+            }
+            Some("approve-for-me") => args.push("--approve-for-me".to_string()),
+            Some("bypassPermissions") => {
+                args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
+            }
+            _ => {}
+        }
+
         if let Some(id) = options.session {
             args.push("resume".to_string());
             args.push(id.to_string());

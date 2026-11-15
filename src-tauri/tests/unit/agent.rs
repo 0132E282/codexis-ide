@@ -22,21 +22,21 @@ fn a_session_that_looks_like_a_flag_is_rejected() {
         "a\0b",
     ] {
         assert_eq!(
-            options(Some(bad)).validate(),
+            options(Some(bad)).validate(CliKind::Claude),
             Err(validation::KEY_BAD_SESSION),
             "{bad:?}"
         );
     }
 
     assert_eq!(
-        options(Some(&"a".repeat(129))).validate(),
+        options(Some(&"a".repeat(129))).validate(CliKind::Claude),
         Err(validation::KEY_BAD_SESSION)
     );
     assert_eq!(
-        options(Some("0b1c9f3e-5a2d-4c7e-9a10-2f6d8b7e1c34")).validate(),
+        options(Some("0b1c9f3e-5a2d-4c7e-9a10-2f6d8b7e1c34")).validate(CliKind::Claude),
         Ok(())
     );
-    assert_eq!(options(None).validate(), Ok(()));
+    assert_eq!(options(None).validate(CliKind::Claude), Ok(()));
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn plan_mode_asks_the_person_but_the_side_chat_stays_read_only() {
     assert!(asks_person(Some(PLAN_MODE)) && asks_person(Some(ASK_MODE)));
     assert!(!asks_person(Some(READ_ONLY_PLAN_MODE)) && !asks_person(Some("auto")));
     assert!(!asks_person(None));
-    assert!(valid_mode(READ_ONLY_PLAN_MODE));
+    assert!(valid_mode(CliKind::Claude, READ_ONLY_PLAN_MODE));
 
     // * Only plan mode of a side-chat run changes; the main chat and other modes are as the person chose.
     assert_eq!(
@@ -230,10 +230,10 @@ fn permission_mode_is_a_claude_flag_only() {
     assert!(!args(CliKind::Codex, None, None, Some("plan"), &[])
         .iter()
         .any(|arg| arg == "--permission-mode"));
-    assert!(valid_mode("acceptEdits"));
-    assert!(valid_mode("bypassPermissions"));
-    assert!(!valid_mode("--x"));
-    assert!(!valid_mode("Bypass"));
+    assert!(valid_mode(CliKind::Claude, "acceptEdits"));
+    assert!(valid_mode(CliKind::Claude, "bypassPermissions"));
+    assert!(!valid_mode(CliKind::Claude, "--x"));
+    assert!(!valid_mode(CliKind::Claude, "Bypass"));
 }
 
 #[test]
@@ -267,15 +267,34 @@ fn options_are_validated_model_first_then_mode() {
     };
 
     assert_eq!(
-        options(Some("--x"), Some("--y")).validate(),
+        options(Some("--x"), Some("--y")).validate(CliKind::Claude),
         Err("agent.model_invalid")
     );
     assert_eq!(
-        options(Some("opus"), Some("--y")).validate(),
+        options(Some("opus"), Some("--y")).validate(CliKind::Claude),
         Err("agent.mode_invalid")
     );
-    assert_eq!(options(Some("opus"), Some("plan")).validate(), Ok(()));
-    assert_eq!(options(None, None).validate(), Ok(()));
+    assert_eq!(
+        options(Some("opus"), Some("plan")).validate(CliKind::Claude),
+        Ok(())
+    );
+    assert_eq!(options(None, None).validate(CliKind::Claude), Ok(()));
+    assert_eq!(
+        options(None, Some("plan")).validate(CliKind::Codex),
+        Err("agent.mode_invalid")
+    );
+    assert_eq!(
+        options(None, Some("read-only")).validate(CliKind::Codex),
+        Ok(())
+    );
+    assert_eq!(
+        options(None, Some("accept-edits")).validate(CliKind::Antigravity),
+        Ok(())
+    );
+    assert_eq!(
+        options(None, Some("read-only")).validate(CliKind::Antigravity),
+        Err("agent.mode_invalid")
+    );
 }
 
 #[test]
@@ -287,6 +306,38 @@ fn unknown_cli_name_is_rejected() {
     );
     assert_eq!(CliKind::parse_agent("rm"), None);
     assert_eq!(CliKind::parse_agent("github"), None);
+}
+
+#[test]
+fn commit_message_questions_use_the_selected_model_without_write_tools() {
+    for (kind, model_flag, read_only_flag) in [
+        (CliKind::Claude, "--model", "--tools"),
+        (CliKind::Codex, "-m", "read-only"),
+        (CliKind::Ollama, "--model", "--tools"),
+        (CliKind::Antigravity, "--model", "--settings"),
+    ] {
+        let (args, _) = read_only_question_args(kind, Some("picked-model"), "commit text");
+
+        assert!(
+            args.windows(2)
+                .any(|pair| pair == [model_flag, "picked-model"]),
+            "{kind:?}: {args:?}"
+        );
+        assert!(args.iter().any(|argument| argument == read_only_flag));
+    }
+
+    let (claude, _) = read_only_question_args(CliKind::Claude, None, "commit text");
+    assert!(!claude.iter().any(|argument| argument == "--model"));
+
+    let (antigravity, prompt_in_stdin) =
+        read_only_question_args(CliKind::Antigravity, None, "commit text");
+    assert!(!prompt_in_stdin);
+    assert!(antigravity.contains(&"--print=commit text".to_string()));
+    assert!(!antigravity.contains(&"--mode".to_string()));
+    let settings: serde_json::Value = serde_json::from_str(ANTIGRAVITY_READ_ONLY_SETTINGS).unwrap();
+    assert_eq!(settings["agentMode"], "");
+    assert_eq!(settings["permissions"]["deny"][1], "write_file(*)");
+    assert_eq!(settings["permissions"]["deny"][2], "command(*)");
 }
 
 #[test]

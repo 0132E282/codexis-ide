@@ -16,12 +16,13 @@ import { PanelsMenu } from '@/components/shell/panels-menu';
 import { RailPopup } from '@/components/shell/rail-popup';
 import { SessionRail } from '@/components/shell/session-rail';
 import { ProjectRow } from '@/components/shell/chat/project-row';
+import { DEFAULT_MODES } from '@/components/shell/chat/cli-options';
 import { ChatPanel } from '@/components/shell/chat-panel';
 import { Button } from '@/components/ui/button';
 import { usePanelPlacement } from '@/hooks/use-panel-placement';
 import { useResizableWidth } from '@/hooks/use-resizable-width';
 import { api } from '@/lib/api';
-import type { GridMember } from '@/lib/ide';
+import type { AgentCli, AgentSelection, GridMember } from '@/lib/ide';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -66,19 +67,19 @@ const nameOf = (projects: { root: string; name: string }[], root: string) =>
     root;
 
 type ChatSettings = {
-    mode: string;
+    modes: Record<AgentCli, string>;
     agentTeam: boolean;
     extraRoots: string[];
     worktree: boolean;
 };
 const DEFAULT_SETTINGS: ChatSettings = {
-    mode: 'auto',
+    modes: DEFAULT_MODES,
     agentTeam: false,
     extraRoots: [],
     worktree: false,
 };
 
-/** The chat grid: up to four chats, from any projects, in one layout, with the files of the picked chat's project on the right. The chats of one project share one bar (project, permission mode, agent team) and are stacked under it; projects sit side by side, so the bar is split the same way as the chats. */
+/** The chat grid: chats of one project share a settings bar, which follows the selected chat's CLI. */
 export function ChatGrid({
     members,
     projects,
@@ -125,6 +126,9 @@ export function ChatGrid({
 }) {
     // * Settings are per project: a project that needs another permission mode does not hold the others back.
     const [settings, setSettings] = useState<Record<string, ChatSettings>>({});
+    const [chatSelections, setChatSelections] = useState<
+        Record<number, AgentSelection>
+    >({});
     const settingsOf = (root: string) => settings[root] ?? DEFAULT_SETTINGS;
     const patchSettings = (root: string, change: Partial<ChatSettings>) =>
         setSettings((current) => ({
@@ -226,6 +230,12 @@ export function ChatGrid({
     const picked =
         members.find((member) => member.conversation === pickedId) ??
         members[0];
+    const cliOf = (chats: GridMember[]): AgentCli => {
+        const active =
+            chats.find((chat) => chat.conversation === pickedId) ?? chats[0];
+
+        return chatSelections[active.conversation]?.cli ?? 'claude';
+    };
     // * The picked project's code is in a window of its own: no files here, so the chats keep the room.
     const codeDetached =
         picked !== undefined && codeDetachedRoots.includes(picked.workspace);
@@ -326,11 +336,21 @@ export function ChatGrid({
                                                 extraRoots,
                                             })
                                         }
-                                        cli="claude"
+                                        cli={cliOf(group.chats)}
                                         compact
-                                        mode={settingsOf(group.root).mode}
+                                        mode={
+                                            settingsOf(group.root).modes[
+                                                cliOf(group.chats)
+                                            ]
+                                        }
                                         onModeChange={(mode) =>
-                                            patchSettings(group.root, { mode })
+                                            patchSettings(group.root, {
+                                                modes: {
+                                                    ...settingsOf(group.root)
+                                                        .modes,
+                                                    [cliOf(group.chats)]: mode,
+                                                },
+                                            })
                                         }
                                         agentTeam={
                                             settingsOf(group.root).agentTeam
@@ -462,6 +482,17 @@ export function ChatGrid({
                                                 sharedOptions={settingsOf(
                                                     member.workspace,
                                                 )}
+                                                onSelectionChange={(
+                                                    selection,
+                                                ) =>
+                                                    setChatSelections(
+                                                        (current) => ({
+                                                            ...current,
+                                                            [member.conversation]:
+                                                                selection,
+                                                        }),
+                                                    )
+                                                }
                                                 onTooNarrow={ignore}
                                                 attachFile={
                                                     member.conversation ===
@@ -647,6 +678,7 @@ export function ChatGrid({
                             onViewRepo={ignore}
                             changes={[]}
                             assistant={{ name: 'Codexis' }}
+                            aiSelection={chatSelections[picked.conversation]}
                             onInlineAsk={askAssistant(picked.workspace)}
                         />
                     </div>

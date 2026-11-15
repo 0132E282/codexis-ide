@@ -36,11 +36,16 @@ const MODE_ICONS: Record<string, LucideIcon> = {
     auto: Zap,
     manual: CircleHelp,
     acceptEdits: FilePen,
+    'accept-edits': FilePen,
     plan: ListChecks,
     bypassPermissions: ShieldOff,
+    default: Settings2,
+    'read-only': ShieldCheck,
+    'workspace-write': FilePen,
+    'approve-for-me': Zap,
 };
 
-/** The row under the message box: the projects the AI works in (this one, and others picked for the chat) and (Claude only) the permission mode and agent team. */
+/** The row under the message box: projects, execution mode, worktree and Claude agent team. */
 export function ProjectRow({
     busy,
     projectName,
@@ -64,7 +69,7 @@ export function ProjectRow({
     /** Folders of the other projects the AI may also work in. */
     extraRoots: string[];
     onExtraRootsChange: (roots: string[]) => void;
-    /** One "Settings" menu holds the permission mode and agent team, so the row stays short (every chat). */
+    /** One "Settings" menu holds the execution mode and agent team, so the row stays short. */
     compact?: boolean;
     cli: AgentCli;
     mode: string;
@@ -75,8 +80,9 @@ export function ProjectRow({
     worktree: boolean;
     onWorktreeChange: (on: boolean) => void;
 }) {
+    const modes = MODES[cli];
     const modeLabel = t(
-        MODES.find((option) => option.value === mode)?.label ?? mode,
+        modes.find((option) => option.value === mode)?.label ?? mode,
     );
     const [projectSearch, setProjectSearch] = useState('');
     const { confirm, dialog } = useConfirm();
@@ -90,7 +96,7 @@ export function ProjectRow({
         }
 
         if (
-            MODES.find((option) => option.value === next)?.dangerous === true &&
+            modes.find((option) => option.value === next)?.dangerous === true &&
             !(await confirm({
                 title: t('project_row.bypass_title'),
                 description: t('project_row.bypass_description'),
@@ -108,7 +114,7 @@ export function ProjectRow({
         event: KeyboardEvent<HTMLElement>,
         closeMenu: () => void,
     ) => {
-        const picked = MODES[Number(event.key) - 1];
+        const picked = modes[Number(event.key) - 1];
 
         if (picked !== undefined) {
             event.preventDefault();
@@ -119,7 +125,7 @@ export function ProjectRow({
     };
 
     // * Every mode with its hint, the Recommended tag, its number and a ✓ on the current one (the Settings menu and the mode menu share it).
-    const modeItems = MODES.map((option, index) => {
+    const modeItems = modes.map((option, index) => {
         const Icon = MODE_ICONS[option.value];
 
         return (
@@ -264,7 +270,7 @@ export function ProjectRow({
                         align="start"
                         className="w-72"
                         onKeyDown={(event) =>
-                            cli === 'claude' &&
+                            modes.length > 0 &&
                             pickModeByNumber(event, () =>
                                 setSettingsMenuOpen(false),
                             )
@@ -282,20 +288,22 @@ export function ProjectRow({
                             {t('project_row.worktree')}
                         </DropdownMenuCheckboxItem>
                         {cli === 'claude' && (
+                            <DropdownMenuCheckboxItem
+                                checked={agentTeam}
+                                onSelect={(event) => event.preventDefault()}
+                                onCheckedChange={(on) =>
+                                    onAgentTeamChange(on === true)
+                                }
+                                title={t(
+                                    'project_row.enable_agent_team_experimental',
+                                )}
+                            >
+                                <Users aria-hidden="true" />
+                                Agent team
+                            </DropdownMenuCheckboxItem>
+                        )}
+                        {modes.length > 0 && (
                             <>
-                                <DropdownMenuCheckboxItem
-                                    checked={agentTeam}
-                                    onSelect={(event) => event.preventDefault()}
-                                    onCheckedChange={(on) =>
-                                        onAgentTeamChange(on === true)
-                                    }
-                                    title={t(
-                                        'project_row.enable_agent_team_experimental',
-                                    )}
-                                >
-                                    <Users aria-hidden="true" />
-                                    Agent team
-                                </DropdownMenuCheckboxItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuLabel>
                                     {t('project_row.choose_mode')}
@@ -320,7 +328,7 @@ export function ProjectRow({
                         <GitBranch aria-hidden="true" />
                         {t('project_row.worktree')}
                     </Button>
-                    {cli === 'claude' && (
+                    {modes.length > 0 && (
                         <>
                             <DropdownMenu
                                 open={modeMenuOpen}
@@ -353,21 +361,25 @@ export function ProjectRow({
                                     {modeItems}
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={busy}
-                                aria-pressed={agentTeam}
-                                title={t(
-                                    'project_row.enable_agent_team_experimental',
-                                )}
-                                onClick={() => onAgentTeamChange(!agentTeam)}
-                                className={`gap-1.5 ${agentTeam ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
-                            >
-                                <Users aria-hidden="true" />
-                                Agent team
-                            </Button>
+                            {cli === 'claude' && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={busy}
+                                    aria-pressed={agentTeam}
+                                    title={t(
+                                        'project_row.enable_agent_team_experimental',
+                                    )}
+                                    onClick={() =>
+                                        onAgentTeamChange(!agentTeam)
+                                    }
+                                    className={`gap-1.5 ${agentTeam ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
+                                >
+                                    <Users aria-hidden="true" />
+                                    Agent team
+                                </Button>
+                            )}
                         </>
                     )}
                 </>
