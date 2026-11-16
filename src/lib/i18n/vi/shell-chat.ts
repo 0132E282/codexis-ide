@@ -47,6 +47,12 @@ export const shellChatVietnamese: Record<string, string> = {
     'composer_tools.add_file': 'Thêm tệp',
     'composer_tools.optimize': 'Tối ưu',
     'context_panel.trigger': 'Mức dùng ngữ cảnh',
+    'context_panel.title': 'Ngữ cảnh',
+    'context_panel.no_usage': 'Chưa có số liệu',
+    'context_panel.input': 'Đầu vào',
+    'context_panel.output': 'Đầu ra',
+    'context_panel.cache_read': 'Cache đọc',
+    'context_panel.cache_creation': 'Cache ghi',
     'inert_button.not_available_in_the':
         'Chưa có trong IDE: chưa có trợ lý AI.',
     'limit_usage.session': 'Phiên',

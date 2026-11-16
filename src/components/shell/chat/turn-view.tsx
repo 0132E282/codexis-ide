@@ -1,6 +1,15 @@
-import { Repeat, Sparkles } from 'lucide-react';
+import { CircleX, Repeat, Sparkles } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+    Trace,
+    TraceCollapsible,
+    TraceCollapsibleContent,
+    TraceCollapsibleTrigger,
+    TraceIcon,
+    TraceLine,
+    TraceTitle,
+} from '@/components/ui/trace';
 import type { ChoiceHandlers } from '@/components/ai-chat/choice-card';
 import { MarkdownContent } from '@/components/ai-chat/markdown-content';
 import { AttachmentView } from '@/components/shell/chat/attachment-view';
@@ -9,6 +18,7 @@ import type { PermissionRequest, Turn } from '@/components/shell/chat/turn';
 import { TurnSteps } from '@/components/shell/turn-steps';
 import { useTypewriter } from '@/hooks/use-typewriter';
 import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 // * What the CLIs say when an account runs out of allowance ("You've hit your 5-hour limit", "usage limit reached"...).
 const LIMIT_PATTERN =
@@ -16,6 +26,59 @@ const LIMIT_PATTERN =
 
 const MAX_LIMIT_ANSWER_CHARACTERS = 200;
 const MAX_REQUEST_CHARACTERS = 300;
+
+/** The error of a turn: its first line is the title; a longer error (a stack) opens under it. */
+function TurnError({ error }: { error: string }) {
+    const [title, ...frames] = error
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '');
+    const hasFrames = frames.length > 0;
+    const line = (
+        <TraceLine status="error">
+            <TraceIcon>
+                <CircleX />
+            </TraceIcon>
+            <TraceTitle
+                className={
+                    hasFrames ? undefined : 'break-words whitespace-normal'
+                }
+            >
+                {title}
+            </TraceTitle>
+        </TraceLine>
+    );
+
+    return (
+        <Trace role="alert">
+            {hasFrames ? (
+                <TraceCollapsible>
+                    <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+                    <TraceCollapsibleContent>
+                        <div className="flex flex-col gap-2 rounded-md bg-muted p-3 font-mono text-xs">
+                            <p className="text-destructive">{title}</p>
+                            <ol>
+                                {frames.map((frame, index) => (
+                                    <li
+                                        key={index}
+                                        className={cn(
+                                            frame.includes('node_modules') &&
+                                                'text-muted-foreground',
+                                        )}
+                                    >
+                                        {frame}
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                    </TraceCollapsibleContent>
+                </TraceCollapsible>
+            ) : (
+                line
+            )}
+        </Trace>
+    );
+}
 
 /** What the AI wants to do, in one short line: the file, the command or the description it gave. */
 function describeRequest(request: PermissionRequest): string {
@@ -158,11 +221,7 @@ export const TurnView = memo(function TurnView({
                     </span>
                 </p>
             )}
-            {turn.error !== null && (
-                <p role="alert" className="text-destructive">
-                    {turn.error}
-                </p>
-            )}
+            {turn.error !== null && <TurnError error={turn.error} />}
             {turn.running && waiting !== undefined && (
                 <div
                     role="group"

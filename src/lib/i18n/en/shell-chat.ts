@@ -49,6 +49,12 @@ export const shellChatEnglish: Record<string, string> = {
     'composer_tools.add_file': 'Add file',
     'composer_tools.optimize': 'Optimize',
     'context_panel.trigger': 'Context usage',
+    'context_panel.title': 'Context',
+    'context_panel.no_usage': 'No data yet',
+    'context_panel.input': 'Input',
+    'context_panel.output': 'Output',
+    'context_panel.cache_read': 'Cache read',
+    'context_panel.cache_creation': 'Cache write',
     'inert_button.not_available_in_the':
         'Not available in the IDE: no AI assistant yet.',
     'limit_usage.session': 'Session',

@@ -1,4 +1,9 @@
 import { Button } from '@/components/ui/button';
+import {
+    HoverCard,
+    HoverCardContent,
+    HoverCardTrigger,
+} from '@/components/ui/hover-card';
 import type { ContextUsage } from '@/components/shell/chat/turn-events';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -58,20 +63,91 @@ function ContextRing({ percent }: { percent: number | null }) {
     );
 }
 
-/** * Button holding the ring of how much of the model's context the chat has used; it opens the session rail through `onClick`. */
-export function ContextPanel({ usage, className, onClick }: ContextPanelProps) {
+/** * One line of the breakdown: what it counts and how many tokens. */
+function UsageRow({ label, tokens }: { label: string; tokens: number }) {
     return (
-        <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={cn('text-muted-foreground', className)}
-            aria-label={t('context_panel.trigger')}
-            title={t('context_panel.trigger')}
-            data-rail-toggle=""
-            onClick={onClick}
-        >
-            <ContextRing percent={usage?.percent ?? null} />
-        </Button>
+        <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="tabular-nums">{formatTokens(tokens)}</span>
+        </div>
+    );
+}
+
+/** * Button holding the ring and the share of the model's context the chat has used; hovering it shows the breakdown, and it opens the session rail through `onClick`. */
+export function ContextPanel({ usage, className, onClick }: ContextPanelProps) {
+    const percent = usage?.percent ?? null;
+
+    return (
+        <HoverCard openDelay={150} closeDelay={100}>
+            <HoverCardTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn('gap-1.5 text-muted-foreground', className)}
+                    aria-label={t('context_panel.trigger')}
+                    data-rail-toggle=""
+                    onClick={onClick}
+                >
+                    <ContextRing percent={percent} />
+                    {percent !== null && (
+                        <span className="text-xs tabular-nums">
+                            {Math.round(percent)}%
+                        </span>
+                    )}
+                </Button>
+            </HoverCardTrigger>
+            <HoverCardContent align="end" className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">
+                        {t('context_panel.title')}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                        {usage === null
+                            ? t('context_panel.no_usage')
+                            : usage.window === null
+                              ? formatTokens(usage.used)
+                              : `${formatTokens(usage.used)} / ${formatTokens(usage.window)}`}
+                    </span>
+                </div>
+                <div
+                    role="progressbar"
+                    aria-label={t('context_panel.trigger')}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percent === null ? undefined : percent}
+                    className="h-2 overflow-hidden rounded-full bg-muted"
+                >
+                    <div
+                        className="h-full rounded-full bg-foreground transition-[width] duration-300 motion-reduce:transition-none"
+                        style={{ width: `${Math.min(percent ?? 0, 100)}%` }}
+                    />
+                </div>
+                {usage !== null && (
+                    <div className="space-y-1.5">
+                        <UsageRow
+                            label={t('context_panel.input')}
+                            tokens={usage.input}
+                        />
+                        <UsageRow
+                            label={t('context_panel.output')}
+                            tokens={usage.output}
+                        />
+                        {usage.cacheRead > 0 && (
+                            <UsageRow
+                                label={t('context_panel.cache_read')}
+                                tokens={usage.cacheRead}
+                            />
+                        )}
+                        {usage.cacheCreation > 0 && (
+                            <UsageRow
+                                label={t('context_panel.cache_creation')}
+                                tokens={usage.cacheCreation}
+                            />
+                        )}
+                    </div>
+                )}
+            </HoverCardContent>
+        </HoverCard>
     );
 }
