@@ -705,7 +705,7 @@ export function TreePanel({
                     ref={rows}
                     tabIndex={-1}
                     onKeyDown={handleTreeKeyDown}
-                    className="flex min-h-0 flex-1 flex-col overflow-y-auto outline-none [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"
+                    className="flex min-h-0 flex-1 flex-col overflow-y-auto outline-none [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30 [&::-webkit-scrollbar-track]:bg-transparent [&_li[data-drop-target]>button]:bg-accent [&_li[data-drop-target]>button]:ring-1 [&_li[data-drop-target]>button]:ring-ring"
                 >
                     {paths === null ? (
                         <LoadingRows rows={10} className="px-2" />

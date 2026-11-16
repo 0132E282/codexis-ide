@@ -244,8 +244,8 @@ export const READ_ONLY_OPTIONS = {
     matchBrackets: 'never',
     smoothScrolling: true,
     scrollbar: {
-        verticalScrollbarSize: 10,
-        horizontalScrollbarSize: 10,
+        verticalScrollbarSize: 6,
+        horizontalScrollbarSize: 6,
         useShadows: false,
     },
     renderWhitespace: 'none',
