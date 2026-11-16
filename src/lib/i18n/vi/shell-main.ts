@@ -327,6 +327,7 @@ export const shellMainVietnamese: Record<string, string> = {
         'Chưa có dự án nào. Chọn "Thêm mới dự án" để bắt đầu.',
     'sidebar.number_of_conversations': 'Số cuộc trò chuyện',
     'tree_panel.open_window': 'Tách cửa sổ',
+    'sidebar.project_running': 'Đang chạy',
     'sidebar.remove_from_list_the': 'Xóa khỏi danh sách (không xóa thư mục)',
     'sidebar.remove_project_name_from': 'Xóa dự án {name} khỏi danh sách',
     'sidebar.sidebar': 'Thanh bên',

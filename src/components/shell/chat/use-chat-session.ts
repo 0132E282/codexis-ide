@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useSyncExternalStore,
+} from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ContextUsage } from '@/components/shell/chat/turn-events';
 import { restoreContext, restoreTurns } from '@/components/shell/chat/turn';
@@ -72,12 +78,48 @@ function aliasSession(
     sharedSessions.set(sessionKey(root, conversation), shared);
 }
 
+const runningListeners = new Set<() => void>();
+
 function publish(shared: SharedSession, snapshot: SessionSnapshot) {
     shared.snapshot = snapshot;
 
     for (const listener of shared.listeners) {
         listener();
     }
+
+    for (const listener of runningListeners) {
+        listener();
+    }
+}
+
+/** The project folders with a turn running, as one string (a primitive, so the store hands React a stable snapshot). */
+function runningRootsKey() {
+    const roots = new Set<string>();
+
+    for (const [key, shared] of sharedSessions) {
+        if (shared.snapshot.turns.some((turn) => turn.running)) {
+            roots.add(key.slice(0, key.indexOf('\u0000')));
+        }
+    }
+
+    return [...roots].sort().join('\n');
+}
+
+const subscribeRunning = (listener: () => void) => {
+    runningListeners.add(listener);
+
+    return () => void runningListeners.delete(listener);
+};
+
+/** The folders of the projects where an AI turn is running now, from any chat. */
+export function useRunningRoots(): ReadonlySet<string> {
+    const key = useSyncExternalStore(
+        subscribeRunning,
+        runningRootsKey,
+        runningRootsKey,
+    );
+
+    return useMemo(() => new Set(key === '' ? [] : key.split('\n')), [key]);
 }
 
 /** The saved conversation of a project: loads it, opens another one from the sidebar, starts a new one, and holds the turns and sub-agents shown. */

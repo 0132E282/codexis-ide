@@ -8,6 +8,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
+import { useRunningRoots } from '@/components/shell/chat/use-chat-session';
 import { SidebarConversationItem } from '@/components/shell/sidebar-conversation-item';
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import {
@@ -142,7 +143,8 @@ export function Sidebar({
         return () => window.clearTimeout(timer);
     }, []);
     const needle = plain(query.trim());
-    const rows: { id: string | null; name: string }[] =
+    const runningRoots = useRunningRoots();
+    const rows: { id: string | null; name: string; folders?: string[] }[] =
         projects.length > 0
             ? projects
             : startupName !== null
@@ -307,22 +309,37 @@ export function Sidebar({
                                         {active ? conversations.length : ''}
                                     </span>
                                 </button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    aria-label={t(
-                                        'sidebar.remove_project_name_from',
-                                        {
-                                            name: row.name,
-                                        },
-                                    )}
-                                    title={t('sidebar.remove_from_list_the')}
-                                    onClick={() => onRemove(row.id)}
-                                    className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
-                                >
-                                    <Trash2 aria-hidden="true" />
-                                </Button>
+                                {row.folders?.some((folder) =>
+                                    runningRoots.has(folder),
+                                ) ? (
+                                    <span
+                                        role="status"
+                                        title={t('sidebar.project_running')}
+                                        aria-label={t(
+                                            'sidebar.project_running',
+                                        )}
+                                        className="absolute top-1/2 right-3 size-2.5 -translate-y-1/2 animate-pulse rounded-full bg-orange-500 motion-reduce:animate-none"
+                                    />
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        aria-label={t(
+                                            'sidebar.remove_project_name_from',
+                                            {
+                                                name: row.name,
+                                            },
+                                        )}
+                                        title={t(
+                                            'sidebar.remove_from_list_the',
+                                        )}
+                                        onClick={() => onRemove(row.id)}
+                                        className="absolute top-1/2 right-1.5 -translate-y-1/2 text-muted-foreground opacity-50 group-hover:opacity-100 hover:text-destructive focus-visible:opacity-100"
+                                    >
+                                        <Trash2 aria-hidden="true" />
+                                    </Button>
+                                )}
                             </div>
                             {active && (
                                 <div

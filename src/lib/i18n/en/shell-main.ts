@@ -331,6 +331,7 @@ export const shellMainEnglish: Record<string, string> = {
         'No projects yet. Choose "Add new project" to get started.',
     'sidebar.number_of_conversations': 'Number of conversations',
     'tree_panel.open_window': 'Detach window',
+    'sidebar.project_running': 'Running',
     'sidebar.remove_from_list_the': 'Remove from list (the folder is kept)',
     'sidebar.remove_project_name_from': 'Remove project {name} from the list',
     'sidebar.sidebar': 'Sidebar',
