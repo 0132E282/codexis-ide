@@ -1,6 +1,7 @@
 import { CircleX, Repeat, Sparkles } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import {
     Trace,
     TraceCollapsible,
@@ -198,15 +199,11 @@ export const TurnView = memo(function TurnView({
                 )
             )}
             {turn.running && turn.answer === '' && turn.steps === undefined && (
-                <p
-                    role="status"
-                    className="flex items-center gap-2 text-muted-foreground"
-                >
-                    <Sparkles
-                        aria-hidden="true"
-                        className="size-4 animate-pulse text-primary motion-reduce:animate-none"
-                    />
-                    {t('turn_view.answering')}
+                <Marker role="status">
+                    <MarkerIcon>
+                        <Sparkles className="animate-pulse text-primary motion-reduce:animate-none" />
+                    </MarkerIcon>
+                    <MarkerContent>{t('turn_view.answering')}</MarkerContent>
                     <span
                         aria-hidden="true"
                         className="flex items-center gap-1"
@@ -219,7 +216,7 @@ export const TurnView = memo(function TurnView({
                             />
                         ))}
                     </span>
-                </p>
+                </Marker>
             )}
             {turn.error !== null && <TurnError error={turn.error} />}
             {turn.running && waiting !== undefined && (
