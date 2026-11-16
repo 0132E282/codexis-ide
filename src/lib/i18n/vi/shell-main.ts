@@ -348,6 +348,15 @@ export const shellMainVietnamese: Record<string, string> = {
     'changed_files.discard_all':
         'Hoàn tác thay đổi của {count} tệp? Không thể khôi phục lại.',
     'changed_files.discarded': 'Đã hoàn tác thay đổi',
+    'changed_files.run_migrations': 'Chạy migration',
+    'changed_files.run_seed': 'Chạy seed',
+    'changed_files.run_seeder': 'Seed {name}',
+    'changed_files.run_title': 'Chạy lệnh',
+    'changed_files.run': 'Chạy',
+    'changed_files.run_confirm':
+        'Chạy `{command}` trong thư mục dự án? Lệnh có thể thay đổi cơ sở dữ liệu.',
+    'changed_files.running': 'Đang chạy {command}…',
+    'changed_files.run_finished': 'Đã chạy xong {command}',
     'turn_steps.edited_count_files': 'Đã sửa {count} tệp',
     'turn_steps.working': 'Đang làm việc…',
     'turn_steps.waiting_subagents': 'Đang chờ subagent ({count})…',

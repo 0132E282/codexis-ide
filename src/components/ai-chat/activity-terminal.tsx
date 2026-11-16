@@ -337,8 +337,24 @@ export function useTerminalSessions(
         }[]
     >(firstTerminals);
     const [active, setActive] = useState(1);
+    // * The groups of two terminals shown side by side; each terminal is in one group at most, and a group stays until it is split apart or one of its terminals is closed.
+    const [pairs, setPairs] = useState<[number, number][]>([]);
+
+    const partnerOf = (id: number): number | undefined => {
+        const pair = pairs.find((candidate) => candidate.includes(id));
+
+        return pair === undefined
+            ? undefined
+            : pair[0] === id
+              ? pair[1]
+              : pair[0];
+    };
+
     // * The terminal drawn beside the active one (null: only one on screen).
-    const [split, setSplit] = useState<number | null>(null);
+    const split = partnerOf(active) ?? null;
+
+    const withoutPairsOf = (current: [number, number][], ids: number[]) =>
+        current.filter((pair) => !ids.some((id) => pair.includes(id)));
 
     const add = () => {
         const id = counter.current++;
@@ -350,28 +366,32 @@ export function useTerminalSessions(
         setActive(id);
     };
 
-    // * The two terminals shown side by side form a group.
-    const isInGroup = (id: number) =>
-        split !== null && (id === active || id === split);
+    // * A terminal in a group (side by side with another one).
+    const isInGroup = (id: number) => partnerOf(id) !== undefined;
 
-    // * Split the terminal of the clicked row beside the active one; on a row of the current group it ungroups instead.
+    // * Split the terminal of the clicked row beside the active one; on a row of a group it ungroups instead.
     const divide = (rowId: number) => {
         if (isInGroup(rowId)) {
-            setSplit(null);
+            setPairs((current) => withoutPairsOf(current, [rowId]));
 
             return;
         }
 
         if (rowId !== active) {
-            setSplit(rowId);
+            setPairs((current) => [
+                ...withoutPairsOf(current, [active, rowId]),
+                [active, rowId],
+            ]);
 
             return;
         }
 
-        const other = terminals.find((terminal) => terminal.id !== active);
+        const other = terminals.find(
+            (terminal) => terminal.id !== active && !isInGroup(terminal.id),
+        );
 
         if (other !== undefined) {
-            setSplit(other.id);
+            setPairs((current) => [...current, [active, other.id]]);
 
             return;
         }
@@ -382,7 +402,7 @@ export function useTerminalSessions(
             ...current,
             { id, title: `Terminal ${id}`, root },
         ]);
-        setSplit(id);
+        setPairs((current) => [...current, [active, id]]);
     };
 
     const remove = (id: number) => {
@@ -394,27 +414,19 @@ export function useTerminalSessions(
             return;
         }
 
-        setTerminals(left);
+        const partner = partnerOf(id);
 
-        if (split === id) {
-            setSplit(null);
-        }
+        setTerminals(left);
+        setPairs((current) => withoutPairsOf(current, [id]));
 
         if (active === id) {
-            const next =
-                left.find((terminal) => terminal.id !== split) ?? left[0];
-
-            setActive(next.id);
-            setSplit((current) => (current === next.id ? null : current));
+            setActive(partner ?? left[0].id);
         }
     };
 
-    // * A terminal outside the group is shown alone: it must not pair with the group's split and push the first terminal down the list.
+    // * Picking a terminal shows its whole group (or it alone); the groups themselves never change, and the later row of a group stays on the right.
     const select = (id: number) => {
-        const keepsGroup = isInGroup(id) && id !== split;
-
         setActive(id);
-        setSplit((current) => (keepsGroup ? current : null));
     };
 
     return {
@@ -422,6 +434,7 @@ export function useTerminalSessions(
         active,
         split,
         isInGroup,
+        partnerOf,
         add,
         divide,
         remove,
@@ -440,14 +453,33 @@ export function ActivityTerminal({
     /** The tab is on screen; the shells stay alive when it is not. */
     visible: boolean;
 }) {
-    const { terminals, active, split, isInGroup, remove, select, divide } =
+    const { terminals, active, split, partnerOf, remove, select, divide } =
         sessions;
-    // * The list keeps its order: a connector line joins the two rows of the group.
-    const groupRows = terminals
-        .map((terminal, index) => (isInGroup(terminal.id) ? index : -1))
-        .filter((index) => index !== -1);
-    const groupStart = groupRows[0] ?? -1;
-    const groupEnd = groupRows[1] ?? -1;
+    const rowOf = (id: number) =>
+        terminals.findIndex((terminal) => terminal.id === id);
+    // * The group on screen: the active terminal and its partner; the later row of the two sits on the right.
+    const shownGroupEnd =
+        split === null ? -1 : Math.max(rowOf(active), rowOf(split));
+    // * The list keeps its order: a connector line joins the two rows of every group. A row's own mark (start or end of its group) wins over a line passing it.
+    const connectors = new Map<number, string>();
+    const groupMarks = new Map<number, string>();
+
+    terminals.forEach((terminal, start) => {
+        const partner = partnerOf(terminal.id);
+        const end = partner === undefined ? -1 : rowOf(partner);
+
+        if (end <= start) {
+            return;
+        }
+
+        groupMarks.set(start, '\u250c');
+        groupMarks.set(end, '\u2514');
+
+        for (let row = start + 1; row < end; row++) {
+            connectors.set(row, '\u2502');
+        }
+    });
+    groupMarks.forEach((mark, row) => connectors.set(row, mark));
 
     return (
         <section
@@ -458,7 +490,7 @@ export function ActivityTerminal({
             )}
         >
             <div className="flex min-h-0 min-w-0 flex-1">
-                {terminals.map((terminal) => (
+                {terminals.map((terminal, index) => (
                     <div
                         key={terminal.id}
                         className={cn(
@@ -466,7 +498,8 @@ export function ActivityTerminal({
                             terminal.id !== active &&
                                 terminal.id !== split &&
                                 'hidden',
-                            terminal.id === split &&
+                            // * The later one of the group on screen sits on the right, whichever of the two has the focus.
+                            index === shownGroupEnd &&
                                 'order-last border-l border-zinc-200 dark:border-zinc-800',
                         )}
                     >
@@ -490,14 +523,7 @@ export function ActivityTerminal({
             >
                 {terminals.map((terminal, index) => {
                     const isActive = terminal.id === active;
-                    const connector =
-                        index === groupStart
-                            ? '\u250c'
-                            : index === groupEnd
-                              ? '\u2514'
-                              : index > groupStart && index < groupEnd
-                                ? '\u2502'
-                                : null;
+                    const connector = connectors.get(index) ?? null;
 
                     return (
                         <li

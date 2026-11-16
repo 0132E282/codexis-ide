@@ -1,3 +1,4 @@
+import { ProjectRootContext } from '@/contexts/project-root-context';
 import {
     useCallback,
     useEffect,
@@ -478,19 +479,21 @@ export function ChatPanel({
                     </span>
                 </header>
             )}
-            <MessageList
-                ref={bottom}
-                turns={turns}
-                viewSubagent={viewSubagent}
-                onLeaveSubagent={onLeaveSubagent}
-                onChoose={choose}
-                choicesInPopup
-                onSwitchAccount={switchAccount}
-                onPermission={answerPermission}
-                projectName={projectName}
-                waiting={waitingPrompts}
-                runningSubagentCount={runningSubagentCount}
-            />
+            <ProjectRootContext.Provider value={root}>
+                <MessageList
+                    ref={bottom}
+                    turns={turns}
+                    viewSubagent={viewSubagent}
+                    onLeaveSubagent={onLeaveSubagent}
+                    onChoose={choose}
+                    choicesInPopup
+                    onSwitchAccount={switchAccount}
+                    onPermission={answerPermission}
+                    projectName={projectName}
+                    waiting={waitingPrompts}
+                    runningSubagentCount={runningSubagentCount}
+                />
+            </ProjectRootContext.Provider>
             <Composer
                 project={null}
                 onClearProject={clearNoProject}

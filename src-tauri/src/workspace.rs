@@ -722,20 +722,10 @@ impl Access<'_> {
         Ok(full)
     }
 
-    /// Removes an existing file or folder (with all it holds) for good. A link is unlinked and its target is left alone; nothing in a denied folder (`.git`, `node_modules`...) and never the project root.
+    /// Removes an existing file or folder (with all it holds) for good. A link is unlinked and its target is left alone; the person may delete inside any folder of the project (`storage`, `vendor`, `.git`...), never the project root and never outside it.
     pub fn delete_entry(&self, path: &str) -> Result<()> {
         let relative = normalise(path).ok_or(WorkspaceError::BadPath)?;
-
-        if in_denied_directory(&relative) {
-            return Err(WorkspaceError::Denied);
-        }
-
         let parent = self.parent_directory_with(&relative, &Unguarded)?;
-
-        // * A folder reached through a link may resolve into a denied one (e.g. `docs` -> `.git`).
-        if in_denied_directory(&self.sandbox().relative(&parent)) {
-            return Err(WorkspaceError::Denied);
-        }
 
         let full = parent.join(file_name(&relative));
         let meta = fs::symlink_metadata(&full).map_err(|_| WorkspaceError::NotFound)?;

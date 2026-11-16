@@ -662,6 +662,7 @@ export function ChatGrid({
                             openRequest={openRequest}
                             treePlacement={treePlacement}
                             treeClosed={treeClosed}
+                            fillsColumn
                             toolbarStart={
                                 toggleInTree ? headerStart : undefined
                             }

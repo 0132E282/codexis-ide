@@ -352,6 +352,15 @@ export const shellMainEnglish: Record<string, string> = {
     'changed_files.discard_all':
         'Discard the changes to {count} files? This cannot be undone.',
     'changed_files.discarded': 'Changes discarded',
+    'changed_files.run_migrations': 'Run migrations',
+    'changed_files.run_seed': 'Run seed',
+    'changed_files.run_seeder': 'Seed {name}',
+    'changed_files.run_title': 'Run command',
+    'changed_files.run': 'Run',
+    'changed_files.run_confirm':
+        'Run `{command}` in the project folder? It may change the database.',
+    'changed_files.running': 'Running {command}…',
+    'changed_files.run_finished': 'Finished {command}',
     'turn_steps.edited_count_files': 'Edited {count} files',
     'turn_steps.working': 'Working…',
     'turn_steps.waiting_subagents': 'Waiting for sub-agents ({count})…',

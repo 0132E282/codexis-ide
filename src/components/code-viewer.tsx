@@ -59,6 +59,7 @@ export function CodeViewer({
     onActiveFile,
     onEditorVisible,
     chatCollapsed = false,
+    fillsColumn = false,
     active = true,
     tabsStart,
     toolbarStart,
@@ -105,6 +106,8 @@ export function CodeViewer({
     onEditorVisible?: (visible: boolean) => void;
     /** The chat is closed; when it opens again the columns make room for it. */
     chatCollapsed?: boolean;
+    /** The host gives the viewer a column of its own width (a group of chats): an open file or the change list takes all of it next to the tree, and the host's handle sizes it. */
+    fillsColumn?: boolean;
     /** The project of this viewer is the one shown: coming back to it opens the file tree, not the change list left from before. */
     active?: boolean;
     /** Buttons pinned to the left end of the tab bar. */
@@ -306,8 +309,8 @@ export function CodeViewer({
 
     const showChanges = localRoot !== null && view === 'changes';
     const editorVisible = selected !== null || showChanges;
-    // * The chat is folded away: the open file or change list takes its room, so no empty gap is left.
-    const isFilling = chatCollapsed && editorVisible;
+    // * The chat is folded away, or the host sizes the column: the open file or change list takes the room, so no empty gap is left.
+    const isFilling = (chatCollapsed || fillsColumn) && editorVisible;
     // * No file open: the editor column stays as a small empty state; the chat keeps the rest of the width.
     const showEmpty = alwaysShowEditor && !editorVisible && treeClosed !== true;
 

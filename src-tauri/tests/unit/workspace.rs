@@ -615,24 +615,23 @@ fn deleting_the_root_or_nothing_is_refused() {
 }
 
 #[test]
-fn denied_folders_are_not_deleted() {
+fn the_person_may_delete_inside_denied_folders() {
     let (dir, workspace) = project();
 
-    fs::create_dir_all(dir.path().join(".git")).unwrap();
+    fs::create_dir_all(dir.path().join("storage/app/.backup")).unwrap();
     fs::create_dir_all(dir.path().join("node_modules")).unwrap();
-    fs::write(dir.path().join(".git/config"), "x").unwrap();
+    fs::write(dir.path().join("storage/app/.backup/a.sql"), "x").unwrap();
     fs::write(dir.path().join("node_modules/x"), "x").unwrap();
 
-    for denied in [".git/config", ".git", "node_modules/x", "node_modules"] {
-        assert_eq!(
-            workspace.delete_for_viewer(denied),
-            Err(WorkspaceError::Denied),
-            "{denied:?}"
-        );
-    }
+    assert_eq!(
+        workspace.delete_for_viewer("storage/app/.backup/a.sql"),
+        Ok(())
+    );
+    assert_eq!(workspace.delete_for_viewer("node_modules"), Ok(()));
 
-    assert!(dir.path().join(".git/config").exists());
-    assert!(dir.path().join("node_modules/x").exists());
+    assert!(!dir.path().join("storage/app/.backup/a.sql").exists());
+    assert!(!dir.path().join("node_modules").exists());
+    assert!(dir.path().join("storage/app/.backup").exists());
 }
 
 #[test]

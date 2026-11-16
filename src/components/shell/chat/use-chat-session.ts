@@ -150,7 +150,6 @@ export function useChatSession({
     const selected = useRef({
         root,
         key: requestedKey,
-        ignoredKey: null as string | null,
         shared: requestedSession,
     });
 
@@ -158,25 +157,11 @@ export function useChatSession({
         selected.current = {
             root,
             key: requestedKey,
-            ignoredKey: null,
             shared: requestedSession,
         };
     } else if (selected.current.key !== requestedKey) {
+        // * Another conversation is shown even while a turn runs: the turn goes on in its own conversation (its events are bound to it) and is complete when the person comes back.
         selected.current.key = requestedKey;
-
-        if (
-            selected.current.shared.snapshot.turns.some((turn) => turn.running)
-        ) {
-            selected.current.ignoredKey = requestedKey;
-        } else {
-            selected.current.ignoredKey = null;
-            selected.current.shared = requestedSession;
-        }
-    } else if (
-        selected.current.ignoredKey !== requestedKey &&
-        selected.current.shared !== requestedSession &&
-        !selected.current.shared.snapshot.turns.some((turn) => turn.running)
-    ) {
         selected.current.shared = requestedSession;
     }
 

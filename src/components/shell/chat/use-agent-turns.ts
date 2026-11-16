@@ -86,6 +86,16 @@ function changeSignature(file: ChangedFile): string {
     return `${file.status}:${file.added}:${file.removed}`;
 }
 
+/** The conversation a run belongs to: its turns, sub-agents and ids stay there even when another conversation is shown meanwhile. */
+type RunSession = {
+    setTurns: Dispatch<SetStateAction<Turn[]>>;
+    setContext: Dispatch<SetStateAction<ContextUsage | null>>;
+    setSubagents: Dispatch<SetStateAction<Subagent[]>>;
+    sessions: MutableRefObject<Partial<Record<AgentCli, string>>>;
+    workspace: MutableRefObject<string | null>;
+    conversation: MutableRefObject<number | null>;
+};
+
 /** Sends the messages to the AI CLI and follows each turn while it runs: streams its events into the turns, saves each turn. */
 export function useAgentTurns({
     root,
@@ -133,6 +143,21 @@ export function useAgentTurns({
         notifyChanged,
     } = session;
     const runs = useRef(new Map<string, AgentCli>());
+    // * The conversation each running turn was started in: switching to another conversation must not move the turn's events (or its saving) there.
+    const sessionBinding: RunSession = {
+        setTurns,
+        setContext,
+        setSubagents,
+        sessions,
+        workspace,
+        conversation,
+    };
+    const latestBinding = useRef(sessionBinding);
+    const runSessions = useRef(new Map<string, RunSession>());
+
+    useEffect(() => {
+        latestBinding.current = sessionBinding;
+    });
     // * Turns being answered, updated at once (state is not): the finished turn is saved from here.
     const drafts = useRef(new Map<string, Turn>());
     // * The CLIs already tried for a message that is being moved from one AI to the next, by turn id.
@@ -157,52 +182,80 @@ export function useAgentTurns({
     const readChanges = useStableCallback(() => ide.localChanges(root));
     const before = useRef(new Map<string, Map<string, string>>());
 
-    const persist = useStableCallback((turn: Turn) => {
-        if (workspace.current !== null && conversation.current !== null) {
-            void ide
-                .chatSaveTurn(workspace.current, conversation.current, {
-                    id: turn.id,
-                    cli: turn.cli,
-                    prompt: turn.prompt,
-                    answer: turn.answer,
-                    error: turn.error,
-                    steps:
-                        turn.steps !== undefined && turn.steps.length > 0
-                            ? // * Pictures of tool results are shown live only: saved, they could pass the size limit of a turn.
-                              JSON.stringify(turn.steps, (key, value) =>
-                                  key === 'images' ? undefined : value,
-                              )
-                            : null,
-                    context:
-                        turn.context === undefined
-                            ? null
-                            : JSON.stringify(turn.context),
-                })
-                .then(() => notifyChanged())
-                .catch((caught) => console.error(errorText(caught)));
-        } else {
-            console.error(t('use_agent_turns.could_not_save_the'));
-        }
-    });
+    const persist = useStableCallback(
+        (turn: Turn, bound: RunSession = sessionBinding) => {
+            if (
+                bound.workspace.current !== null &&
+                bound.conversation.current !== null
+            ) {
+                void ide
+                    .chatSaveTurn(
+                        bound.workspace.current,
+                        bound.conversation.current,
+                        {
+                            id: turn.id,
+                            cli: turn.cli,
+                            prompt: turn.prompt,
+                            answer: turn.answer,
+                            error: turn.error,
+                            steps:
+                                turn.steps !== undefined &&
+                                turn.steps.length > 0
+                                    ? // * Pictures of tool results are shown live only: saved, they could pass the size limit of a turn.
+                                      JSON.stringify(
+                                          turn.steps,
+                                          (key, value) =>
+                                              key === 'images'
+                                                  ? undefined
+                                                  : value,
+                                      )
+                                    : null,
+                            context:
+                                turn.context === undefined
+                                    ? null
+                                    : JSON.stringify(turn.context),
+                        },
+                    )
+                    .then(() => notifyChanged())
+                    .catch((caught) => console.error(errorText(caught)));
+            } else {
+                console.error(t('use_agent_turns.could_not_save_the'));
+            }
+        },
+    );
 
     useEffect(() => {
-        const update = (id: string, change: (turn: Turn) => Turn) => {
-            const draft = drafts.current.get(id);
-
-            if (draft !== undefined) {
-                drafts.current.set(id, change(draft));
-            }
-
-            setTurns((current) =>
-                current.map((turn) => (turn.id === id ? change(turn) : turn)),
-            );
-        };
         const stop = onAgentEvent(({ runId, kind, text: payload }) => {
             const runCli = runs.current.get(runId);
 
             if (runCli === undefined) {
                 return;
             }
+
+            // * The events of a run go to the conversation it started in, whichever one is shown now.
+            const bound =
+                runSessions.current.get(runId) ?? latestBinding.current;
+            const {
+                setTurns,
+                setContext,
+                setSubagents,
+                sessions,
+                workspace,
+                conversation,
+            } = bound;
+            const update = (id: string, change: (turn: Turn) => Turn) => {
+                const draft = drafts.current.get(id);
+
+                if (draft !== undefined) {
+                    drafts.current.set(id, change(draft));
+                }
+
+                setTurns((current) =>
+                    current.map((turn) =>
+                        turn.id === id ? change(turn) : turn,
+                    ),
+                );
+            };
 
             switch (kind) {
                 case 'session':
@@ -356,6 +409,7 @@ export function useAgentTurns({
                 case 'result':
                 default: {
                     runs.current.delete(runId);
+                    runSessions.current.delete(runId);
                     working.current.clear();
                     // * They stay listed (done) until the next message starts; a turn that ends cannot leave one "working".
                     setSubagents((current) =>
@@ -395,7 +449,7 @@ export function useAgentTurns({
                     }
 
                     if (finished !== undefined) {
-                        persist(finished);
+                        persist(finished, bound);
                         void recordUsage(finished).then((limited) => {
                             if (!limited) {
                                 flushQueue.current?.();
@@ -410,16 +464,7 @@ export function useAgentTurns({
         });
 
         return () => void stop.then((unlisten) => unlisten());
-    }, [
-        setTurns,
-        setContext,
-        setSubagents,
-        sessions,
-        workspace,
-        conversation,
-        persist,
-        readChanges,
-    ]);
+    }, [persist, readChanges]);
 
     const startTurn = (
         prompt: string,
@@ -448,6 +493,7 @@ export function useAgentTurns({
         };
 
         runs.current.set(id, target);
+        runSessions.current.set(id, sessionBinding);
         chains.current.set(id, tried);
         accountChains.current.set(id, triedAccounts);
         drafts.current.set(id, turn);
@@ -509,6 +555,7 @@ export function useAgentTurns({
             })
             .catch((caught) => {
                 runs.current.delete(id);
+                runSessions.current.delete(id);
                 drafts.current.delete(id);
 
                 const failed = {
