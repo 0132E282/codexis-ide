@@ -59,6 +59,7 @@ export function CodeViewer({
     onActiveFile,
     onEditorVisible,
     chatCollapsed = false,
+    active = true,
     tabsStart,
     toolbarStart,
     tabsEnd,
@@ -104,6 +105,8 @@ export function CodeViewer({
     onEditorVisible?: (visible: boolean) => void;
     /** The chat is closed; when it opens again the columns make room for it. */
     chatCollapsed?: boolean;
+    /** The project of this viewer is the one shown: coming back to it opens the file tree, not the change list left from before. */
+    active?: boolean;
     /** Buttons pinned to the left end of the tab bar. */
     tabsStart?: ReactNode;
     /** Drawn first in the toolbar of the file tree when it is on the left. */
@@ -269,6 +272,16 @@ export function CodeViewer({
         selected,
         () => void (pendingEdit !== undefined ? decideEdit('apply') : save()),
     );
+
+    const [wasActive, setWasActive] = useState(active);
+
+    if (active !== wasActive) {
+        setWasActive(active);
+
+        if (active) {
+            setView('files');
+        }
+    }
 
     // * A bump of the counter (not its first value) opens the Changes view.
     const [seenChangesRequest, setSeenChangesRequest] =

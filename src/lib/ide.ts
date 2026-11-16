@@ -285,9 +285,9 @@ export const ide = {
     terminalResize: (id: string, columns: number, rows: number) =>
         invoke<void>('terminal_resize', { id, columns, rows }),
     terminalClose: (id: string) => invoke<void>('terminal_close', { id }),
-    /** Opens the code side of the project folder (files, editor, terminal) in a window of its own (an open one is brought to the front); resolves to the folder as the backend holds it, which `onCodeWindowClosed` reports back. */
-    projectCodeWindowOpen: (root?: string) =>
-        invoke<string>('project_code_window_open', { root }),
+    /** Opens the code side of the project folder (files, editor, terminal) in a window of its own (an open one is brought to the front); with `roots` (two or more) the projects of a group share the one window. Resolves to the folder(s) as the backend holds them, one per line, which `onCodeWindowClosed` reports back. */
+    projectCodeWindowOpen: (root?: string, roots?: string[]) =>
+        invoke<string>('project_code_window_open', { root, roots }),
     /** Opens the separate operating-system window that holds the whole bottom panel on `tab` (an open one is brought to the front). */
     terminalWindowOpen: (root?: string, tab?: string, sessions?: string[]) =>
         invoke<void>('terminal_window_open', { root, tab, sessions }),

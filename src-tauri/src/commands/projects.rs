@@ -57,26 +57,59 @@ pub fn projects_select(state: State<AppState>, id: String) -> Result<Info, Strin
     state.select_project(&id)
 }
 
-/// Opens the code side of a project folder (files, editor, terminal) in a window of its own, a light page like the terminal window: standard window frame, no sidebar or sign-in check (async, so building the window cannot deadlock on Windows). `root` is a saved project or the open workspace; a window already open for it is only brought to the front.
+/// Separator of the folders a window holds in the one text that names them (the registry, the closing event); a folder name cannot contain a line break in practice.
+pub const WINDOW_FOLDER_SEPARATOR: char = '\n';
+
+/// The label of the code window of `folders`. It only holds hex digits of a hash of the folders, so the capability pattern `project-*` matches it and nothing unescaped gets in; one folder gives the same label as before groups existed.
+pub fn code_window_label(folders: &[String]) -> String {
+    let joined = folders.join(&WINDOW_FOLDER_SEPARATOR.to_string());
+
+    format!(
+        "project-code-{}",
+        &format!("{:x}", Sha256::digest(joined.as_bytes()))[..16]
+    )
+}
+
+/// Opens the code side of a project folder (files, editor, terminal) in a window of its own, a light page like the terminal window: standard window frame, no sidebar or sign-in check (async, so building the window cannot deadlock on Windows). `root` is a saved project or the open workspace; `roots` (two or more) puts every one of those projects in the same window, as the chats of a group are. A window already open for the same folders is only brought to the front. Answers with the folders, joined by [`WINDOW_FOLDER_SEPARATOR`], as the closing event reports them.
 #[tauri::command]
 pub async fn project_code_window_open(
     app: AppHandle,
     state: State<'_, AppState>,
     terminals: State<'_, Terminals>,
     root: Option<String>,
+    roots: Option<Vec<String>>,
 ) -> Result<String, String> {
-    // * The folder is checked by the workspace sandbox (the open workspace or a saved project), so only a known folder gets a window.
-    let folder = state.workspace_for(root.as_deref())?.root().to_path_buf();
-    let name = folder
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let folder = folder.display().to_string();
-    // * The label only holds hex digits of a hash of the folder, so the capability pattern `project-*` matches it and nothing unescaped gets in.
-    let label = format!(
-        "project-code-{}",
-        &format!("{:x}", Sha256::digest(folder.as_bytes()))[..16]
-    );
+    // * Each folder is checked by the workspace sandbox (the open workspace or a saved project), so only a known folder gets a window.
+    let requested = match roots {
+        Some(roots) if roots.len() > 1 => roots.into_iter().map(Some).collect(),
+        _ => vec![root],
+    };
+    let mut folders: Vec<String> = Vec::new();
+
+    for requested_root in &requested {
+        let folder = state
+            .workspace_for(requested_root.as_deref())?
+            .root()
+            .display()
+            .to_string();
+
+        if !folders.contains(&folder) {
+            folders.push(folder);
+        }
+    }
+
+    let name = folders
+        .iter()
+        .map(|folder| {
+            PathBuf::from(folder)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let folder = folders.join(&WINDOW_FOLDER_SEPARATOR.to_string());
+    let label = code_window_label(&folders);
 
     if let Some(existing) = app.get_webview_window(&label) {
         existing.set_focus().map_err(|error| error.to_string())?;
@@ -84,7 +117,7 @@ pub async fn project_code_window_open(
         return Ok(folder);
     }
 
-    // * The terminal and the page of the window read the folder registered here.
+    // * The terminal and the page of the window read the folders registered here.
     terminals
         .register_window(&label, &folder)
         .map_err(|error| error.to_string())?;
@@ -107,3 +140,7 @@ pub async fn project_code_window_open(
 
     Ok(folder)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/commands_projects.rs"]
+mod tests;

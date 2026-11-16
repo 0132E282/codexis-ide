@@ -174,10 +174,23 @@ export default function App() {
     // * The code side of a folder is in a window of its own: the terminal and files buttons bring that window forward instead of opening them here.
     const isCodeDetached = (root: string | null) =>
         root !== null && detachedRoots.includes(root);
-    const focusCodeWindow = (root: string | null) =>
+    // * A window shared by a group is brought forward under the whole group, not as a new window of that one project.
+    const focusCodeWindow = (root: string | null) => {
+        const shared = [...detachedPanes.current.values()].find(
+            (targets) =>
+                targets.length > 1 &&
+                targets.some((target) => target.root === root),
+        );
+
         void ide
-            .projectCodeWindowOpen(root ?? undefined)
+            .projectCodeWindowOpen(
+                root ?? undefined,
+                shared?.flatMap((target) =>
+                    target.root === undefined ? [] : [target.root],
+                ),
+            )
             .catch((caught) => toast.error(errorText(caught)));
+    };
     const toggleBottomTab = (tab: BottomTab) =>
         tab === 'terminal' && isCodeDetached(activeRoot)
             ? focusCodeWindow(activeRoot)
@@ -240,10 +253,10 @@ export default function App() {
     }, [activeRoot]);
 
     // * The separate window holding the panel: what it needs from the chats and the editor comes back here (acting on the pane active now), it is told the prompts running, and closing it brings the panel back on the tab it was detached on.
-    const windowBridge = useRef({ patchPane, activeKey, paneStates });
+    const windowBridge = useRef({ patchPane, activeKey, paneStates, panes });
 
     useEffect(() => {
-        windowBridge.current = { patchPane, activeKey, paneStates };
+        windowBridge.current = { patchPane, activeKey, paneStates, panes };
     });
     const runningPromptsKey = JSON.stringify(activeState.runningPrompts);
 
@@ -298,7 +311,7 @@ export default function App() {
 
     // * The file tree's menu asks for the open folder in a window of its own (a project or the startup folder alike). The pane then hides its code side until that window is closed; `detachedPanes` remembers which panes were hidden this way, so one the person hid with the Files button stays as it was.
     const detachedPanes = useRef(
-        new Map<string, { key: string; root: string | undefined }>(),
+        new Map<string, { key: string; root: string | undefined }[]>(),
     );
     // * The same folders as state, so the chat grid draws again without their files.
     const [detachedRoots, setDetachedRoots] = useState<string[]>([]);
@@ -306,21 +319,50 @@ export default function App() {
     useEffect(() => {
         const open = () => {
             const root = activeRootRef.current;
-            const { patchPane: patch, activeKey: key } = windowBridge.current;
+            const {
+                patchPane: patch,
+                activeKey: key,
+                panes: allPanes,
+            } = windowBridge.current;
+            // * In a group of chats, every project of the group goes to the one window.
+            const groupRoots = groupRootsRef.current;
+            const openRoot = groupRoots?.length === 1 ? groupRoots[0] : root;
+            const targets =
+                groupRoots !== undefined
+                    ? groupRoots.flatMap((groupRoot) => {
+                          const pane = allPanes.find(
+                              (candidate) => candidate.root === groupRoot,
+                          );
+
+                          return pane === undefined
+                              ? []
+                              : [{ key: pane.key, root: groupRoot }];
+                      })
+                    : [{ key, root }];
 
             void ide
-                .projectCodeWindowOpen(root)
+                .projectCodeWindowOpen(openRoot, groupRoots)
                 .then((folder) => {
-                    // * Keyed by the folder the backend answers with: the closing event carries that same text (the path the pane holds may be written differently).
+                    // * Keyed by the folders the backend answers with: the closing event carries that same text (the path the pane holds may be written differently).
                     if (detachedPanes.current.has(folder)) {
                         return;
                     }
-                    detachedPanes.current.set(folder, { key, root });
+                    detachedPanes.current.set(folder, targets);
                     // * The grid compares with the pane's own folder text.
-                    setDetachedRoots((roots) =>
-                        root === undefined ? roots : [...roots, root],
-                    );
-                    patch(key, { filesHidden: true, chatCollapsed: false });
+                    setDetachedRoots((roots) => [
+                        ...roots,
+                        ...targets.flatMap((target) =>
+                            target.root === undefined ? [] : [target.root],
+                        ),
+                    ]);
+
+                    for (const target of targets) {
+                        patch(target.key, {
+                            filesHidden: true,
+                            chatCollapsed: false,
+                        });
+                    }
+
                     setBottomTab(null);
                 })
                 .catch((caught) => toast.error(errorText(caught)));
@@ -331,11 +373,17 @@ export default function App() {
             if (detached !== undefined) {
                 detachedPanes.current.delete(folder);
                 setDetachedRoots((roots) =>
-                    roots.filter((root) => root !== detached.root),
+                    roots.filter(
+                        (root) =>
+                            !detached.some((target) => target.root === root),
+                    ),
                 );
-                windowBridge.current.patchPane(detached.key, {
-                    filesHidden: false,
-                });
+
+                for (const target of detached) {
+                    windowBridge.current.patchPane(target.key, {
+                        filesHidden: false,
+                    });
+                }
             }
         });
 
@@ -476,6 +524,14 @@ export default function App() {
     });
     const openMembers = grid.filter((member) => member.group === openGroup);
     const showGrid = openGroup !== null && openMembers.length >= 2;
+    // * The projects of the open group of chats, each once: the code window takes them all (none when no group is shown).
+    const groupRootsRef = useRef<string[] | undefined>(undefined);
+
+    useEffect(() => {
+        groupRootsRef.current = showGrid
+            ? [...new Set(openMembers.map((member) => member.workspace))]
+            : undefined;
+    });
 
     const openInVscode = (root: string | null = activeRoot) =>
         ide

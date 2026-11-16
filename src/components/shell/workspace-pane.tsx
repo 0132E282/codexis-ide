@@ -395,6 +395,7 @@ export function WorkspacePane({
                         treeClosed={treeClosed}
                         onTreeClosedChange={setTreeClosed}
                         chatCollapsed={state.chatCollapsed}
+                        active={active}
                         treePlacement={treePlacement}
                         toolbarStart={
                             toggleInTree ? treeSidebarToggle : undefined
